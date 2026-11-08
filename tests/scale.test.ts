@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { DEFAULT_SCALE, compressMoonRatio, scaledOrbitDistance, scaledRadius } from '../src/data/scale';
+import { SOLAR_SYSTEM } from '../src/data/solarSystem';
+import { Universe } from '../src/sim/universe';
 import type { BodyDef } from '../src/data/types';
 
 const S = DEFAULT_SCALE;
@@ -109,5 +111,27 @@ describe('compressMoonRatio', () => {
     // Value well below the linear extension.
     expect(f(100)).toBeLessThan(100);
     expect(f(100)).toBeCloseTo(knee + Math.pow(100 - knee, S.moonExponent), 10);
+  });
+});
+
+describe('size dependent minimum apparent size', () => {
+  const u = new Universe(SOLAR_SYSTEM);
+  const floor = (id: string): number => u.get(id).minApparentSize;
+
+  test('a gas giant keeps a bigger dot than its moons', () => {
+    expect(floor('saturn')).toBeGreaterThan(floor('titan') * 2);
+    expect(floor('jupiter')).toBeGreaterThan(floor('ganymede') * 2);
+    expect(floor('titan')).toBeGreaterThan(floor('phobos'));
+  });
+
+  test('bigger planets keep bigger floors, within the clamp', () => {
+    expect(floor('jupiter')).toBeGreaterThan(floor('earth'));
+    expect(floor('earth')).toBeGreaterThan(floor('mercury'));
+    expect(floor('earth')).toBeCloseTo(DEFAULT_SCALE.minApparentSize, 4);
+    for (const b of u.bodies) {
+      if (b.def.visual.minApparentSize !== undefined) continue;
+      expect(b.minApparentSize).toBeGreaterThanOrEqual(DEFAULT_SCALE.minApparentMin);
+      expect(b.minApparentSize).toBeLessThanOrEqual(DEFAULT_SCALE.minApparentMax);
+    }
   });
 });

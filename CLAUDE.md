@@ -21,7 +21,7 @@ Farlight is a relaxed solar system glider (working title was Space Glider 3D). L
 
 ## Quick reference
 - **Controls:** mouse joystick for pitch and yaw. A / D roll. W / S and wheel throttle. Shift boost. X stop. `,` / `.` warp down and up. C camera toggle (chase and cockpit). M system map. T cycle targets. H hide HUD. F3 debug panel. Hold F to align to target.
-- **Flight:** the ship flies where it points. Throttle sets a target speed as a fraction of a speed cap, and velocity eases toward it. Caps: about 80 m/s near ground, about 3 km/s at the top of the atmosphere, 3 to 30 km/s in space (soft-capped so impact is at least about 30 s away).
+- **Flight:** the ship flies where it points. Throttle sets a target speed as a fraction of a speed cap (distance to the nearest surface / `impactTime` 8 s, floor 160 m/s, ceiling 1000 km/s); boost multiplies it by 4. Feel targets (asserted in `tests/travel.test.ts`): Earth orbit to the Moon in about 30 s boosted, a quarter of Earth in about 85 s cruising at 25 km, low flight under 1 km/s. In air, attitude and velocity are carried around the curvature so level flight holds altitude at any speed.
 - **Atmosphere assist:** strength scales with density. The ship auto-levels roll and gently pitches to level without input. Soft gravity, and drag bleeds speed toward the local cap.
 - **Ground cushion:** below about 200 m the cushion pushes up while keeping tangential speed. The ship never crashes. Landing happens at low speed near the ground.
 - **Warp rules:** space warp drops automatically when the ETA to an atmosphere or SOI boundary gets short. In atmosphere, max 4×. Landed or parked, up to 10k× for sunsets and moonrises.
@@ -62,7 +62,7 @@ Farlight is a relaxed solar system glider (working title was Space Glider 3D). L
   - Colours are linear RGB 0..1.
 - **Fractions, not meters.** Atmosphere height, terrain amplitude, cloud altitude and thickness, and feature sizes are fractions of the body's game radius. Ring radii are multiples of the planet radius. This keeps them valid under any scale profile.
 - **Scale profile** (`data/scale.ts`, `DEFAULT_SCALE`): planet and moon radius ×0.1, Sun radius ×0.005, planet orbits ×0.001, moon orbits compressed in parent radii (linear up to 4, then exponent 0.7). Fix proportions here or in config, not with per-body hacks.
-- **Minimum apparent size.** Every body has a `visual.minApparentSize` floor (default 0.012 rad, about 0.7°). Below it, draw a shaded impostor disc with colour, phase and halo. Blend into the true mesh as the body grows.
+- **Minimum apparent size.** Every body has an angular size floor that scales with its radius (`minApparentSizeFor` in `scale.ts`: 0.7° for Earth, bigger for gas giants, smaller for moons; `visual.minApparentSize` overrides). Below it, draw a shaded impostor disc with colour, phase and halo. Blend into the true mesh as the body grows.
 
 ## Testing loop
 - **PostToolUse** (`.claude/hooks/post-edit.sh`, on Edit, Write and MultiEdit of `.ts` or `.mjs`): incremental `tsc --noEmit`, and eslint for files in `src/` and `tests/`. Errors go straight back to the editing agent (exit 2).

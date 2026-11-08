@@ -20,7 +20,7 @@ Io beneath a looming Jupiter, Saturn's rings, and a dive into Jupiter's cloud se
 | W / S, wheel, 1 to 0 | Throttle |
 | A / D | Roll |
 | Q / E | Yaw |
-| Shift | Boost |
+| Shift | Boost (4x, climb high to go fast) |
 | X | Brake |
 | , / . | Slow down / speed up time |
 | C | Chase or cockpit camera |

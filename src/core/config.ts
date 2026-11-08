@@ -4,13 +4,18 @@
  */
 export const config = {
   flight: {
-    /** Speed cap = distance to nearest surface / impactTime. Time warp does the distance work. */
-    impactTime: 20,
-    minSpeedCap: 90,
-    maxSpeedCap: 30000,
-    boostMultiplier: 2.2,
+    /**
+     * Speed cap = distance to nearest surface / impactTime. Feel over realism: a boosted trip
+     * from Earth to the Moon takes about half a minute, and a planet can be crossed in minutes.
+     */
+    impactTime: 8,
+    minSpeedCap: 160,
+    maxSpeedCap: 1000000,
+    boostMultiplier: 4,
     /** Seconds to approach the target velocity. */
     accelTau: 1.4,
+    /** Slowing down is quicker than speeding up, so arrivals brake in time. */
+    decelTau: 0.45,
     /** Angular rates at full input, rad/s. */
     pitchRate: 1.0,
     yawRate: 0.6,
@@ -18,6 +23,10 @@ export const config = {
     angularTau: 0.22,
     /** Speed at which wings fully support the ship in dense air, m/s. */
     liftSpeed: 70,
+    /** Descent rate (m/s at 1 g) when the wings have too little airspeed to hold the ship. */
+    sinkRate: 30,
+    /** Re-entry stress per unit of speed above the local cap (in air). */
+    entryStressGain: 2.5,
     cushionHeight: 220,
     gearHeight: 3,
     landSpeed: 14,

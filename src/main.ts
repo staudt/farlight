@@ -15,6 +15,7 @@ import { DebugPanel } from './ui/debugPanel';
 import { Hud } from './ui/hud';
 import { SystemMap } from './ui/map';
 import { SkyLabels } from './ui/skyLabels';
+import { FpsCounter } from './ui/fpsCounter';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
@@ -63,6 +64,7 @@ input.on('debug', () => debug.toggle());
 const hud = new Hud(document.getElementById('hud')!, world, gfx, input);
 const systemMap = new SystemMap(document.getElementById('map')!, world, input);
 const skyLabels = new SkyLabels(document.getElementById('hud')!, world, gfx);
+const fpsCounter = new FpsCounter(document.getElementById('hud')!);
 
 const alignDir = new Vector3();
 let last = performance.now();
@@ -93,6 +95,7 @@ function frame(now: number): void {
   hud.update(realDt);
   systemMap.update();
   skyLabels.update();
+  fpsCounter.update(realDt);
 
   fpsAcc += realDt;
   fpsFrames++;

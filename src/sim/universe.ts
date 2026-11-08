@@ -4,6 +4,7 @@ import {
   DEFAULT_SCALE,
   type ScaleProfile,
   scaledOrbitDistance,
+  minApparentSizeFor,
   scaledRadius,
   soiFactor,
 } from '../data/scale';
@@ -55,7 +56,7 @@ export class Body {
     this.atmosphereHeight = def.atmosphere ? def.atmosphere.height * this.radius : 0;
     this.terrainAmplitude = def.terrain ? def.terrain.amplitude * this.radius : 0;
     this.soiRadius = soiFactor(def, parentDef, scale) * this.radius;
-    this.minApparentSize = def.visual.minApparentSize ?? scale.minApparentSize;
+    this.minApparentSize = minApparentSizeFor(def, this.radius, scale);
     this.surfaceGravity = def.physical.surfaceGravity * G0;
     this.tilt = new Quaternion().setFromAxisAngle(X_AXIS, def.physical.axialTilt);
     if (def.orbit && parentDef) {

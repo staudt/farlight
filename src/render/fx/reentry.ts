@@ -150,10 +150,8 @@ export class Reentry {
   update(ctx: FrameContext): void {
     const w = ctx.world;
     const ship = w.ship;
-    // Raw stress is tiny in thin air at orbital speed, so map it on a log scale. Slow flight in
-    // dense air stays cold.
-    const s = Math.max(ship.stress, 1e-6);
-    const target = clamp01((Math.log10(s) + 3.9) / 1.5) * smooth(250, 700, ship.speed);
+    // Stress is 0..1 already (the air braking the ship); ease it in so faint heat stays faint.
+    const target = smooth(0.04, 0.7, ship.stress) * smooth(250, 700, ship.speed);
     this.heat += (target - this.heat) * (1 - Math.exp(-ctx.realDt / 0.4));
     const heat = this.heat;
 

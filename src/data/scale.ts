@@ -17,8 +17,16 @@ export interface ScaleProfile {
    */
   moonLinearUntil: number;
   moonExponent: number;
-  /** Default angular diameter floor in radians. */
+  /** Angular diameter floor (radians) for a body of `minApparentRefRadius` game meters. */
   minApparentSize: number;
+  /**
+   * The floor scales with size, so a far Saturn still looks bigger than its moons:
+   * floor = minApparentSize * (radius / ref)^exponent, clamped to [min, max].
+   */
+  minApparentRefRadius: number;
+  minApparentExponent: number;
+  minApparentMin: number;
+  minApparentMax: number;
   /** Default sphere of influence in radii, per kind. */
   soiFactorPlanet: number;
   soiFactorMoon: number;
@@ -30,7 +38,11 @@ export const DEFAULT_SCALE: ScaleProfile = {
   planetOrbitScale: 0.001,
   moonLinearUntil: 4,
   moonExponent: 0.7,
-  minApparentSize: 0.012, // ~0.7 degrees
+  minApparentSize: 0.012, // ~0.7 degrees for an Earth sized body
+  minApparentRefRadius: 637000,
+  minApparentExponent: 0.4,
+  minApparentMin: 0.004,
+  minApparentMax: 0.032,
   soiFactorPlanet: 30,
   soiFactorMoon: 10,
 };
@@ -61,4 +73,11 @@ export function soiFactor(def: BodyDef, parent: BodyDef | undefined, s: ScalePro
   if (def.visual.soiFactor !== undefined) return def.visual.soiFactor;
   if (def.kind === 'star') return Infinity;
   return parent && parent.kind !== 'star' ? s.soiFactorMoon : s.soiFactorPlanet;
+}
+
+/** Angular diameter floor for a body: bigger bodies keep a bigger dot in the sky. */
+export function minApparentSizeFor(def: BodyDef, radius: number, s: ScaleProfile): number {
+  if (def.visual.minApparentSize !== undefined) return def.visual.minApparentSize;
+  const v = s.minApparentSize * Math.pow(radius / s.minApparentRefRadius, s.minApparentExponent);
+  return Math.min(s.minApparentMax, Math.max(s.minApparentMin, v));
 }

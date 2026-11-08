@@ -51,7 +51,7 @@ describe('assisted glider flight', () => {
     expect(bankDeg(w)).toBeGreaterThan(10);
   });
 
-  test('a full boost climb reaches space within about a minute', () => {
+  test('a full boost climb reaches space in seconds, not minutes', () => {
     const w = new World(SOLAR_SYSTEM, 0);
     SCENARIOS['earth-low-morning']!.apply(w);
     const climb = emptyInput();
@@ -67,8 +67,9 @@ describe('assisted glider flight', () => {
       t += 1 / 30;
     }
     expect(w.phase).not.toBe('atmosphere');
-    expect(t).toBeGreaterThan(15);
-    expect(t).toBeLessThan(75);
+    // Feel target: shooting to the sky is quick, but the colour transition is still a moment.
+    expect(t).toBeGreaterThan(6);
+    expect(t).toBeLessThan(40);
   });
 
   test('throttle to zero near the ground lands softly', () => {

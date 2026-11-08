@@ -170,20 +170,25 @@ export class Ship {
     const fwd = this.forward(_v2);
 
     // Velocity eases toward the nose direction at the target speed (assisted glider).
-    const k = 1 - Math.exp(-dt / f.accelTau);
+    const slowing = targetSpeed < this.vel.length();
+    const k = 1 - Math.exp(-dt / (slowing ? f.decelTau : f.accelTau));
     _v1.copy(fwd).multiplyScalar(targetSpeed);
     this.vel.lerp(_v1, k);
 
-    // Soft gravity: wings support the ship once fast enough.
+    // Sink: without enough airspeed the wings stop holding the ship and it settles toward
+    // the ground at a gentle, tunable rate (scaled by gravity), cushioned near the surface.
     if (env.density > 0.001 && env.solidGround) {
       const speed = this.vel.length();
       const unsupported = Math.pow(Math.max(0, 1 - speed / f.liftSpeed), 2);
-      this.vel.addScaledVector(env.up, -env.gravity * unsupported * Math.min(1, env.density * 4) * dt);
+      const sink = f.sinkRate * Math.sqrt(env.gravity / 9.81) * unsupported * Math.min(1, env.density * 4);
+      const vr = this.vel.dot(env.up);
+      if (vr > -sink) this.vel.addScaledVector(env.up, (-sink - vr) * (1 - Math.exp(-dt / 1.2)));
     }
 
-    // Air stress for effects: fast ships in dense air glow and shake.
-    const dyn = env.density * this.vel.lengthSq();
-    this.stress = clamp(dyn / 4.0e6, 0, 1);
+    // Re-entry stress: the air is braking the ship (speed above the local cap). Cruising at the
+    // cap stays clean; diving in from space glows hot. No air, no heat.
+    const excess = Math.max(0, this.vel.length() / Math.max(this.speedCap, 1) - 1);
+    this.stress = clamp(excess * f.entryStressGain * Math.min(1, env.density * 20), 0, 1);
 
     // Ground cushion: descent rate shrinks with height so the ship never hits the ground.
     if (env.solidGround) {
@@ -200,7 +205,18 @@ export class Ship {
       }
     }
 
+    // Carry attitude and velocity around the curvature: in air, "level" stays level at any
+    // speed instead of the planet curving away beneath a straight line.
+    const carry = env.stabilization;
+    if (carry > 0) _up0.copy(this.pos).normalize();
     this.pos.addScaledVector(this.vel, dt);
+    if (carry > 0) {
+      _up1.copy(this.pos).normalize();
+      _qc.setFromUnitVectors(_up0, _up1);
+      if (carry < 1) _qc.slerp(_qId, 1 - carry);
+      this.quat.premultiply(_qc).normalize();
+      this.vel.applyQuaternion(_qc);
+    }
 
     if (env.solidGround) {
       // Hard floor: the env altitude is from before the move, so correct by the radial change.
@@ -245,6 +261,10 @@ function clamp(v: number, a: number, b: number): number {
 }
 
 const _v1 = new Vector3();
+const _up0 = new Vector3();
+const _up1 = new Vector3();
+const _qc = new Quaternion();
+const _qId = new Quaternion();
 const _v2 = new Vector3();
 const _v3 = new Vector3();
 const _v4 = new Vector3();
