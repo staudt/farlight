@@ -1,18 +1,18 @@
 import { expect, test } from 'vitest';
-import { chunkEdgeLength, faceToDir, isBeyondHorizon, maxLevelFor, shouldMerge, shouldSplit } from '../src/terrain/quadtree';
+import { SPLIT_FACTOR, chunkEdgeLength, faceToDir, isBeyondHorizon, maxLevelFor, shouldMerge, shouldSplit } from '../src/terrain/quadtree';
 
 test('split below factor * edge, never past max level', () => {
-  expect(shouldSplit(100, 100, 3, 10)).toBe(true);
-  expect(shouldSplit(300, 100, 3, 10)).toBe(false);
+  expect(shouldSplit(100 * SPLIT_FACTOR * 0.9, 100, 3, 10)).toBe(true);
+  expect(shouldSplit(100 * SPLIT_FACTOR * 1.1, 100, 3, 10)).toBe(false);
   expect(shouldSplit(1, 100, 10, 10)).toBe(false);
 });
 
 test('merge has hysteresis', () => {
   const edge = 100;
-  const d = edge * 2.2 * 1.1;
+  const d = edge * SPLIT_FACTOR * 1.1;
   expect(shouldSplit(d, edge, 3, 10)).toBe(false);
   expect(shouldMerge(d, edge)).toBe(false);
-  expect(shouldMerge(edge * 2.2 * 1.5, edge)).toBe(true);
+  expect(shouldMerge(edge * SPLIT_FACTOR * 1.5, edge)).toBe(true);
 });
 
 test('max level gives a finest edge under 400 m', () => {
