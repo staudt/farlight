@@ -26,6 +26,8 @@ if (params.has('debug')) debug.toggle();
 const atmoFolder = debug.folder('Atmosphere and post');
 atmoFolder.add(post.atmosphere, 'intensity', 0, 3).name('scatter intensity');
 atmoFolder.add(post.bloom, 'intensity', 0, 3).name('bloom');
+atmoFolder.add(post.clouds, 'coverageBias', -0.5, 0.5).name('cloud coverage');
+atmoFolder.add(post.clouds, 'sunIntensity', 0, 5).name('cloud light');
 
 input.on('warpUp', () => world.clock.step(1));
 input.on('warpDown', () => world.clock.step(-1));

@@ -11,8 +11,8 @@ export const MAX_ATMOS = 2;
 
 export const atmosphereFragment = /* glsl */ `
 #define MAX_ATMOS ${MAX_ATMOS}
-#define PRIMARY_STEPS 14
-#define LIGHT_STEPS 5
+#define ATMO_STEPS 14
+#define ATMO_LIGHT_STEPS 5
 
 uniform mat4 uInvProj;
 uniform mat4 uCamToWorld;
@@ -78,14 +78,14 @@ vec3 applyAtmosphere(int i, vec3 color, vec3 d, float tScene) {
   t1 = min(t1, tScene);
   if (t1 <= t0) return color;
 
-  float seg = (t1 - t0) / float(PRIMARY_STEPS);
+  float seg = (t1 - t0) / float(ATMO_STEPS);
   vec3 sumR = vec3(0.0);
   vec3 sumM = vec3(0.0);
   float odR = 0.0;
   float odM = 0.0;
   float mu = dot(d, uSunDir);
 
-  for (int s = 0; s < PRIMARY_STEPS; s++) {
+  for (int s = 0; s < ATMO_STEPS; s++) {
     float t = t0 + (float(s) + 0.5) * seg;
     vec3 p = d * t - c;                 // relative to the planet center
     float r = length(p);
@@ -99,10 +99,10 @@ vec3 applyAtmosphere(int i, vec3 color, vec3 d, float tScene) {
     vec3 up = p / r;
     float cosSun = dot(up, uSunDir);
     vec2 tl = hitSphereFrom(p, uSunDir, RA);
-    float lseg = max(tl.y, 0.0) / float(LIGHT_STEPS);
+    float lseg = max(tl.y, 0.0) / float(ATMO_LIGHT_STEPS);
     float lR = 0.0;
     float lM = 0.0;
-    for (int j = 0; j < LIGHT_STEPS; j++) {
+    for (int j = 0; j < ATMO_LIGHT_STEPS; j++) {
       vec3 q = p + uSunDir * ((float(j) + 0.5) * lseg);
       float la = max(length(q) - R, 0.0);
       lR += exp(-la / uHr[i]) * lseg;

@@ -10,6 +10,7 @@ import {
 import { HalfFloatType, NoToneMapping, Vector3 } from 'three';
 import type { GameRenderer } from './renderer';
 import { AtmosphereEffect } from './atmosphere/atmosphereEffect';
+import { CloudEffect } from './clouds/cloudEffect';
 import { SunView } from './bodies/sunView';
 
 /**
@@ -20,6 +21,7 @@ import { SunView } from './bodies/sunView';
 export class PostStack {
   readonly composer: EffectComposer;
   readonly atmosphere = new AtmosphereEffect();
+  readonly clouds = new CloudEffect();
   readonly bloom: BloomEffect;
   readonly toneMapping: ToneMappingEffect;
   readonly vignette: VignetteEffect;
@@ -31,7 +33,7 @@ export class PostStack {
     r.toneMapping = NoToneMapping;
     this.composer = new EffectComposer(r, { frameBufferType: HalfFloatType, multisampling: 4 });
     this.composer.addPass(new RenderPass(gfx.scene, gfx.camera));
-    this.composer.addPass(new EffectPass(gfx.camera, this.atmosphere));
+    this.composer.addPass(new EffectPass(gfx.camera, this.clouds, this.atmosphere));
     this.bloom = new BloomEffect({
       intensity: 0.85,
       luminanceThreshold: 0.85,
@@ -47,7 +49,9 @@ export class PostStack {
 
     gfx.renderFn = (ctx) => {
       const world = ctx.world;
-      this.atmosphere.updateFrame(ctx.camera, ctx.cameraWorld, world.universe.root, world.universe.bodies);
+      const bodies = world.universe.bodies;
+      this.clouds.updateFrame(ctx.camera, ctx.cameraWorld, world.universe.root, bodies, ctx.simTime);
+      this.atmosphere.updateFrame(ctx.camera, ctx.cameraWorld, world.universe.root, bodies);
       this.skyBrightness = this.estimateSky(gfx);
       gfx.starfield.brightness = 1 - 0.97 * this.skyBrightness;
       if (sunView) sunView.glowIntensity = 1 - 0.5 * this.skyBrightness;

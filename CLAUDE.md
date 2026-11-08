@@ -102,3 +102,4 @@ A relaxed solar system glider. Launch from a planet, glide through its atmospher
 - Unproject view rays at the NEAR plane; the far plane overflows float32.
 - One NaN pixel turns the whole frame black through bloom. If the smoke test reports a black frame with no console errors, suspect NaN in a post shader.
 - Smoke tests pick a free port; never hardcode preview ports (parallel agents collide).
+- Effects merged into one EffectPass share a shader: prefix every #define (ATMO_, CLOUD_).

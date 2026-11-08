@@ -1,4 +1,4 @@
-import { Quaternion, Vector3 } from 'three';
+import { Matrix4, Quaternion, Vector3 } from 'three';
 import type { BodyDef, StarSystemDef } from '../data/types';
 import {
   DEFAULT_SCALE,
@@ -95,7 +95,10 @@ export class Body {
 
 const _qInv = new Quaternion();
 const _spin = new Quaternion();
-const _tmp = new Vector3();
+const _x = new Vector3();
+const _y = new Vector3();
+const _z = new Vector3();
+const _m = new Matrix4();
 
 export class Universe {
   readonly system: StarSystemDef;
@@ -150,12 +153,16 @@ export class Universe {
   }
 
   private updateRotation(b: Body, t: number): void {
-    let angle = b.spinRate * t + b.def.seed * 0.618;
-    if (b.def.physical.tidallyLocked && b.parent) {
-      // Local +X faces the parent.
-      _tmp.copy(b.parent.position).sub(b.position).applyQuaternion(_qInv.copy(b.tilt).invert());
-      angle = Math.atan2(-_tmp.z, _tmp.x);
+    if (b.def.physical.tidallyLocked && b.parent && b.orbit) {
+      // Local +X faces the parent exactly; local +Y is the orbit normal.
+      _x.copy(b.localPosition).negate().normalize();
+      _y.copy(b.localPosition).cross(b.localVelocity).normalize();
+      _z.copy(_x).cross(_y);
+      _m.makeBasis(_x, _y, _z);
+      b.rotation.setFromRotationMatrix(_m);
+      return;
     }
+    const angle = b.spinRate * t + b.def.seed * 0.618;
     _spin.setFromAxisAngle(Y_AXIS, angle);
     b.rotation.copy(b.tilt).multiply(_spin);
   }
