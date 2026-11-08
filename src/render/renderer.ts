@@ -98,6 +98,8 @@ export class GameRenderer {
   }
 
   onResize?: (w: number, h: number) => void;
+  /** Camera shake in meters along the view right and up axes (re-entry buffeting). */
+  cameraShake?: () => { x: number; y: number };
 
   render(world: World, realDt: number): void {
     this.realTime += realDt;
@@ -107,6 +109,11 @@ export class GameRenderer {
     ctx.simTime = world.clock.time;
 
     this.shipCamera.update(world, this.camera, realDt);
+    if (this.cameraShake) {
+      const s = this.cameraShake();
+      _shake.set(s.x, s.y, 0).applyQuaternion(this.camera.quaternion);
+      this.shipCamera.worldPos.add(_shake);
+    }
 
     // Sun light shines on the ship from the sun's direction.
     const sun = world.universe.root;
@@ -124,3 +131,4 @@ export class GameRenderer {
 }
 
 const _sunDir = new Vector3();
+const _shake = new Vector3();

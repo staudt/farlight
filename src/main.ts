@@ -4,6 +4,7 @@ import { SOLAR_SYSTEM } from './data/solarSystem';
 import { Input } from './input/input';
 import { PostStack } from './render/post';
 import { GameRenderer } from './render/renderer';
+import { getShake, installShipFx } from './render/fx';
 import { DEFAULT_SCENARIO, SCENARIOS } from './scenarios';
 import { World } from './sim/world';
 import { DebugPanel } from './ui/debugPanel';
@@ -19,6 +20,8 @@ const scenario = SCENARIOS[scenarioName] ?? SCENARIOS[DEFAULT_SCENARIO]!;
 scenario.apply(world);
 
 const gfx = new GameRenderer(canvas, world);
+installShipFx(gfx);
+gfx.cameraShake = getShake;
 const post = new PostStack(gfx);
 const input = new Input(canvas);
 const debug = new DebugPanel(world, gfx, (name) => SCENARIOS[name]?.apply(world));
