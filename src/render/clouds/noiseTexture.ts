@@ -6,7 +6,29 @@ import { mulberry32 } from '../../core/rng';
  *  R: Perlin-Worley base shape (billowy cumulus blobs)
  *  G: higher frequency Worley for edge erosion
  */
-export function createCloudNoiseTexture(size = 64, seed = 7): Data3DTexture {
+export const CLOUD_NOISE_SIZE = 64;
+let cached: Uint8Array | null = null;
+
+/** The RG cloud noise voxels, generated once and shared by the GPU texture and CPU sampling. */
+export function cloudNoiseData(): Uint8Array {
+  cached ??= buildCloudNoise(CLOUD_NOISE_SIZE, 7);
+  return cached;
+}
+
+export function createCloudNoiseTexture(): Data3DTexture {
+  const size = CLOUD_NOISE_SIZE;
+  const tex = new Data3DTexture(cloudNoiseData(), size, size, size);
+  tex.format = RGFormat;
+  tex.type = UnsignedByteType;
+  tex.minFilter = LinearFilter;
+  tex.magFilter = LinearFilter;
+  tex.wrapS = tex.wrapT = tex.wrapR = RepeatWrapping;
+  tex.unpackAlignment = 1;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function buildCloudNoise(size: number, seed: number): Uint8Array {
   const rnd = mulberry32(seed);
   const data = new Uint8Array(size * size * size * 2);
 
@@ -22,15 +44,7 @@ export function createCloudNoiseTexture(size = 64, seed = 7): Data3DTexture {
     data[i * 2] = Math.round(clamp01(pw * 0.75 + w * 0.35) * 255);
     data[i * 2 + 1] = Math.round(clamp01(1 - worleyHi[i]!) * 255);
   }
-  const tex = new Data3DTexture(data, size, size, size);
-  tex.format = RGFormat;
-  tex.type = UnsignedByteType;
-  tex.minFilter = LinearFilter;
-  tex.magFilter = LinearFilter;
-  tex.wrapS = tex.wrapT = tex.wrapR = RepeatWrapping;
-  tex.unpackAlignment = 1;
-  tex.needsUpdate = true;
-  return tex;
+  return data;
 }
 
 /** Tileable Worley (F1 distance), normalized to 0..1. */

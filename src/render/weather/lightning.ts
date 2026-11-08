@@ -137,7 +137,7 @@ export class Lightning {
       _dir.copy(east).multiplyScalar(Math.cos(a)).addScaledVector(north, Math.sin(a));
       const strikeUp = _su.copy(up).addScaledVector(_dir, d / body.radius).normalize();
       body.worldToLocalDir(strikeUp, this.dirLocal);
-      if (weatherAmount(def, this.dirLocal, ctx.simTime) > 0.12) {
+      if (weatherAmount(def, this.dirLocal, ctx.simTime, body) > 0.12) {
         this.strikeAt(ctx, body, _dir, d, false);
         return;
       }

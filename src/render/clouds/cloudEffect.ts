@@ -2,6 +2,7 @@ import { Effect, EffectAttribute } from 'postprocessing';
 import { Color, Matrix3, Matrix4, type PerspectiveCamera, Quaternion, Uniform, Vector3 } from 'three';
 import type { Body } from '../../sim/universe';
 import { cloudFragment } from './clouds.glsl';
+import { cloudDrift } from './coverage';
 import { createCloudNoiseTexture } from './noiseTexture';
 
 /** Raymarched cloud layer for the nearest body that has clouds. */
@@ -77,9 +78,8 @@ export class CloudEffect extends Effect {
     u.get('uScale')!.value = scale;
     u.get('uCoverage')!.value = Math.min(1, Math.max(0, c.coverage + this.coverageBias));
     // Drift wraps at the weather map period so float32 never sees huge offsets.
-    const period = scale * 28;
-    const drift = (simTime * c.speed) % period;
-    (u.get('uDrift')!.value as Vector3).set(drift, 0, drift * 0.35);
+    const drift = cloudDrift(c, best.radius, simTime);
+    (u.get('uDrift')!.value as Vector3).set(drift.x, 0, drift.z);
     (u.get('uSunDir')!.value as Vector3).copy(sun.position).sub(best.position).normalize();
     (u.get('uCloudColor')!.value as Color).setRGB(c.color[0], c.color[1], c.color[2]);
     u.get('uSunI')!.value = this.sunIntensity;

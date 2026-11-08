@@ -51,7 +51,7 @@ float cloudDensity(vec3 pl, float h01, float detail) {
   float shape = remap01(h01, 0.0, 0.12) * remap01(h01, 1.0, 0.55);
   if (shape <= 0.0) return 0.0;
   // Weather map: continent scale coverage variation.
-  float weather = texture(uNoise, pl / (uScale * 28.0)).r;
+  float weather = texture(uNoise, (pl + uDrift) / (uScale * 28.0)).r;
   float weather2 = texture(uNoise, pl / (uScale * 9.0) + 0.37).r;
   float cov = clamp(uCoverage + (weather - 0.5) * 1.3 + (weather2 - 0.5) * 0.4, 0.0, 1.0);
   vec3 q = (pl + uDrift) / uScale;
@@ -64,6 +64,28 @@ float cloudDensity(vec3 pl, float h01, float detail) {
     d = remap01(d, erode * 0.35 * detail * (1.0 - h01 * 0.5), 1.0);
   }
   return d;
+}
+
+// Exit distance from point p (inside the sphere) along d through a sphere of radius r.
+float exitSphere(vec3 p, vec3 d, float r) {
+  float b = dot(p, d);
+  float k = dot(p, p) - r * r;
+  return -b + sqrt(max(b * b - k, 0.0));
+}
+
+// Fraction of sunlight reaching a surface point under the cloud layer (0 = deep shadow).
+float cloudShadow(vec3 pw, float rIn, float rOut, float thickness) {
+  if (dot(normalize(pw), uSunDir) < -0.05) return 1.0;
+  float tIn = exitSphere(pw, uSunDir, rIn);
+  float tOut = exitSphere(pw, uSunDir, rOut);
+  float seg = (tOut - tIn) / 4.0;
+  float od = 0.0;
+  for (int j = 0; j < 4; j++) {
+    vec3 q = pw + uSunDir * (tIn + (float(j) + 0.5) * seg);
+    float qh = (length(q) - rIn) / thickness;
+    od += cloudDensity(uToLocal * q, qh, 0.0) * seg;
+  }
+  return exp(-od * (1.0 / 180.0) * 0.35);
 }
 
 float hgPhase(float mu, float g) {
@@ -79,7 +101,7 @@ vec4 farClouds(vec3 d, float tScene, float rIn, float thickness) {
   if (tm.x > tm.y || tm.x < 0.0 || tm.x > tScene) return vec4(0.0);
   vec3 pw = d * tm.x - uCenter;
   vec3 pl = uToLocal * pw;
-  float weather = texture(uNoise, pl / (uScale * 28.0)).r;
+  float weather = texture(uNoise, (pl + uDrift) / (uScale * 28.0)).r;
   float weather2 = texture(uNoise, pl / (uScale * 9.0) + 0.37).r;
   float cov = clamp(uCoverage + (weather - 0.5) * 1.3 + (weather2 - 0.5) * 0.4, 0.0, 1.0);
   // Lower octave than the volume: from orbit the full frequency aliases (no 3D mips).
@@ -113,11 +135,22 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
 
   float rIn = uR + uBase;
   float rOut = uR + uTop;
+  vec4 sceneIn = inputColor;
+  // Cloud shadows on terrain (and anything else) below the cloud base.
+  if (tScene < 1e29) {
+    vec3 pg = d * tScene - uCenter;
+    float rg = length(pg);
+    if (rg < rIn) {
+      float sh = cloudShadow(pg, rIn, rOut, uTop - uBase);
+      float fade = 1.0 - smoothstep(uScale * 6.0, uScale * 20.0, tScene);
+      sceneIn.rgb *= mix(1.0, 0.18 + 0.82 * sh, fade);
+    }
+  }
   float farMix = smoothstep(uTop + 15000.0, uTop + 120000.0, uCamAlt);
   vec4 far = vec4(0.0);
   if (farMix > 0.0) {
     far = farClouds(d, tScene, rIn, uTop - uBase);
-    if (farMix >= 1.0) { outputColor = vec4(inputColor.rgb * (1.0 - far.a) + far.rgb, inputColor.a); return; }
+    if (farMix >= 1.0) { outputColor = vec4(sceneIn.rgb * (1.0 - far.a) + far.rgb, inputColor.a); return; }
   }
   float hIn = uCamAlt - uBase;   // camera altitude above the inner shell
   float hOut = uCamAlt - uTop;
@@ -142,7 +175,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
   t1 = min(t1, tScene);
   if (t1 <= t0) march = false;
   if (!march) {
-    outputColor = vec4(inputColor.rgb * (1.0 - far.a * farMix) + far.rgb * farMix, inputColor.a);
+    outputColor = vec4(sceneIn.rgb * (1.0 - far.a * farMix) + far.rgb * farMix, inputColor.a);
     return;
   }
 
@@ -199,8 +232,8 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
       if (trans < 0.02) break;
     }
   }
-  vec3 volColor = inputColor.rgb * trans + light;
-  vec3 farColor = inputColor.rgb * (1.0 - far.a) + far.rgb;
+  vec3 volColor = sceneIn.rgb * trans + light;
+  vec3 farColor = sceneIn.rgb * (1.0 - far.a) + far.rgb;
   outputColor = vec4(mix(volColor, farColor, farMix), inputColor.a);
 }
 `;

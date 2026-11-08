@@ -17,21 +17,24 @@ const surface = (description: string, p: ShipPlacement): Scenario => ({
 });
 
 /** Longitude (degrees) on the day side at `lat` where the weather `kind` is strongest right now. */
-function stormLongitude(w: World, bodyId: string, kind: 'rain' | 'lightning' | 'snow', lat: number): number {
+/** Finds a daytime spot inside a storm cell: scans latitudes (within the band) and longitudes. */
+function stormSpot(w: World, bodyId: string, kind: 'rain' | 'lightning' | 'snow', lats: [number, number]): { lat: number; lon: number } {
   w.universe.update(w.clock.time);
   const body = w.universe.get(bodyId);
   const def = body.def.atmosphere!.weather!.find((d) => d.kind === kind)!;
   const sun = body.worldToLocalDir(w.universe.root.position.clone().sub(body.position).normalize(), new Vector3());
   const d = new Vector3();
-  let best = 0;
+  let best = { lat: lats[0], lon: 0 };
   let bestScore = -1;
-  for (let lon = -180; lon < 180; lon += 2) {
-    latLonToDir((lat * Math.PI) / 180, (lon * Math.PI) / 180, d);
-    if (d.dot(sun) < 0.25) continue;
-    const score = weatherAmount(def, d, w.clock.time);
-    if (score > bestScore) {
-      bestScore = score;
-      best = lon;
+  for (let lat = lats[0]; lat <= lats[1]; lat += 1.5) {
+    for (let lon = -180; lon < 180; lon += 1.5) {
+      latLonToDir((lat * Math.PI) / 180, (lon * Math.PI) / 180, d);
+      if (d.dot(sun) < 0.3) continue;
+      const score = weatherAmount(def, d, w.clock.time, body);
+      if (score > bestScore) {
+        bestScore = score;
+        best = { lat, lon };
+      }
     }
   }
   return best;
@@ -99,17 +102,17 @@ export const SCENARIOS: Record<string, Scenario> = {
   },
   'earth-storm': {
     description: 'Low under the storm clouds, rain and lightning',
-    apply: (w) =>
-      w.place({
-        body: 'earth', lat: 30, lon: stormLongitude(w, 'earth', 'lightning', 30), altitude: 1200, heading: 20, pitch: 3, throttle: 0.15,
-      }),
+    apply: (w) => {
+      const spot = stormSpot(w, 'earth', 'lightning', [-30, 30]);
+      w.place({ body: 'earth', ...spot, altitude: 1200, heading: 20, pitch: 3, throttle: 0.15 });
+    },
   },
   'earth-snow': {
     description: 'Low over the arctic in falling snow',
-    apply: (w) =>
-      w.place({
-        body: 'earth', lat: 72, lon: stormLongitude(w, 'earth', 'snow', 72), altitude: 700, heading: 90, pitch: 2, throttle: 0.15,
-      }),
+    apply: (w) => {
+      const spot = stormSpot(w, 'earth', 'snow', [62, 76]);
+      w.place({ body: 'earth', ...spot, altitude: 700, heading: 90, pitch: 2, throttle: 0.15 });
+    },
   },
 };
 

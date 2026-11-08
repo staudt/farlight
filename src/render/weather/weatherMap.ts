@@ -1,4 +1,6 @@
 import type { WeatherDef } from '../../data/types';
+import type { Body } from '../../sim/universe';
+import { cloudCoverage } from '../clouds/coverage';
 
 function hash3(x: number, y: number, z: number): number {
   let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(z | 0, 1274126177);
@@ -65,10 +67,17 @@ export function bandWeight(def: WeatherDef, absLat: number): number {
 }
 
 /** 0..1 how strongly this weather is happening at a body fixed direction (before altitude fading). */
-export function weatherAmount(def: WeatherDef, dir: Dir3, time: number): number {
+export function weatherAmount(def: WeatherDef, dir: Dir3, time: number, body?: Body): number {
   const lat = Math.abs(Math.asin(Math.max(-1, Math.min(1, dir.y))));
   const band = bandWeight(def, lat);
   if (band <= 0) return 0;
+  const clouds = body?.def.atmosphere?.clouds;
+  if (clouds) {
+    // Precipitation and storms only under the clouds you can see: heavy overcast.
+    const cov = cloudCoverage(clouds, body.radius, body.atmosphereHeight, dir, time);
+    const thr = def.kind === 'lightning' ? 0.8 : 0.68;
+    return band * smooth(thr, thr + 0.12, cov) * (0.55 + 0.45 * def.intensity);
+  }
   const n = cloudProxy(dir, time, def.kind === 'snow' ? 3.7 : 0);
   const thr = 0.74 - 0.5 * def.intensity;
   return band * smooth(thr, thr + 0.1, n) * (0.55 + 0.45 * def.intensity);

@@ -212,13 +212,13 @@ export class Precipitation {
       const rd = find('rain');
       const sd = find('snow');
       if (rd && rainSettings.enabled) {
-        const a = rainSettings.force ? 1 : weatherAmount(rd, this.dirLocal, time);
+        const a = rainSettings.force ? 1 : weatherAmount(rd, this.dirLocal, time, body);
         rainT = Math.min(1, a * rainSettings.intensity) * altFade;
         const c = rd.color;
         if (c) (this.rain.material.uniforms.uColor!.value as Vector3).set(c[0], c[1], c[2]);
       }
       if (sd && snowSettings.enabled) {
-        const a = snowSettings.force ? 1 : weatherAmount(sd, this.dirLocal, time);
+        const a = snowSettings.force ? 1 : weatherAmount(sd, this.dirLocal, time, body);
         snowT = Math.min(1, a * snowSettings.intensity) * altFade;
       }
       // Daylight brightness: dim at night, dimmer under overcast.
