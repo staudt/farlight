@@ -1,6 +1,7 @@
 import { Vector3 } from 'three';
 import { config } from './core/config';
 import { SOLAR_SYSTEM } from './data/solarSystem';
+import { AudioEngine } from './audio/audio';
 import { Input } from './input/input';
 import { PostStack } from './render/post';
 import { GameRenderer } from './render/renderer';
@@ -21,6 +22,7 @@ const scenario = SCENARIOS[scenarioName] ?? SCENARIOS[DEFAULT_SCENARIO]!;
 world.setHeightProvider((b) => createHeightSamplerForBody(b)); // terrain: before placement queries ground height
 scenario.apply(world);
 
+const audio = new AudioEngine(world);
 const gfx = new GameRenderer(canvas, world, [createPlanetView]); // terrain: chunked planets
 installShipFx(gfx);
 gfx.cameraShake = getShake;
@@ -33,6 +35,8 @@ atmoFolder.add(post.atmosphere, 'intensity', 0, 3).name('scatter intensity');
 atmoFolder.add(post.bloom, 'intensity', 0, 3).name('bloom');
 atmoFolder.add(post.clouds, 'coverageBias', -0.5, 0.5).name('cloud coverage');
 atmoFolder.add(post.clouds, 'sunIntensity', 0, 5).name('cloud light');
+const audioFolder = debug.folder('Audio');
+for (const k of Object.keys(audio.tuning) as (keyof typeof audio.tuning)[]) audioFolder.add(audio.tuning, k, 0, 2);
 
 input.on('warpUp', () => world.clock.step(1));
 input.on('warpDown', () => world.clock.step(-1));
@@ -64,6 +68,7 @@ function frame(now: number): void {
   gfx.shipCamera.lookPitch = clamp(gfx.shipCamera.lookPitch - look.y * 0.004, -1.3, 1.3);
 
   world.step(realDt, flight);
+  audio.update(realDt);
   gfx.render(world, realDt);
   debug.update();
   hud.update(realDt);
@@ -93,6 +98,7 @@ declare global {
 }
 window.__game = {
   world,
+  audio,
   gfx,
   post,
   config,
