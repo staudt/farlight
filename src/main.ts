@@ -5,6 +5,7 @@ import { Input } from './input/input';
 import { PostStack } from './render/post';
 import { GameRenderer } from './render/renderer';
 import { getShake, installShipFx } from './render/fx';
+import { createHeightSamplerForBody, createPlanetView, terrainPending } from './terrain';
 import { DEFAULT_SCENARIO, SCENARIOS } from './scenarios';
 import { World } from './sim/world';
 import { DebugPanel } from './ui/debugPanel';
@@ -17,9 +18,10 @@ const params = new URLSearchParams(location.search);
 const world = new World(SOLAR_SYSTEM, 0);
 const scenarioName = params.get('scenario') ?? DEFAULT_SCENARIO;
 const scenario = SCENARIOS[scenarioName] ?? SCENARIOS[DEFAULT_SCENARIO]!;
+world.setHeightProvider((b) => createHeightSamplerForBody(b)); // terrain: before placement queries ground height
 scenario.apply(world);
 
-const gfx = new GameRenderer(canvas, world);
+const gfx = new GameRenderer(canvas, world, [createPlanetView]); // terrain: chunked planets
 installShipFx(gfx);
 gfx.cameraShake = getShake;
 const post = new PostStack(gfx);
@@ -106,6 +108,7 @@ window.__game = {
     speed: world.ship.speed,
     warp: world.clock.warp,
     simTime: world.clock.time,
+    pending: terrainPending(), // terrain
     ready: frameCount > 10,
   }),
 };
