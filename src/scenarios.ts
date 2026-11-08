@@ -40,6 +40,9 @@ export const SCENARIOS: Record<string, Scenario> = {
   'moon-surface-earthrise': surface('On the Moon near the limb, Earth on the horizon', {
     body: 'moon', lat: 0, lon: 82, altitude: 0, heading: 270, landed: true,
   }),
+  'moon-low-day': surface('Two kilometres over the Moon, low sun, craters in relief', {
+    body: 'moon', lat: 5, localHour: 8, altitude: 2000, heading: 0, pitch: -14, throttle: 0.3,
+  }),
   'deep-space-warp': {
     description: 'Between Earth and Moon',
     apply: (w) => {

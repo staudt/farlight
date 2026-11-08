@@ -44,6 +44,11 @@ function samplerFor(req: ChunkRequest): TerrainSampler {
 
 const SKIRT = 0.06;
 
+function smoothstep(a: number, b: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
 /** Builds one chunk: samples heights on a (grid+1)^2 lattice, colors per triangle, adds skirts. */
 export function buildChunk(req: ChunkRequest): ChunkResult {
   const sampler = samplerFor(req);
@@ -91,19 +96,54 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
   const edge = chunkEdgeLength(R, req.level);
   const skirt = edge * SKIRT;
   const facetAng = Math.PI / 2 / (1 << req.level) / G;
-  const jitterFreq = Math.min(55, Math.max(4, 0.6 / facetAng));
+  const cell = edge / G;
+  void facetAng;
+  // LOD factors. `detail` drives biome jitter and sharp transitions, `smooth` blends flat facet
+  // colors into per vertex gradients on coarse chunks, `facetVar` is the per facet brightness noise.
+  const detail = 1 - smoothstep(3000, 40000, cell);
+  const smooth = smoothstep(4000, 18000, cell);
+  const facetVar = 1 - smoothstep(3000, 16000, cell);
+  // Slopes measured over a coarse triangle are meaningless at body scale: fade them out with size.
+  const slopeScale = 1 / (1 + cell / 8000);
+
+  // Per vertex colors from the analytic sample (continuous across triangles and chunks).
+  const vcol = new Float32Array(V * V * 3);
+  const rad = new Float64Array(V * V);
+  for (let k = 0; k < V * V; k++) rad[k] = Math.hypot(px[k]!, py[k]!, pz[k]!);
+  for (let j = 0; j < V; j++) {
+    for (let i = 0; i < V; i++) {
+      const k = i + j * V;
+      const i0 = Math.max(0, i - 1);
+      const i1 = Math.min(G, i + 1);
+      const j0 = Math.max(0, j - 1);
+      const j1 = Math.min(G, j + 1);
+      const ka = i0 + j * V;
+      const kb = i1 + j * V;
+      const kc = i + j0 * V;
+      const kd = i + j1 * V;
+      const d1 = Math.hypot(px[kb]! - px[ka]!, py[kb]! - py[ka]!, pz[kb]! - pz[ka]!) || 1;
+      const d2 = Math.hypot(px[kd]! - px[kc]!, py[kd]! - py[kc]!, pz[kd]! - pz[kc]!) || 1;
+      const gx = (rad[kb]! - rad[ka]!) / d1;
+      const gy = (rad[kd]! - rad[kc]!) / d2;
+      const sample = samples[k]!;
+      const slope = sample.water ? 0 : Math.min(1, Math.hypot(gx, gy) * slopeScale);
+      const col = biomeColor(terrain, sample, slope, detail);
+      vcol[k * 3] = col[0];
+      vcol[k * 3 + 1] = col[1];
+      vcol[k * 3 + 2] = col[2];
+    }
+  }
 
   const cells = G * G;
   const tris = cells * 2 + 4 * G * 2;
   const positions = new Float32Array(tris * 9);
   const colors = new Float32Array(tris * 9);
   const water = new Float32Array(tris * 6);
-  const triColor = new Float32Array(cells * 6); // two triangles per cell, rgb
+  const triColor = new Float32Array(cells * 18); // two triangles per cell, 3 vertices, rgb
   const triWater = new Float32Array(cells * 2);
   const triRnd = new Float32Array(cells * 2);
 
   let maxDist2 = 0;
-  const tmp = makeSample();
   const baseSeed = hashInts(req.face, req.level, req.x, req.y);
 
   const writeTri = (t: number, a: number, b: number, c: number, cell: number, which: number): void => {
@@ -119,9 +159,10 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
       positions[o + q * 3 + 2] = Z;
       const d2 = X * X + Y * Y + Z * Z;
       if (d2 > maxDist2) maxDist2 = d2;
-      colors[o + q * 3] = triColor[(cell * 2 + which) * 3]!;
-      colors[o + q * 3 + 1] = triColor[(cell * 2 + which) * 3 + 1]!;
-      colors[o + q * 3 + 2] = triColor[(cell * 2 + which) * 3 + 2]!;
+      const co = (cell * 2 + which) * 9 + q * 3;
+      colors[o + q * 3] = triColor[co]!;
+      colors[o + q * 3 + 1] = triColor[co + 1]!;
+      colors[o + q * 3 + 2] = triColor[co + 2]!;
       water[t * 6 + q * 2] = triWater[cell * 2 + which]!;
       water[t * 6 + q * 2 + 1] = triRnd[cell * 2 + which]!;
     }
@@ -129,59 +170,46 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
 
   // Pass 1: colors per triangle.
   const classify = (a: number, b: number, c: number, cell: number, which: number): void => {
-    const ex = px[b]! - px[a]!;
-    const ey = py[b]! - py[a]!;
-    const ez = pz[b]! - pz[a]!;
-    const fx = px[c]! - px[a]!;
-    const fy = py[c]! - py[a]!;
-    const fz = pz[c]! - pz[a]!;
-    let nx = ey * fz - ez * fy;
-    let ny = ez * fx - ex * fz;
-    let nz = ex * fy - ey * fx;
-    const nl = Math.hypot(nx, ny, nz) || 1;
-    nx /= nl;
-    ny /= nl;
-    nz /= nl;
-    const rx = dx[a]! + dx[b]! + dx[c]!;
-    const ry = dy[a]! + dy[b]! + dy[c]!;
-    const rz = dz[a]! + dz[b]! + dz[c]!;
-    const rl = Math.hypot(rx, ry, rz) || 1;
-    const cosT = Math.min(1, Math.abs(nx * rx + ny * ry + nz * rz) / rl);
-    const slope = Math.min(1, Math.sqrt(1 - cosT * cosT) / Math.max(cosT, 1e-4));
     const sa = samples[a]!;
     const sb = samples[b]!;
     const sc = samples[c]!;
     const wn = (sa.water ? 1 : 0) + (sb.water ? 1 : 0) + (sc.water ? 1 : 0);
-    tmp.x = rx / rl;
-    tmp.y = ry / rl;
-    tmp.z = rz / rl;
-    tmp.lat = Math.asin(Math.max(-1, Math.min(1, tmp.y)));
-    tmp.water = wn >= 2;
-    if (tmp.water) {
-      tmp.n = (sa.n + sb.n + sc.n) / 3;
-      tmp.depthN = ((sa.water ? sa.depthN : 0) + (sb.water ? sb.depthN : 0) + (sc.water ? sc.depthN : 0)) / wn;
-    } else {
-      // Average only land vertices so shores are not dragged underwater.
-      let n = 0;
-      let cnt = 0;
-      for (const s of [sa, sb, sc]) {
-        if (!s.water) {
-          n += s.n;
-          cnt++;
-        }
-      }
-      tmp.n = cnt ? n / cnt : sa.n;
-      tmp.depthN = 0;
+    const isWater = wn >= 2;
+    // Flat color: mean of the vertices that share the triangle's water/land class, so shores
+    // are not dragged across the coastline.
+    let fr = 0;
+    let fg = 0;
+    let fb = 0;
+    let cnt = 0;
+    const vs = [a, b, c];
+    for (let q = 0; q < 3; q++) {
+      const k = vs[q]!;
+      if (samples[k]!.water !== isWater) continue;
+      fr += vcol[k * 3]!;
+      fg += vcol[k * 3 + 1]!;
+      fb += vcol[k * 3 + 2]!;
+      cnt++;
     }
-    tmp.moisture = (sa.moisture + sb.moisture + sc.moisture) / 3;
-    const col = biomeColor(terrain, tmp, tmp.water ? 0 : slope, jitterFreq);
+    if (cnt === 0) cnt = 1;
+    fr /= cnt;
+    fg /= cnt;
+    fb /= cnt;
     const rnd = (hashInts(baseSeed, cell, which) & 0xffff) / 65535;
-    const k = 1 + (rnd - 0.5) * 0.08;
-    const o = (cell * 2 + which) * 3;
-    triColor[o] = col[0] * k;
-    triColor[o + 1] = col[1] * k;
-    triColor[o + 2] = col[2] * k;
-    triWater[cell * 2 + which] = tmp.water ? 1 : 0;
+    const kv = 1 + (rnd - 0.5) * 0.14 * facetVar;
+    // A subtle warm/cool shift per facet makes the low poly look read on land.
+    const tint = isWater ? 0 : (((hashInts(baseSeed, cell, which + 7) & 0xff) / 255) - 0.5) * 0.05 * facetVar;
+    for (let q = 0; q < 3; q++) {
+      const k = vs[q]!;
+      const o = (cell * 2 + which) * 9 + q * 3;
+      const m = smooth;
+      const rr = fr + (vcol[k * 3]! - fr) * m;
+      const gg = fg + (vcol[k * 3 + 1]! - fg) * m;
+      const bb = fb + (vcol[k * 3 + 2]! - fb) * m;
+      triColor[o] = rr * kv * (1 + tint);
+      triColor[o + 1] = gg * kv;
+      triColor[o + 2] = bb * kv * (1 - tint);
+    }
+    triWater[cell * 2 + which] = isWater ? 1 : 0;
     triRnd[cell * 2 + which] = rnd;
   };
 
@@ -217,9 +245,9 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
     };
     const color = (tri: number): void => {
       for (let q = 0; q < 3; q++) {
-        colors[tri * 9 + q * 3] = triColor[(cell * 2 + which) * 3]!;
-        colors[tri * 9 + q * 3 + 1] = triColor[(cell * 2 + which) * 3 + 1]!;
-        colors[tri * 9 + q * 3 + 2] = triColor[(cell * 2 + which) * 3 + 2]!;
+        colors[tri * 9 + q * 3] = triColor[(cell * 2 + which) * 9]!;
+        colors[tri * 9 + q * 3 + 1] = triColor[(cell * 2 + which) * 9 + 1]!;
+        colors[tri * 9 + q * 3 + 2] = triColor[(cell * 2 + which) * 9 + 2]!;
         water[tri * 6 + q * 2] = triWater[cell * 2 + which]! + 2;
         water[tri * 6 + q * 2 + 1] = triRnd[cell * 2 + which]!;
       }
