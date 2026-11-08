@@ -4,6 +4,7 @@ import { SOLAR_SYSTEM } from './data/solarSystem';
 import { AudioEngine } from './audio/audio';
 import { Input } from './input/input';
 import { PostStack } from './render/post';
+import { createGasGiantView } from './render/bodies';
 import { GameRenderer } from './render/renderer';
 import { getShake, installShipFx } from './render/fx';
 import { createHeightSamplerForBody, createPlanetView, terrainPending } from './terrain';
@@ -25,7 +26,7 @@ world.setHeightProvider((b) => createHeightSamplerForBody(b)); // terrain: befor
 scenario.apply(world);
 
 const audio = new AudioEngine(world);
-const gfx = new GameRenderer(canvas, world, [createPlanetView]); // terrain: chunked planets
+const gfx = new GameRenderer(canvas, world, [createPlanetView, createGasGiantView]); // terrain: chunked planets; gas giants + rings
 installShipFx(gfx);
 gfx.cameraShake = getShake;
 const post = new PostStack(gfx);
