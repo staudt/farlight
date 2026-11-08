@@ -111,7 +111,100 @@ export const SCENARIOS: Record<string, Scenario> = {
         body: 'earth', lat: 72, lon: stormLongitude(w, 'earth', 'snow', 72), altitude: 700, heading: 90, pitch: 2, throttle: 0.15,
       }),
   },
+  'jupiter-orbit': {
+    description: 'Day side of Jupiter from 2.5 radii, Great Red Spot in view',
+    apply: (w) => faceSpot(w, 'jupiter', 2.5),
+  },
+  'jupiter-skim': {
+    description: 'Three kilometres below the Jupiter cloud tops, flying level through the cloud sea',
+    apply: (w) => {
+      w.place({
+        body: 'jupiter', lat: -12, localHour: 11, altitude: gasAltitude(w, 'jupiter', -3000), heading: 90, pitch: 0, throttle: 0.35,
+      });
+    },
+  },
+  'saturn-rings': {
+    description: 'Saturn and its rings from 3 radii, just above the ring plane, sun behind',
+    apply: (w) => {
+      w.universe.update(w.clock.time);
+      const saturn = w.universe.get('saturn');
+      const pole = new Vector3(0, 1, 0).applyQuaternion(saturn.rotation);
+      const sun = w.universe.root.position.clone().sub(saturn.position).normalize();
+      const flat = sun.clone().addScaledVector(pole, -sun.dot(pole)).normalize();
+      const side = new Vector3().crossVectors(pole, flat);
+      // Sun behind the camera: the camera sits on the sun side, a little above the ring plane.
+      w.placeInSpace('saturn', saturn.radius * 3, flat.clone().addScaledVector(pole, 0.2).addScaledVector(side, 0.35));
+    },
+  },
+  'saturn-ring-shadow': {
+    description: 'Saturn seen from the ring plane side, ring shadow draped across the cloud tops',
+    apply: (w) => {
+      w.clock.time = sunElevationTime(w, 'saturn', 14);
+      w.universe.update(w.clock.time);
+      const saturn = w.universe.get('saturn');
+      const pole = new Vector3(0, 1, 0).applyQuaternion(saturn.rotation);
+      const sun = w.universe.root.position.clone().sub(saturn.position).normalize();
+      const flat = sun.clone().addScaledVector(pole, -sun.dot(pole)).normalize();
+      const side = new Vector3().crossVectors(pole, flat);
+      // The shadow lands on the hemisphere opposite the sun; look at it from a little over that side.
+      const sign = sun.dot(pole) >= 0 ? 1 : -1;
+      w.placeInSpace('saturn', saturn.radius * 3.2, flat.clone().multiplyScalar(0.85).addScaledVector(side, 0.25).addScaledVector(pole, -0.4 * sign));
+    },
+  },
 };
+
+/** A sim time within the body's year when the sun stands about `deg` degrees off its equatorial plane. */
+function sunElevationTime(w: World, bodyId: string, deg: number): number {
+  const body = w.universe.get(bodyId);
+  const target = (deg * Math.PI) / 180;
+  const year = body.orbit?.period ?? 86400 * 365;
+  let best = w.clock.time;
+  let bestErr = Infinity;
+  for (let k = 0; k < 120; k++) {
+    const t = (k / 120) * year;
+    w.universe.update(t);
+    const pole = new Vector3(0, 1, 0).applyQuaternion(body.rotation);
+    const el = Math.asin(w.universe.root.position.clone().sub(body.position).normalize().dot(pole));
+    const err = Math.abs(Math.abs(el) - target);
+    if (err < bestErr) {
+      bestErr = err;
+      best = t;
+    }
+  }
+  return best;
+}
+
+/** Ground-relative (pressure floor relative) altitude of a point `depth` meters from the cloud tops. */
+function gasAltitude(w: World, bodyId: string, depthFromTops: number): number {
+  const b = w.universe.get(bodyId);
+  return depthFromTops + (b.def.gas?.cloudDeckDepth ?? 0.02) * b.radius;
+}
+
+/** Puts the camera `radii` out, over the first storm, at the time of day when it faces the sun. */
+function faceSpot(w: World, bodyId: string, radii: number): void {
+  const body = w.universe.get(bodyId);
+  const storm = body.def.gas?.storms?.[0];
+  const period = body.def.physical.rotationPeriod;
+  const local = new Vector3();
+  latLonToDir(storm?.lat ?? 0, storm?.lon ?? 0, local);
+  let best = 0;
+  let bestScore = -2;
+  for (let t = 0; t < period; t += period / 120) {
+    w.universe.update(t);
+    const dir = local.clone().applyQuaternion(body.rotation);
+    const score = dir.dot(w.universe.root.position.clone().sub(body.position).normalize());
+    if (score > bestScore) {
+      bestScore = score;
+      best = t;
+    }
+  }
+  w.clock.time = best;
+  w.universe.update(best);
+  const dir = local.clone().applyQuaternion(body.rotation);
+  const sun = w.universe.root.position.clone().sub(body.position).normalize();
+  const side = new Vector3().crossVectors(dir, sun);
+  w.placeInSpace(bodyId, body.radius * radii, dir.addScaledVector(sun, 0.15).addScaledVector(side, 0.5));
+}
 
 /** Sim time when the given Moon longitude has the given local solar hour. */
 function findMoonMorning(w: World, lonDeg: number, hour: number): number {
