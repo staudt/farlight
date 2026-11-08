@@ -5,6 +5,7 @@ import { Input } from './input/input';
 import { PostStack } from './render/post';
 import { GameRenderer } from './render/renderer';
 import { getShake, installShipFx } from './render/fx';
+import { auroraSettings, installWeather, lightningSettings, rainSettings, snowSettings } from './render/weather';
 import { DEFAULT_SCENARIO, SCENARIOS } from './scenarios';
 import { World } from './sim/world';
 import { DebugPanel } from './ui/debugPanel';
@@ -23,6 +24,7 @@ const gfx = new GameRenderer(canvas, world);
 installShipFx(gfx);
 gfx.cameraShake = getShake;
 const post = new PostStack(gfx);
+const weather = installWeather(gfx, post);
 const input = new Input(canvas);
 const debug = new DebugPanel(world, gfx, (name) => SCENARIOS[name]?.apply(world));
 if (params.has('debug')) debug.toggle();
@@ -31,6 +33,14 @@ atmoFolder.add(post.atmosphere, 'intensity', 0, 3).name('scatter intensity');
 atmoFolder.add(post.bloom, 'intensity', 0, 3).name('bloom');
 atmoFolder.add(post.clouds, 'coverageBias', -0.5, 0.5).name('cloud coverage');
 atmoFolder.add(post.clouds, 'sunIntensity', 0, 5).name('cloud light');
+const wxFolder = debug.folder('Weather');
+for (const [name, o] of Object.entries({ rain: rainSettings, snow: snowSettings, lightning: lightningSettings, aurora: auroraSettings })) {
+  const f = wxFolder.addFolder(name);
+  f.add(o, 'enabled');
+  f.add(o, 'intensity', 0, 3);
+  if ('force' in o) f.add(o, 'force');
+}
+wxFolder.add({ strike: () => weather.lightning.strikeNow() }, 'strike');
 
 input.on('warpUp', () => world.clock.step(1));
 input.on('warpDown', () => world.clock.step(-1));
