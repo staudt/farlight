@@ -7,7 +7,7 @@ atmosphere as the sky turns from blue to black, and chase the other planets acro
 system with time warp. Every planet and moon stays visible in the sky, and each world
 has its own feel: Earth's oceans, clouds and auroras, the cratered Moon with Earth on the
 horizon, Martian canyons under a dusty sky, the golden murk of Venus, Titan's orange haze,
-Io beneath a looming Jupiter.
+Io beneath a looming Jupiter, Saturn's rings, and a dive into Jupiter's cloud sea.
 
 **Play:** https://staudt.github.io/farlight/
 
@@ -34,7 +34,8 @@ Io beneath a looming Jupiter.
 Fly slowly near the ground to land. Once landed, you can warp time to watch sunsets and moonrises.
 
 Try a scenario with `?scenario=` in the URL, for example `earth-low-morning`, `atmo-entry`,
-`moon-surface-earthrise`, `mars-canyon`, `io-volcanoes`, `earth-aurora-orbit` or `earth-storm`.
+`moon-surface-earthrise`, `mars-canyon`, `io-volcanoes`, `saturn-rings`, `jupiter-orbit`,
+`jupiter-skim`, `earth-aurora-orbit` or `earth-storm`.
 
 ## Tech
 
