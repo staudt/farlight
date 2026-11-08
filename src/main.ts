@@ -12,6 +12,7 @@ import { World } from './sim/world';
 import { DebugPanel } from './ui/debugPanel';
 import { Hud } from './ui/hud';
 import { SystemMap } from './ui/map';
+import { SkyLabels } from './ui/skyLabels';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
@@ -44,6 +45,7 @@ input.on('camera', () => gfx.shipCamera.toggle());
 input.on('debug', () => debug.toggle());
 const hud = new Hud(document.getElementById('hud')!, world, gfx, input);
 const systemMap = new SystemMap(document.getElementById('map')!, world, input);
+const skyLabels = new SkyLabels(document.getElementById('hud')!, world, gfx);
 
 const alignDir = new Vector3();
 let last = performance.now();
@@ -73,6 +75,7 @@ function frame(now: number): void {
   debug.update();
   hud.update(realDt);
   systemMap.update();
+  skyLabels.update();
 
   fpsAcc += realDt;
   fpsFrames++;
