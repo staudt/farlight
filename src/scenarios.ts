@@ -67,12 +67,31 @@ export const SCENARIOS: Record<string, Scenario> = {
       w.placeInSpace('earth', earth.radius * 2.6);
     },
   },
+  'mars-canyon': surface('Over the rim of Valles Marineris in the Martian morning', {
+    body: 'mars', lat: -8, localHour: 9, altitude: 2500, heading: 270, pitch: -4, throttle: 0.4,
+  }),
+  'mars-sunset': surface('Blue sunset over the dusty Martian plains', {
+    body: 'mars', lat: 20, localHour: 18.3, altitude: 1200, heading: 270, pitch: 0, throttle: 0.4,
+  }),
+  'venus-clouds': surface('Under the endless yellow clouds of Venus', {
+    body: 'venus', lat: 10, localHour: 11, altitude: 3000, heading: 45, pitch: 0, throttle: 0.4,
+  }),
+  'titan-haze': surface('Gliding through the orange haze of Titan', {
+    body: 'titan', lat: 30, localHour: 10, altitude: 2000, heading: 90, pitch: -3, throttle: 0.4,
+  }),
+  'io-volcanoes': {
+    description: 'Low over Io in daylight, Jupiter looming over the horizon',
+    apply: (w) => {
+      // Jupiter hangs over lon 0 (tidal lock); at lon 68 it sits about 22 degrees up, to the west.
+      w.place({ body: 'io', lat: 5, lon: 68, altitude: 3000, heading: 270, pitch: 8, throttle: 0.3, time: findLockedMorning(w, 'io', 68, 9) });
+    },
+  },
   'moon-surface-earthrise': {
     description: 'Morning on the Moon near the limb, Earth on the horizon',
     apply: (w) => {
       // Earth hangs over lon 0 (tidal lock). Find a time in the month when lon 82 has a
       // low morning sun, so the ground is lit and Earth sits near the horizon.
-      w.place({ body: 'moon', lat: 0, lon: 82, altitude: 0, heading: 270, landed: true, time: findMoonMorning(w, 82, 8.5) });
+      w.place({ body: 'moon', lat: 0, lon: 82, altitude: 0, heading: 270, landed: true, time: findLockedMorning(w, 'moon', 82, 8.5) });
     },
   },
   'moon-low-day': surface('Two kilometres over the Moon, low sun, craters in relief', {
@@ -116,9 +135,9 @@ export const SCENARIOS: Record<string, Scenario> = {
   },
 };
 
-/** Sim time when the given Moon longitude has the given local solar hour. */
-function findMoonMorning(w: World, lonDeg: number, hour: number): number {
-  const moon = w.universe.get('moon');
+/** Sim time when a tidally locked moon's longitude has the given local solar hour. */
+function findLockedMorning(w: World, bodyId: string, lonDeg: number, hour: number): number {
+  const moon = w.universe.get(bodyId);
   const target = ((lonDeg - (hour - 12) * 15) * Math.PI) / 180;
   let best = 0;
   let bestErr = Infinity;
