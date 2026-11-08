@@ -1,6 +1,7 @@
 import { Vector3 } from 'three';
 import { config } from './core/config';
 import { SOLAR_SYSTEM } from './data/solarSystem';
+import { AudioEngine } from './audio/audio';
 import { Input } from './input/input';
 import { PostStack } from './render/post';
 import { GameRenderer } from './render/renderer';
@@ -19,6 +20,7 @@ const scenarioName = params.get('scenario') ?? DEFAULT_SCENARIO;
 const scenario = SCENARIOS[scenarioName] ?? SCENARIOS[DEFAULT_SCENARIO]!;
 scenario.apply(world);
 
+const audio = new AudioEngine(world);
 const gfx = new GameRenderer(canvas, world);
 installShipFx(gfx);
 gfx.cameraShake = getShake;
@@ -62,6 +64,7 @@ function frame(now: number): void {
   gfx.shipCamera.lookPitch = clamp(gfx.shipCamera.lookPitch - look.y * 0.004, -1.3, 1.3);
 
   world.step(realDt, flight);
+  audio.update(realDt);
   gfx.render(world, realDt);
   debug.update();
   hud.update(realDt);
@@ -91,6 +94,7 @@ declare global {
 }
 window.__game = {
   world,
+  audio,
   gfx,
   post,
   config,
