@@ -167,33 +167,49 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
   const w = { x: 0, y: 0, z: 0 };
   const seedMix = def.seed | 0;
 
+  // High frequency layers are faded out over open ocean so the sea does not speckle with tiny
+  // islands; they come back on and near land. Only worlds with water do this.
+  const hfFrom = 7;
+
+  function layerValue(L: CompiledLayer, x: number, y: number, z: number): number {
+    const d = L.def;
+    let px = x * d.frequency + L.ox;
+    let py = y * d.frequency + L.oy;
+    let pz = z * d.frequency + L.oz;
+    let m = 1;
+    if (d.mask) {
+      const mv = noise.noise(x * d.mask.frequency + L.mx, y * d.mask.frequency + L.my, z * d.mask.frequency + L.mz);
+      m = smoothstep(d.mask.threshold, d.mask.threshold + 0.3, mv);
+      if (m <= 0) return 0;
+    }
+    if (d.warp) {
+      warp3(noise, px, py, pz, d.warp, w);
+      px = w.x;
+      py = w.y;
+      pz = w.z;
+    }
+    const v =
+      d.type === 'fbm'
+        ? fbm(noise, px, py, pz, d.octaves, L.lac, L.gain)
+        : d.type === 'ridged'
+          ? ridged(noise, px, py, pz, d.octaves, L.lac, L.gain)
+          : billow(noise, px, py, pz, d.octaves, L.lac, L.gain);
+    return v * d.amplitude * m;
+  }
+
   function layersHeight(x: number, y: number, z: number): number {
     let sum = 0;
+    if (!hasWater) {
+      for (let i = 0; i < layers.length; i++) sum += layerValue(layers[i]!, x, y, z);
+      return sum;
+    }
     for (let i = 0; i < layers.length; i++) {
-      const L = layers[i]!;
-      const d = L.def;
-      let px = x * d.frequency + L.ox;
-      let py = y * d.frequency + L.oy;
-      let pz = z * d.frequency + L.oz;
-      let m = 1;
-      if (d.mask) {
-        const mv = noise.noise(x * d.mask.frequency + L.mx, y * d.mask.frequency + L.my, z * d.mask.frequency + L.mz);
-        m = smoothstep(d.mask.threshold, d.mask.threshold + 0.3, mv);
-        if (m <= 0) continue;
-      }
-      if (d.warp) {
-        warp3(noise, px, py, pz, d.warp, w);
-        px = w.x;
-        py = w.y;
-        pz = w.z;
-      }
-      const v =
-        d.type === 'fbm'
-          ? fbm(noise, px, py, pz, d.octaves, L.lac, L.gain)
-          : d.type === 'ridged'
-            ? ridged(noise, px, py, pz, d.octaves, L.lac, L.gain)
-            : billow(noise, px, py, pz, d.octaves, L.lac, L.gain);
-      sum += v * d.amplitude * m;
+      if (layers[i]!.def.frequency < hfFrom) sum += layerValue(layers[i]!, x, y, z);
+    }
+    const land = smoothstep(seaLevel - 0.12, seaLevel + 0.12, sum);
+    if (land <= 0) return sum;
+    for (let i = 0; i < layers.length; i++) {
+      if (layers[i]!.def.frequency >= hfFrom) sum += layerValue(layers[i]!, x, y, z) * land;
     }
     return sum;
   }
