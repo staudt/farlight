@@ -55,6 +55,7 @@ export class World {
     surfaceDistance: Infinity,
     stabilization: 0,
     solidGround: false,
+    canLand: false,
   };
   /** Height above the base radius (sea level), for HUD and atmosphere. */
   radialAltitude = Infinity;
@@ -95,7 +96,10 @@ export class World {
 
   /** Terrain height (game meters above radius) at a body fixed unit direction. */
   groundHeight(body: Body, dir: Vector3): number {
-    return body.kind === 'rocky' ? this.sampler(body).heightAt(dir.x, dir.y, dir.z) : 0;
+    if (body.kind === 'rocky') return this.sampler(body).heightAt(dir.x, dir.y, dir.z);
+    // Gas giants: a soft pressure floor below the cloud tops.
+    if (body.kind === 'gas') return -(body.def.gas?.cloudDeckDepth ?? 0.02) * body.radius;
+    return 0;
   }
 
   step(realDt: number, input: FlightInput): void {
@@ -137,7 +141,8 @@ export class World {
 
     const dirLocal = ship.frame.rotating ? _d.copy(env.up) : body.worldToLocalDir(env.up, _d);
     const ground = this.groundHeight(body, dirLocal);
-    env.solidGround = body.kind === 'rocky';
+    env.solidGround = body.kind !== 'star';
+    env.canLand = body.kind === 'rocky';
     env.altitude = r - body.radius - ground;
     this.radialAltitude = r - body.radius;
 

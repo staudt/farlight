@@ -37,8 +37,10 @@ export interface FlightEnv {
   surfaceDistance: number;
   /** Per body leveling strength 0..1. */
   stabilization: number;
-  /** True when a solid surface exists below (false for gas giants and stars). */
+  /** True when a floor exists below: terrain, or a gas giant's pressure floor. */
   solidGround: boolean;
+  /** Touchdown allowed (false on gas giants: their floor only pushes back). */
+  canLand: boolean;
 }
 
 const FORWARD = new Vector3(0, 0, -1);
@@ -209,7 +211,7 @@ export class Ship {
         const vr = this.vel.dot(env.up);
         if (vr < 0) this.vel.addScaledVector(env.up, -vr);
       }
-      if (altNow < f.gearHeight + 2 && this.vel.length() < f.landSpeed && this.throttle < 0.05) {
+      if (env.canLand && altNow < f.gearHeight + 2 && this.vel.length() < f.landSpeed && this.throttle < 0.05) {
         this.landed = true;
         this.vel.set(0, 0, 0);
         this.angVel.set(0, 0, 0);
