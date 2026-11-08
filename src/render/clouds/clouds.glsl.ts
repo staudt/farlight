@@ -82,7 +82,8 @@ vec4 farClouds(vec3 d, float tScene, float rIn, float thickness) {
   float weather = texture(uNoise, pl / (uScale * 28.0)).r;
   float weather2 = texture(uNoise, pl / (uScale * 9.0) + 0.37).r;
   float cov = clamp(uCoverage + (weather - 0.5) * 1.3 + (weather2 - 0.5) * 0.4, 0.0, 1.0);
-  float base = texture(uNoise, (pl + uDrift) / uScale).r;
+  // Lower octave than the volume: from orbit the full frequency aliases (no 3D mips).
+  float base = texture(uNoise, (pl + uDrift) / (uScale * 3.0)).r;
   float dens = smoothstep(1.0 - cov, 1.0 - cov + 0.35, base * 0.85 + 0.15 * weather2);
   vec3 up = pw / length(pw);
   float cosSun = dot(up, uSunDir);

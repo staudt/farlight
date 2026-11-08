@@ -34,8 +34,11 @@ export class GameRenderer {
   readonly shipView = new ShipView();
   readonly bodyViews: BodyView[] = [];
   readonly sunLight = new DirectionalLight(0xffffff, 3);
-  readonly ambient = new AmbientLight(0x223344, 0.25);
+  readonly ambient = new AmbientLight(0x223344, 0.18);
+  /** Planetshine: sky color above, the nearby planet's lit color below. */
   readonly hemi = new HemisphereLight(0x88aaff, 0x332211, 0);
+  /** Soft fill from the camera so the ship always reads, even against the sun. */
+  readonly fill = new DirectionalLight(0xbfd4ff, 0.55);
   /** Extra per frame hooks (effects, weather, ...). */
   readonly updaters: ((ctx: FrameContext) => void)[] = [];
   /** Replaces the final render call (the post processing stack installs itself here). */
@@ -58,7 +61,7 @@ export class GameRenderer {
 
     this.camera = new PerspectiveCamera(config.camera.fov, 1, config.render.near, config.render.far);
     this.scene.add(this.camera, this.starfield.object, this.shipView.object, this.sunLight, this.sunLight.target);
-    this.scene.add(this.ambient, this.hemi);
+    this.scene.add(this.ambient, this.hemi, this.fill, this.fill.target);
 
     for (const body of world.universe.bodies) {
       let view: BodyView | null = null;
@@ -98,6 +101,33 @@ export class GameRenderer {
   }
 
   onResize?: (w: number, h: number) => void;
+
+  private updateFillLights(world: World): void {
+    // Camera fill: from slightly above and behind the camera.
+    _fillDir.set(0.2, 0.6, 1).applyQuaternion(this.camera.quaternion);
+    this.fill.position.copy(_fillDir).multiplyScalar(100);
+    this.fill.target.position.set(0, 0, 0);
+
+    // Planetshine from the dominant body.
+    const body = world.ship.frame.body;
+    if (body.kind === 'star') {
+      this.hemi.intensity = 0;
+      return;
+    }
+    _up2.copy(world.shipWorldPos).sub(body.position);
+    const dist = _up2.length();
+    _up2.divideScalar(dist);
+    this.hemi.position.copy(_up2);
+    const sunDir = _sunDir2.copy(world.universe.root.position).sub(body.position).normalize();
+    const day = Math.max(0, _up2.dot(sunDir) * 0.7 + 0.3);
+    const c = body.def.visual.color;
+    // Fades with distance: strong when the planet fills the sky.
+    const near = Math.min(1, (body.radius * 3) / dist);
+    this.hemi.groundColor.setRGB(c[0] * day, c[1] * day, c[2] * day);
+    const a = body.def.atmosphere ? world.atmosphereDepth : 0;
+    this.hemi.color.setRGB(0.08 + 0.45 * a * day, 0.1 + 0.55 * a * day, 0.16 + 0.75 * a * day);
+    this.hemi.intensity = 1.6 * near;
+  }
   /** Camera shake in meters along the view right and up axes (re-entry buffeting). */
   cameraShake?: () => { x: number; y: number };
 
@@ -120,6 +150,7 @@ export class GameRenderer {
     _sunDir.copy(sun.position).sub(world.shipWorldPos).normalize();
     this.sunLight.position.copy(_sunDir).multiplyScalar(1000);
     this.sunLight.target.position.set(0, 0, 0);
+    this.updateFillLights(world);
 
     for (const v of this.bodyViews) v.update(ctx);
     this.shipView.update(ctx);
@@ -132,3 +163,6 @@ export class GameRenderer {
 
 const _sunDir = new Vector3();
 const _shake = new Vector3();
+const _fillDir = new Vector3();
+const _up2 = new Vector3();
+const _sunDir2 = new Vector3();

@@ -5,6 +5,7 @@ import {
   IcosahedronGeometry,
   Mesh,
   MeshBasicMaterial,
+  DoubleSide,
   MeshStandardMaterial,
   Vector3,
 } from 'three';
@@ -271,7 +272,7 @@ export function buildShipModel(): ShipModel {
   const group = new Group();
   const hullMesh = new Mesh(
     hull.geometry(),
-    new MeshStandardMaterial({ vertexColors: true, flatShading: true, metalness: 0.15, roughness: 0.55 }),
+    new MeshStandardMaterial({ vertexColors: true, flatShading: true, metalness: 0.15, roughness: 0.55, side: DoubleSide }),
   );
   const glassMesh = new Mesh(
     glass.geometry(),
