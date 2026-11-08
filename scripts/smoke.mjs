@@ -17,7 +17,15 @@ const flags = new Set(args.filter((a) => a.startsWith('--')).map((a) => a.split(
 const waitArg = args.find((a) => a.startsWith('--wait='));
 const settleMs = waitArg ? Number(waitArg.split('=')[1]) : 2500;
 const only = args.filter((a) => !a.startsWith('--'));
-const PORT = 4179;
+import { createServer } from 'node:net';
+// Parallel agents run smoke tests at the same time: always use a free port.
+const PORT = await new Promise((resolve) => {
+  const srv = createServer();
+  srv.listen(0, () => {
+    const { port } = srv.address();
+    srv.close(() => resolve(port));
+  });
+});
 const OUT = 'artifacts/smoke';
 const BROWSER = process.env.CHROMIUM_PATH ?? ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome'].find(existsSync);
 
@@ -25,11 +33,14 @@ mkdirSync(OUT, { recursive: true });
 if (!flags.has('--no-build')) execSync('npx vite build --logLevel error', { stdio: 'inherit' });
 
 const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'pipe' });
+let serverExited = false;
+server.on('exit', () => (serverExited = true));
 const stop = () => server.kill('SIGTERM');
 process.on('exit', stop);
 
 async function waitForServer() {
   for (let i = 0; i < 100; i++) {
+    if (serverExited) throw new Error(`preview server on port ${PORT} exited (port taken?)`);
     try {
       const r = await fetch(`http://localhost:${PORT}/`);
       if (r.ok) return;

@@ -2,6 +2,7 @@ import { Vector3 } from 'three';
 import { config } from './core/config';
 import { SOLAR_SYSTEM } from './data/solarSystem';
 import { Input } from './input/input';
+import { PostStack } from './render/post';
 import { GameRenderer } from './render/renderer';
 import { DEFAULT_SCENARIO, SCENARIOS } from './scenarios';
 import { World } from './sim/world';
@@ -16,9 +17,13 @@ const scenario = SCENARIOS[scenarioName] ?? SCENARIOS[DEFAULT_SCENARIO]!;
 scenario.apply(world);
 
 const gfx = new GameRenderer(canvas, world);
+const post = new PostStack(gfx);
 const input = new Input(canvas);
 const debug = new DebugPanel(world, gfx, (name) => SCENARIOS[name]?.apply(world));
 if (params.has('debug')) debug.toggle();
+const atmoFolder = debug.folder('Atmosphere and post');
+atmoFolder.add(post.atmosphere, 'intensity', 0, 3).name('scatter intensity');
+atmoFolder.add(post.bloom, 'intensity', 0, 3).name('bloom');
 
 input.on('warpUp', () => world.clock.step(1));
 input.on('warpDown', () => world.clock.step(-1));
@@ -80,6 +85,7 @@ declare global {
 window.__game = {
   world,
   gfx,
+  post,
   config,
   scenarios: Object.keys(SCENARIOS),
   getState: () => ({

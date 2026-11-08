@@ -48,11 +48,11 @@ const earth: BodyDef = {
     height: 0.094,
     scaleHeight: 0.13,
     rayleighDepth: [0.045, 0.1, 0.25],
-    mieDepth: 0.035,
+    mieDepth: 0.012,
     mieG: 0.78,
     mieColor: [1, 1, 1],
     absorptionDepth: [0.0, 0.012, 0.0],
-    sunIntensity: 22,
+    sunIntensity: 14,
     stabilization: 1,
     clouds: { altitude: 0.08, thickness: 0.07, coverage: 0.45, color: [1, 1, 1], scale: 0.02, speed: 8 },
     weather: [
