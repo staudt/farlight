@@ -146,9 +146,12 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
   }
 
   float len = t1 - t0;
-  float stepLen = len / float(CLOUD_STEPS);
+  // Adaptive step count: short paths (looking up through the layer) need few samples.
+  float thicknessM = uTop - uBase;
+  int steps = int(clamp(len / (thicknessM * 0.12), 10.0, float(CLOUD_STEPS)));
+  float stepLen = len / float(steps);
   // Keep near steps fine when the layer is long (horizon, orbit views).
-  float jitter = hash12(gl_FragCoord.xy + fract(uFrame * 0.618) * 100.0);
+  float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy + mod(uFrame, 64.0) * 5.588238, vec2(0.06711056, 0.00583715))));
   float sigma = 1.0 / 180.0;               // extinction per meter at density 1
   float thickness = uTop - uBase;
 
@@ -158,6 +161,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
   float phase = mix(hgPhase(mu, 0.65), hgPhase(mu, -0.2), 0.35) * 4.0 * 3.14159265;
 
   for (int i = 0; i < CLOUD_STEPS; i++) {
+    if (i >= steps) break;
     float t = t0 + (float(i) + jitter) * stepLen;
     vec3 pw = d * t - uCenter;             // world axes, planet centered
     float r = length(pw);

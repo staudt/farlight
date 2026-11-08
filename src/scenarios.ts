@@ -1,3 +1,4 @@
+import { Vector3 } from 'three';
 import type { World, ShipPlacement } from './sim/world';
 
 export interface Scenario {
@@ -37,9 +38,14 @@ export const SCENARIOS: Record<string, Scenario> = {
       w.placeInSpace('earth', earth.radius * 2.6);
     },
   },
-  'moon-surface-earthrise': surface('On the Moon near the limb, Earth on the horizon', {
-    body: 'moon', lat: 0, lon: 82, altitude: 0, heading: 270, landed: true,
-  }),
+  'moon-surface-earthrise': {
+    description: 'Morning on the Moon near the limb, Earth on the horizon',
+    apply: (w) => {
+      // Earth hangs over lon 0 (tidal lock). Find a time in the month when lon 82 has a
+      // low morning sun, so the ground is lit and Earth sits near the horizon.
+      w.place({ body: 'moon', lat: 0, lon: 82, altitude: 0, heading: 270, landed: true, time: findMoonMorning(w, 82, 8.5) });
+    },
+  },
   'deep-space-warp': {
     description: 'Between Earth and Moon',
     apply: (w) => {
@@ -48,5 +54,26 @@ export const SCENARIOS: Record<string, Scenario> = {
     },
   },
 };
+
+/** Sim time when the given Moon longitude has the given local solar hour. */
+function findMoonMorning(w: World, lonDeg: number, hour: number): number {
+  const moon = w.universe.get('moon');
+  const target = ((lonDeg - (hour - 12) * 15) * Math.PI) / 180;
+  let best = 0;
+  let bestErr = Infinity;
+  for (let t = 0; t < moon.orbit!.period; t += 1800) {
+    w.universe.update(t);
+    const s = moon.worldToLocalDir(_dir.copy(w.universe.root.position).sub(moon.position).normalize(), _dir);
+    const sub = Math.atan2(-s.z, s.x);
+    const err = Math.abs(Math.atan2(Math.sin(sub - target), Math.cos(sub - target)));
+    if (err < bestErr) {
+      bestErr = err;
+      best = t;
+    }
+  }
+  return best;
+}
+
+const _dir = new Vector3();
 
 export const DEFAULT_SCENARIO = 'earth-low-morning';
