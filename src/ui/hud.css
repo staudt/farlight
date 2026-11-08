@@ -1,0 +1,468 @@
+:root {
+  --hud-line: #5ff2ff;
+  --hud-dim: rgba(95, 242, 255, 0.55);
+  --hud-faint: rgba(95, 242, 255, 0.22);
+  --hud-panel: rgba(6, 14, 28, 0.55);
+  --hud-text: #d9fbff;
+}
+
+#hud,
+#map {
+  font-family: 'Rajdhani', system-ui, sans-serif;
+  color: var(--hud-text);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  user-select: none;
+}
+
+#hud * {
+  box-sizing: border-box;
+}
+
+#hud.hidden .hud-layer {
+  opacity: 0;
+}
+
+.hud-layer {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.4s ease;
+}
+
+.hud-label {
+  font-size: 11px;
+  color: var(--hud-dim);
+  font-weight: 400;
+}
+
+.hud-value {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 12px rgba(95, 242, 255, 0.35);
+}
+
+.hud-panel {
+  background: var(--hud-panel);
+  border: 1px solid var(--hud-faint);
+  backdrop-filter: blur(4px);
+}
+
+/* Compass */
+.compass {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  width: 360px;
+  height: 36px;
+  margin-left: -180px;
+  overflow: hidden;
+  transition: opacity 0.5s ease;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
+}
+.compass-tick {
+  position: absolute;
+  top: 16px;
+  width: 1px;
+  height: 8px;
+  background: var(--hud-dim);
+}
+.compass-tick.major {
+  top: 12px;
+  height: 12px;
+  background: var(--hud-line);
+}
+.compass-text {
+  position: absolute;
+  top: 0;
+  width: 30px;
+  margin-left: -15px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--hud-line);
+}
+.compass-pointer {
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  margin-left: -4px;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 6px solid var(--hud-line);
+}
+.compass-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+.compass-deg {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  color: var(--hud-dim);
+}
+
+/* Bottom left */
+.gauges {
+  position: absolute;
+  left: 28px;
+  bottom: 26px;
+  width: 230px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gauge-row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+.gauge-row .hud-label {
+  width: 32px;
+}
+.speedbar {
+  position: relative;
+  height: 3px;
+  background: var(--hud-faint);
+}
+.speedbar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--hud-line);
+  box-shadow: 0 0 8px var(--hud-line);
+  width: 0;
+}
+.speedbar-tick {
+  position: absolute;
+  top: -5px;
+  width: 2px;
+  height: 13px;
+  background: #fff;
+  margin-left: -1px;
+}
+.boost {
+  font-size: 12px;
+  color: #ffd27a;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  font-weight: 600;
+}
+.boost.on {
+  opacity: 1;
+}
+
+/* Bottom right */
+.timebox {
+  position: absolute;
+  right: 28px;
+  bottom: 26px;
+  text-align: right;
+}
+.timebox .hud-value {
+  font-size: 20px;
+}
+.timebox.limited .hud-value {
+  color: #ffd27a;
+}
+.timebox .note {
+  height: 14px;
+  font-size: 11px;
+  color: #ffd27a;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.timebox.limited .note {
+  opacity: 1;
+}
+
+/* Body card */
+.bodycard {
+  position: absolute;
+  top: 20px;
+  right: 28px;
+  width: 250px;
+  padding: 14px 18px 12px;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+.bodycard.on {
+  opacity: 1;
+}
+.card-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--hud-faint);
+}
+.glyph {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--hud-line);
+  position: relative;
+  flex: none;
+}
+.glyph::after {
+  content: '';
+  position: absolute;
+  left: -5px;
+  right: -5px;
+  top: 50%;
+  height: 1px;
+  background: var(--hud-dim);
+  transform: rotate(-20deg);
+}
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+}
+.card-row .k {
+  color: var(--hud-dim);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  padding-top: 2px;
+}
+.card-row .v {
+  text-align: right;
+  font-weight: 600;
+}
+
+/* Crosshair */
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+}
+.crosshair i {
+  position: absolute;
+  background: var(--hud-line);
+  opacity: 0.8;
+}
+.crosshair i.h {
+  width: 8px;
+  height: 1px;
+  top: 0;
+}
+.crosshair i.v {
+  width: 1px;
+  height: 8px;
+  left: 0;
+}
+.crosshair .ring {
+  position: absolute;
+  left: -14px;
+  top: -14px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--hud-faint);
+  border-radius: 50%;
+  background: none;
+}
+.stickdot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: var(--hud-line);
+  box-shadow: 0 0 8px var(--hud-line);
+  opacity: 0.85;
+}
+
+/* Target marker */
+.target {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+}
+.target .box {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+.target .c {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 0 solid var(--hud-line);
+}
+.target .c.tl {
+  left: 0;
+  top: 0;
+  border-left-width: 1px;
+  border-top-width: 1px;
+}
+.target .c.tr {
+  right: 0;
+  top: 0;
+  border-right-width: 1px;
+  border-top-width: 1px;
+}
+.target .c.bl {
+  left: 0;
+  bottom: 0;
+  border-left-width: 1px;
+  border-bottom-width: 1px;
+}
+.target .c.br {
+  right: 0;
+  bottom: 0;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+}
+.target .info {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  margin-left: 12px;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: 0.18em;
+}
+.target .info b {
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.28em;
+  color: var(--hud-line);
+}
+.target .info span {
+  display: block;
+  color: var(--hud-dim);
+}
+.edgearrow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+}
+.edgearrow i {
+  position: absolute;
+  left: -9px;
+  top: -9px;
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 14px solid var(--hud-line);
+  filter: drop-shadow(0 0 6px var(--hud-line));
+}
+.edgearrow em {
+  position: absolute;
+  font-style: normal;
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--hud-dim);
+  transform: translate(-50%, 0);
+}
+.alignhint {
+  position: absolute;
+  left: 50%;
+  top: calc(50% - 86px);
+  transform: translateX(-50%);
+  font-size: 12px;
+  color: var(--hud-line);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  white-space: nowrap;
+}
+
+/* Toast */
+.toast {
+  position: absolute;
+  left: 50%;
+  top: 24%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+  pointer-events: none;
+}
+.toast.on {
+  opacity: 1;
+}
+.toast .big {
+  font-size: 44px;
+  font-weight: 400;
+  letter-spacing: 0.5em;
+  margin-right: -0.5em;
+  text-shadow: 0 0 24px rgba(95, 242, 255, 0.45);
+}
+.toast .small {
+  margin-top: 6px;
+  font-size: 14px;
+  letter-spacing: 0.5em;
+  margin-right: -0.5em;
+  color: var(--hud-line);
+}
+
+/* Hints */
+.hints {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  padding: 10px 22px;
+  font-size: 12px;
+  line-height: 1.8;
+  letter-spacing: 0.2em;
+  color: var(--hud-dim);
+  text-align: center;
+  width: min(560px, calc(100vw - 620px));
+  min-width: 360px;
+  opacity: 0;
+  transition: opacity 1.5s ease;
+}
+.hints.on {
+  opacity: 1;
+}
+.hints b {
+  font-weight: 600;
+  color: var(--hud-line);
+}
+.clickprompt {
+  position: absolute;
+  left: 50%;
+  top: calc(50% - 130px);
+  transform: translateX(-50%);
+  font-size: 13px;
+  letter-spacing: 0.5em;
+  margin-right: -0.5em;
+  color: var(--hud-line);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  animation: pulse 3s ease-in-out infinite;
+}
+.clickprompt.on {
+  opacity: 0.8;
+}
+@keyframes pulse {
+  50% {
+    filter: brightness(0.6);
+  }
+}

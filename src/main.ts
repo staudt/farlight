@@ -6,6 +6,8 @@ import { GameRenderer } from './render/renderer';
 import { DEFAULT_SCENARIO, SCENARIOS } from './scenarios';
 import { World } from './sim/world';
 import { DebugPanel } from './ui/debugPanel';
+import { Hud } from './ui/hud';
+import { SystemMap } from './ui/map';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
@@ -24,11 +26,8 @@ input.on('warpUp', () => world.clock.step(1));
 input.on('warpDown', () => world.clock.step(-1));
 input.on('camera', () => gfx.shipCamera.toggle());
 input.on('debug', () => debug.toggle());
-input.on('target', () => {
-  const bodies = world.universe.bodies;
-  const idx = world.target ? bodies.indexOf(world.target) : -1;
-  world.target = bodies[(idx + 1) % bodies.length] ?? null;
-});
+const hud = new Hud(document.getElementById('hud')!, world, gfx, input);
+const systemMap = new SystemMap(document.getElementById('map')!, world, input);
 
 const alignDir = new Vector3();
 let last = performance.now();
@@ -54,6 +53,8 @@ function frame(now: number): void {
   world.step(realDt, flight);
   gfx.render(world, realDt);
   debug.update();
+  hud.update(realDt);
+  systemMap.update();
 
   fpsAcc += realDt;
   fpsFrames++;
