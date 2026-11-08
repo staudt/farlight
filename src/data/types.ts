@@ -1,0 +1,258 @@
+/**
+ * Data schema for star systems. Everything the game shows comes from these
+ * definitions. The hand authored solar system and the future procedural
+ * generator both produce a StarSystemDef; no module may special case a body by name.
+ *
+ * Unit conventions:
+ *  - physical.* and orbit.* are REAL values (meters, seconds, radians). The ScaleProfile
+ *    converts them to game units. Artistic overrides in `visual` are in GAME meters.
+ *  - Atmosphere and terrain heights are FRACTIONS of the body's game radius, so they stay
+ *    valid whatever scale profile is used.
+ *  - Colors are linear RGB 0..1.
+ */
+
+export type RGB = readonly [number, number, number];
+
+export type BodyKind = 'star' | 'rocky' | 'gas';
+
+export interface StarSystemDef {
+  id: string;
+  name: string;
+  seed: number;
+  /** Ordered so that parents come before children. The first body is the root star. */
+  bodies: BodyDef[];
+}
+
+export interface BodyDef {
+  id: string;
+  name: string;
+  kind: BodyKind;
+  parentId?: string;
+  seed: number;
+  physical: PhysicalDef;
+  orbit?: OrbitDef;
+  visual: VisualDef;
+  atmosphere?: AtmosphereDef;
+  terrain?: TerrainDef;
+  gas?: GasDef;
+  rings?: RingDef;
+  star?: StarDef;
+  info: BodyInfo;
+}
+
+export interface PhysicalDef {
+  /** Real mean radius in meters. */
+  radius: number;
+  /** Surface gravity in g. */
+  surfaceGravity: number;
+  /** Sidereal rotation period in seconds. Negative means retrograde. Ignored if tidallyLocked. */
+  rotationPeriod: number;
+  /** Obliquity in radians. */
+  axialTilt: number;
+  /** Always shows the same face to its parent. */
+  tidallyLocked?: boolean;
+}
+
+export interface OrbitDef {
+  /** Real semi major axis in meters. */
+  semiMajorAxis: number;
+  eccentricity: number;
+  /** Radians, relative to the parent's reference plane (ecliptic). */
+  inclination: number;
+  ascendingNode: number;
+  argPeriapsis: number;
+  /** Mean anomaly at sim time 0, radians. */
+  meanAnomalyAtEpoch: number;
+  /** Orbital period in seconds. Negative means retrograde. */
+  period: number;
+}
+
+export interface VisualDef {
+  /** Game meters. Overrides the scaled physical radius. */
+  radius?: number;
+  /** Game meters. Overrides the scaled semi major axis. */
+  orbitDistance?: number;
+  /** Angular DIAMETER floor in radians. The body never looks smaller than this. */
+  minApparentSize?: number;
+  /** Dominant color: far glow, map icon, impostor fallback. */
+  color: RGB;
+  /** Sphere of influence radius as a multiple of the game radius. */
+  soiFactor?: number;
+}
+
+export interface AtmosphereDef {
+  /** Atmosphere thickness as a fraction of the game radius. */
+  height: number;
+  /** Density scale height as a fraction of the atmosphere thickness (Earth ~0.12). */
+  scaleHeight: number;
+  /** Zenith Rayleigh optical depth per channel (Earth ~[0.05, 0.11, 0.27]). */
+  rayleighDepth: RGB;
+  /** Zenith Mie (haze/dust) optical depth. */
+  mieDepth: number;
+  /** Mie phase anisotropy, 0.7..0.9. */
+  mieG: number;
+  /** Tint of the Mie scattering, white for water haze, butterscotch for Mars dust. */
+  mieColor?: RGB;
+  /** Extra absorption optical depth per channel (ozone like). */
+  absorptionDepth?: RGB;
+  /** Sun light intensity used by the scattering shader. */
+  sunIntensity: number;
+  /** How strongly the ship is leveled at sea level, 0..1. */
+  stabilization?: number;
+  clouds?: CloudDef;
+  weather?: WeatherDef[];
+  aurora?: AuroraDef;
+}
+
+export interface CloudDef {
+  /** Base altitude as a fraction of atmosphere thickness. */
+  altitude: number;
+  /** Layer thickness as a fraction of atmosphere thickness. */
+  thickness: number;
+  /** 0..1 sky coverage. */
+  coverage: number;
+  color: RGB;
+  /** Noise feature size as a fraction of the body radius. */
+  scale: number;
+  /** Drift speed, game meters per second. */
+  speed: number;
+}
+
+export type WeatherKind = 'rain' | 'snow' | 'dust' | 'lightning';
+
+export interface WeatherDef {
+  kind: WeatherKind;
+  /** 0..1 */
+  intensity: number;
+  color?: RGB;
+  /** Absolute latitude band in radians where this weather happens. */
+  latitudeBand?: readonly [number, number];
+}
+
+export interface AuroraDef {
+  colors: readonly RGB[];
+  /** Ring latitude in radians (both poles). */
+  latitude: number;
+  intensity: number;
+}
+
+export interface TerrainDef {
+  /** Max relief as a fraction of the game radius. */
+  amplitude: number;
+  /** Normalized height (-1..1) below which the surface is water. Omit for dry worlds. */
+  seaLevel?: number;
+  layers: NoiseLayer[];
+  craters?: CraterDef;
+  features?: FeatureDef[];
+  /** Ordered rules. The first matching biome colors the vertex; blending happens at edges. */
+  biomes: BiomeDef[];
+  water?: { color: RGB; deepColor: RGB };
+  polarCaps?: { latitude: number; color: RGB };
+  props?: PropDef[];
+}
+
+export type NoiseType = 'fbm' | 'ridged' | 'billow';
+
+export interface NoiseLayer {
+  type: NoiseType;
+  /** Base frequency in cycles across the unit sphere. */
+  frequency: number;
+  /** Contribution to the normalized height. */
+  amplitude: number;
+  octaves: number;
+  lacunarity?: number;
+  gain?: number;
+  /** Domain warp strength, 0 for none. */
+  warp?: number;
+  /** Optional low frequency mask: the layer only shows where the mask noise > threshold. */
+  mask?: { frequency: number; threshold: number };
+}
+
+export interface CraterDef {
+  count: number;
+  /** Fractions of the radius. */
+  minRadius: number;
+  maxRadius: number;
+  /** Bowl depth relative to crater radius. */
+  depth: number;
+  /** Rim height relative to crater radius. */
+  rimHeight: number;
+}
+
+export type FeatureKind = 'volcano' | 'canyon' | 'spires' | 'mesa';
+
+export interface FeatureDef {
+  kind: FeatureKind;
+  name?: string;
+  /** Radians. */
+  lat: number;
+  lon: number;
+  /** Fraction of the radius. */
+  radius: number;
+  /** Normalized height contribution. */
+  height: number;
+}
+
+export interface BiomeDef {
+  name: string;
+  color: RGB;
+  /** Normalized height range (-1..1). */
+  minHeight?: number;
+  maxHeight?: number;
+  /** Max slope, 0 flat .. 1 vertical. */
+  maxSlope?: number;
+  /** Absolute latitude range in radians. */
+  latitude?: readonly [number, number];
+  /** Moisture noise range 0..1. */
+  moisture?: readonly [number, number];
+}
+
+export type PropKind = 'tree' | 'rock' | 'spire' | 'crystal' | 'mesa';
+
+export interface PropDef {
+  kind: PropKind;
+  /** Instances per square kilometer. */
+  density: number;
+  color: RGB;
+  /** Game meters. */
+  minSize: number;
+  maxSize: number;
+  minHeight?: number;
+  maxHeight?: number;
+  maxSlope?: number;
+  biomes?: string[];
+}
+
+export interface GasDef {
+  bands: readonly RGB[];
+  bandFrequency: number;
+  turbulence: number;
+  storms?: { lat: number; lon: number; size: number; color: RGB }[];
+  /** Depth below the cloud tops where the pressure floor pushes back, fraction of radius. */
+  cloudDeckDepth: number;
+}
+
+export interface RingDef {
+  /** Multiples of the planet radius. */
+  innerRadius: number;
+  outerRadius: number;
+  color: RGB;
+  opacity: number;
+  bands: number;
+}
+
+export interface StarDef {
+  color: RGB;
+  intensity: number;
+  /** Glow sprite size as a multiple of the radius. */
+  coronaSize: number;
+}
+
+export interface BodyInfo {
+  /** Short labels for the HUD card. */
+  type: string;
+  atmosphere: string;
+  temperature: string;
+  features: string[];
+  summary: string;
+}
