@@ -93,6 +93,7 @@ export class Ship {
    */
   update(realDt: number, simDt: number, input: FlightInput, env: FlightEnv): void {
     const f = config.flight;
+    if (!(realDt > 0)) return;
     this.boosting = input.boost;
 
     // Throttle

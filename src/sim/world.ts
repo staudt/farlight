@@ -143,8 +143,10 @@ export class World {
 
     env.altitudeAhead = env.altitude;
     if (env.solidGround && env.altitude < config.flight.cushionHeight * 10) {
+      // Horizontal velocity only: a vertical descent is not "terrain rising ahead".
+      _vh.copy(ship.vel).addScaledVector(env.up, -ship.vel.dot(env.up));
       for (const t of [0.6, 1.5]) {
-        _p.copy(ship.pos).addScaledVector(ship.vel, t);
+        _p.copy(ship.pos).addScaledVector(_vh, t);
         const rr = _p.length();
         _p.divideScalar(rr);
         const dl = ship.frame.rotating ? _p : body.worldToLocalDir(_p, _d2);
@@ -274,6 +276,7 @@ function smoothstep(a: number, b: number, x: number): number {
 const _d = new Vector3();
 const _d2 = new Vector3();
 const _p = new Vector3();
+const _vh = new Vector3();
 const _wp = new Vector3();
 const _m = new Matrix4();
 const _zero = new Vector3();

@@ -47,7 +47,8 @@ let fps = 60;
 let frameCount = 0;
 
 function frame(now: number): void {
-  const realDt = Math.min(0.1, (now - last) / 1000);
+  // rAF timestamps can precede the performance.now() taken at load: never go negative.
+  const realDt = Math.min(0.1, Math.max(0, (now - last) / 1000));
   last = now;
 
   const flight = input.poll(realDt);
