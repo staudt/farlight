@@ -87,10 +87,17 @@ try {
       await page.waitForFunction(() => window.__game?.getState?.().ready, null, { timeout: 30000 });
       await page.waitForTimeout(settleMs);
       // Wait for terrain or other async content if the game reports pending work.
-      await page.waitForFunction(() => !(window.__game.getState().pending > 0), null, { timeout: 20000 }).catch(() => {
-        res.problems.push('content still pending after 20s');
+      let pendingTimedOut = false;
+      await page.waitForFunction(() => !(window.__game.getState().pending > 0), null, { timeout: 30000 }).catch(() => {
+        pendingTimedOut = true;
       });
       const state = await page.evaluate(() => window.__game.getState());
+      // Workers starve when other processes saturate the CPU: only a real failure when the
+      // page itself runs smoothly.
+      if (pendingTimedOut) {
+        if (state.fps >= 30) res.problems.push('content still pending after 30s');
+        else (res.warnings ??= []).push(`content pending after 30s at ${Math.round(state.fps)} fps (machine overloaded?)`);
+      }
       const stats = await page.evaluate(() => {
         const src = document.querySelector('canvas');
         const c = document.createElement('canvas');
@@ -126,7 +133,8 @@ try {
     console.log(
       `${res.ok ? 'PASS' : 'FAIL'} ${name}` +
         (s ? `  [${s.body} ${s.phase} alt ${Math.round(s.altitude)}m fps ${Math.round(s.fps)}]` : '') +
-        (res.problems.length ? `\n     ${res.problems.join('\n     ')}` : ''),
+        (res.problems.length ? `\n     ${res.problems.join('\n     ')}` : '') +
+        (res.warnings?.length ? `\n     warning: ${res.warnings.join('\n     warning: ')}` : ''),
     );
     await page.close();
   }

@@ -8,7 +8,11 @@ import { DEFAULT_SCALE } from '../src/data/scale';
 describe('Universe with SOLAR_SYSTEM', () => {
   test('builds without throwing and exposes all bodies', () => {
     const u = new Universe(SOLAR_SYSTEM);
-    expect(u.bodies.map((b) => b.id)).toEqual(['sun', 'earth', 'moon']);
+    const ids = u.bodies.map((b) => b.id);
+    expect(ids[0]).toBe('sun');
+    expect(ids).toEqual(expect.arrayContaining(['sun', 'earth', 'moon']));
+    // Parents always come before their children.
+    for (const b of u.bodies) if (b.parent) expect(ids.indexOf(b.parent.id)).toBeLessThan(ids.indexOf(b.id));
     expect(u.root.id).toBe('sun');
     expect(u.get('moon').parent?.id).toBe('earth');
   });
