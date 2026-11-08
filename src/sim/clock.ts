@@ -1,6 +1,6 @@
 import { config } from '../core/config';
 
-/** Sim time in seconds with discrete time warp levels. */
+/** Sim time in seconds with discrete time warp levels (rails ephemeris makes any warp exact). */
 export class SimClock {
   time: number;
   warpIndex = 0;
