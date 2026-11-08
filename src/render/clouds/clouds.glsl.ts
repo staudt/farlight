@@ -71,6 +71,32 @@ float hgPhase(float mu, float g) {
   return (1.0 - g2) / (4.0 * 3.14159265 * pow(1.0 + g2 - 2.0 * g * mu, 1.5));
 }
 
+// Far mode: one smooth coverage sample on the mid shell. Cheap and grain free from orbit.
+vec4 farClouds(vec3 d, float tScene, float rIn, float thickness) {
+  float rMid = rIn + thickness * 0.5;
+  float hMid = uCamAlt - (rMid - uR);
+  vec2 tm = hitShell(d, uCenter, hMid * (2.0 * rMid + hMid));
+  if (tm.x > tm.y || tm.x < 0.0 || tm.x > tScene) return vec4(0.0);
+  vec3 pw = d * tm.x - uCenter;
+  vec3 pl = uToLocal * pw;
+  float weather = texture(uNoise, pl / (uScale * 28.0)).r;
+  float weather2 = texture(uNoise, pl / (uScale * 9.0) + 0.37).r;
+  float cov = clamp(uCoverage + (weather - 0.5) * 1.3 + (weather2 - 0.5) * 0.4, 0.0, 1.0);
+  float base = texture(uNoise, (pl + uDrift) / uScale).r;
+  float dens = smoothstep(1.0 - cov, 1.0 - cov + 0.35, base * 0.85 + 0.15 * weather2);
+  vec3 up = pw / length(pw);
+  float cosSun = dot(up, uSunDir);
+  float day = smoothstep(-0.12, 0.06, cosSun);
+  vec3 sunCol = mix(vec3(1.0, 0.45, 0.2), vec3(1.0, 0.97, 0.92), smoothstep(0.0, 0.35, cosSun)) * day;
+  // Thicker cloud reads brighter; a soft self shadow keeps some relief.
+  float lambert = 0.35 + 0.65 * max(cosSun, 0.0);
+  vec3 col = uCloudColor * (sunCol * uSunI * 0.62 * lambert * (0.7 + 0.3 * dens) + vec3(0.03, 0.04, 0.06) * day);
+  // Grazing angles near the limb thicken the layer visually.
+  float graze = 1.0 - abs(dot(d, up));
+  float a = clamp(dens * (0.85 + 0.6 * graze), 0.0, 0.97);
+  return vec4(col * a, a);
+}
+
 void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth, out vec4 outputColor) {
   outputColor = inputColor;
   if (uActive == 0) return;
@@ -86,10 +112,17 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
 
   float rIn = uR + uBase;
   float rOut = uR + uTop;
+  float farMix = smoothstep(uTop + 15000.0, uTop + 120000.0, uCamAlt);
+  vec4 far = vec4(0.0);
+  if (farMix > 0.0) {
+    far = farClouds(d, tScene, rIn, uTop - uBase);
+    if (farMix >= 1.0) { outputColor = vec4(inputColor.rgb * (1.0 - far.a) + far.rgb, inputColor.a); return; }
+  }
   float hIn = uCamAlt - uBase;   // camera altitude above the inner shell
   float hOut = uCamAlt - uTop;
   vec2 tOut = hitShell(d, uCenter, hOut * (2.0 * rOut + hOut));
-  if (tOut.x > tOut.y || tOut.y < 0.0) return;
+  vec4 vol = vec4(0.0, 0.0, 0.0, 0.0); // rgb = light, a = 1 - transmittance
+  bool march = !(tOut.x > tOut.y || tOut.y < 0.0);
   vec2 tInn = hitShell(d, uCenter, hIn * (2.0 * rIn + hIn));
   vec2 tGround = hitShell(d, uCenter, uCamAlt * (2.0 * uR + uCamAlt));
 
@@ -101,12 +134,16 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
     t0 = 0.0;
     t1 = (tInn.x < tInn.y && tInn.x > 0.0) ? tInn.x : tOut.y;
   } else {                                // below the layer
-    if (tGround.x < tGround.y && tGround.x > 0.0) return; // looking at the ground
+    if (tGround.x < tGround.y && tGround.x > 0.0) march = false; // looking at the ground
     t0 = tInn.y;
     t1 = tOut.y;
   }
   t1 = min(t1, tScene);
-  if (t1 <= t0) return;
+  if (t1 <= t0) march = false;
+  if (!march) {
+    outputColor = vec4(inputColor.rgb * (1.0 - far.a * farMix) + far.rgb * farMix, inputColor.a);
+    return;
+  }
 
   float len = t1 - t0;
   float stepLen = len / float(CLOUD_STEPS);
@@ -157,6 +194,8 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
       if (trans < 0.02) break;
     }
   }
-  outputColor = vec4(inputColor.rgb * trans + light, inputColor.a);
+  vec3 volColor = inputColor.rgb * trans + light;
+  vec3 farColor = inputColor.rgb * (1.0 - far.a) + far.rgb;
+  outputColor = vec4(mix(volColor, farColor, farMix), inputColor.a);
 }
 `;

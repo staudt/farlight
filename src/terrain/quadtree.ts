@@ -47,7 +47,7 @@ export function maxLevelFor(radius: number, targetEdge = 400, cap = 16): number 
   return Math.max(0, Math.min(cap, Math.ceil(Math.log2(Math.max(1, ratio)))));
 }
 
-export const SPLIT_FACTOR = 2.2;
+export const SPLIT_FACTOR = 3.2;
 export const MERGE_HYSTERESIS = 1.35;
 
 /** A displayed leaf should split when the camera is closer than `edge * factor`. */
