@@ -1,15 +1,41 @@
 import { Vector3 } from 'three';
+import { weatherAmount } from './render/weather/weatherMap';
 import type { World, ShipPlacement } from './sim/world';
+import { latLonToDir } from './terrain/api';
 
 export interface Scenario {
   description: string;
   apply(world: World): void;
 }
 
+/** Sim time (half a year in) when the north pole leans away from the sun. */
+const POLAR_NIGHT = 182.6 * 86400;
+
 const surface = (description: string, p: ShipPlacement): Scenario => ({
   description,
   apply: (w) => w.place(p),
 });
+
+/** Longitude (degrees) on the day side at `lat` where the weather `kind` is strongest right now. */
+function stormLongitude(w: World, bodyId: string, kind: 'rain' | 'lightning' | 'snow', lat: number): number {
+  w.universe.update(w.clock.time);
+  const body = w.universe.get(bodyId);
+  const def = body.def.atmosphere!.weather!.find((d) => d.kind === kind)!;
+  const sun = body.worldToLocalDir(w.universe.root.position.clone().sub(body.position).normalize(), new Vector3());
+  const d = new Vector3();
+  let best = 0;
+  let bestScore = -1;
+  for (let lon = -180; lon < 180; lon += 2) {
+    latLonToDir((lat * Math.PI) / 180, (lon * Math.PI) / 180, d);
+    if (d.dot(sun) < 0.25) continue;
+    const score = weatherAmount(def, d, w.clock.time);
+    if (score > bestScore) {
+      bestScore = score;
+      best = lon;
+    }
+  }
+  return best;
+}
 
 /**
  * Named starting situations. Used by `?scenario=name`, the debug panel and the smoke test.
@@ -55,6 +81,35 @@ export const SCENARIOS: Record<string, Scenario> = {
       const moon = w.universe.get('moon');
       w.placeInSpace('earth', moon.orbit!.a * 0.5);
     },
+  },
+  'earth-aurora-night': surface('Landed under the northern lights', {
+    body: 'earth', lat: 58, localHour: 0, altitude: 0, heading: 0, pitch: 24, landed: true, time: POLAR_NIGHT,
+  }),
+  'earth-aurora-orbit': {
+    description: 'Over the north pole on the night side, aurora ring below',
+    apply: (w) => {
+      w.clock.time = POLAR_NIGHT;
+      w.universe.update(w.clock.time);
+      const earth = w.universe.get('earth');
+      const pole = new Vector3(0, 1, 0).applyQuaternion(earth.rotation);
+      const sun = w.universe.root.position.clone().sub(earth.position).normalize();
+      const night = sun.clone().negate().addScaledVector(pole, sun.dot(pole)).normalize();
+      w.placeInSpace('earth', earth.radius + 1.5e6, pole.multiplyScalar(0.8).addScaledVector(night, 0.6));
+    },
+  },
+  'earth-storm': {
+    description: 'Low under the storm clouds, rain and lightning',
+    apply: (w) =>
+      w.place({
+        body: 'earth', lat: 30, lon: stormLongitude(w, 'earth', 'lightning', 30), altitude: 1200, heading: 20, pitch: 3, throttle: 0.15,
+      }),
+  },
+  'earth-snow': {
+    description: 'Low over the arctic in falling snow',
+    apply: (w) =>
+      w.place({
+        body: 'earth', lat: 72, lon: stormLongitude(w, 'earth', 'snow', 72), altitude: 700, heading: 90, pitch: 2, throttle: 0.15,
+      }),
   },
 };
 

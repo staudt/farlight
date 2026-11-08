@@ -7,6 +7,7 @@ import { PostStack } from './render/post';
 import { GameRenderer } from './render/renderer';
 import { getShake, installShipFx } from './render/fx';
 import { createHeightSamplerForBody, createPlanetView, terrainPending } from './terrain';
+import { auroraSettings, installWeather, lightningSettings, rainSettings, snowSettings } from './render/weather';
 import { DEFAULT_SCENARIO, SCENARIOS } from './scenarios';
 import { World } from './sim/world';
 import { DebugPanel } from './ui/debugPanel';
@@ -28,6 +29,8 @@ const gfx = new GameRenderer(canvas, world, [createPlanetView]); // terrain: chu
 installShipFx(gfx);
 gfx.cameraShake = getShake;
 const post = new PostStack(gfx);
+const weather = installWeather(gfx, post);
+weather.lightning.onStrike = (distance) => audio.thunder(distance);
 const input = new Input(canvas);
 const debug = new DebugPanel(world, gfx, (name) => SCENARIOS[name]?.apply(world));
 if (params.has('debug')) debug.toggle();
@@ -38,6 +41,14 @@ atmoFolder.add(post.clouds, 'coverageBias', -0.5, 0.5).name('cloud coverage');
 atmoFolder.add(post.clouds, 'sunIntensity', 0, 5).name('cloud light');
 const audioFolder = debug.folder('Audio');
 for (const k of Object.keys(audio.tuning) as (keyof typeof audio.tuning)[]) audioFolder.add(audio.tuning, k, 0, 2);
+const wxFolder = debug.folder('Weather');
+for (const [name, o] of Object.entries({ rain: rainSettings, snow: snowSettings, lightning: lightningSettings, aurora: auroraSettings })) {
+  const f = wxFolder.addFolder(name);
+  f.add(o, 'enabled');
+  f.add(o, 'intensity', 0, 3);
+  if ('force' in o) f.add(o, 'force');
+}
+wxFolder.add({ strike: () => weather.lightning.strikeNow() }, 'strike');
 
 input.on('warpUp', () => world.clock.step(1));
 input.on('warpDown', () => world.clock.step(-1));
