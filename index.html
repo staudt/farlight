@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Space Glider</title>
+    <title>Farlight</title>
     <style>
       html,
       body {
@@ -25,12 +25,38 @@
       #map {
         display: none;
       }
+      #title {
+        position: absolute;
+        top: 34px;
+        left: 44px;
+        pointer-events: none;
+        font-family: Rajdhani, sans-serif;
+        color: #eaf6ff;
+        transition: opacity 2.5s ease;
+        text-shadow: 0 0 18px rgba(80, 200, 255, 0.35);
+      }
+      #title h1 {
+        margin: 0;
+        font-weight: 500;
+        font-size: 46px;
+        letter-spacing: 0.42em;
+      }
+      #title p {
+        margin: 4px 0 0 4px;
+        font-size: 13px;
+        letter-spacing: 0.38em;
+        color: rgba(140, 225, 255, 0.75);
+      }
+      #title.gone {
+        opacity: 0;
+      }
     </style>
   </head>
   <body>
     <canvas id="game"></canvas>
     <div id="hud"></div>
     <div id="map"></div>
+    <div id="title"><h1>FARLIGHT</h1><p>A SOLAR SYSTEM GLIDER</p></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

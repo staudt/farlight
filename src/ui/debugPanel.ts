@@ -19,7 +19,7 @@ export class DebugPanel {
   };
 
   constructor(private world: World, gfx: GameRenderer, jump: (name: string) => void) {
-    this.gui = new GUI({ title: 'Space Glider debug' });
+    this.gui = new GUI({ title: 'Farlight debug' });
     this.gui.hide();
 
     const state = this.gui.addFolder('State');

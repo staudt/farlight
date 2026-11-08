@@ -32,6 +32,11 @@ const post = new PostStack(gfx);
 const weather = installWeather(gfx, post);
 weather.lightning.onStrike = (distance) => audio.thunder(distance);
 const input = new Input(canvas);
+// Title card fades on the first click (or after a while).
+const title = document.getElementById('title');
+const hideTitle = (): void => title?.classList.add('gone');
+canvas.addEventListener('click', hideTitle, { once: true });
+setTimeout(hideTitle, 15000);
 const debug = new DebugPanel(world, gfx, (name) => SCENARIOS[name]?.apply(world));
 if (params.has('debug')) debug.toggle();
 const atmoFolder = debug.folder('Atmosphere and post');

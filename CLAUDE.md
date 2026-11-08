@@ -1,7 +1,7 @@
-# Space Glider 3D
+# Farlight
 
 ## What it is
-A relaxed solar system glider. Launch from a planet, glide through its atmosphere, look at the sky and the other bodies, and use time warp for distance. Feel beats accuracy. The ship is an assisted glider, not a simulator. This is the successor to `staudt/spaceglider` (Canvas 2D). The approved plan, with milestones and the feel checklist, is at `/home/ricardo/.claude/plans/let-s-plan-a-space-floofy-pebble.md`.
+Farlight is a relaxed solar system glider (working title was Space Glider 3D). Launch from a planet, glide through its atmosphere, look at the sky and the other bodies, and use time warp for distance. Feel beats accuracy. The ship is an assisted glider, not a simulator. This is the successor to `staudt/spaceglider` (Canvas 2D). The approved plan, with milestones and the feel checklist, is at `/home/ricardo/.claude/plans/let-s-plan-a-space-floofy-pebble.md`.
 
 **Stack:** Vite, TypeScript (strict), Three.js (WebGLRenderer with custom GLSL ShaderMaterials), pmndrs `postprocessing`, `lil-gui`, Rajdhani via `@fontsource`, procedural Web Audio, Web Workers for terrain, vitest, eslint, and playwright-core for the smoke test. Deploys to GitHub Pages.
 
