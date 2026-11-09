@@ -2,9 +2,13 @@ import { Vector3 } from 'three';
 import { weatherAmount } from './render/weather/weatherMap';
 import type { World, ShipPlacement } from './sim/world';
 import { latLonToDir } from './terrain/api';
+import { pickFocusBody } from './data/generate';
+import type { BodyDef } from './data/types';
 
 export interface Scenario {
   description: string;
+  /** Works in any system (names no Sol body ids). */
+  generic?: boolean;
   apply(world: World): void;
 }
 
@@ -173,7 +177,41 @@ export const SCENARIOS: Record<string, Scenario> = {
       w.placeInSpace('saturn', saturn.radius * 3.2, flat.clone().multiplyScalar(0.85).addScaledVector(side, 0.25).addScaledVector(pole, -0.4 * sign));
     },
   },
+  arrival: {
+    description: 'Arriving in a system: the most interesting planet from 6 radii, day side, star off to the side',
+    generic: true,
+    apply: (w) => arrive(w),
+  },
+  'arrival-low': {
+    description: 'Gliding 1.5 km over the most interesting planet, day side',
+    generic: true,
+    apply: (w) => {
+      const focus = focusBody(w);
+      const alt = focus.kind === 'gas' ? gasAltitude(w, focus.id, -3000) : 1500;
+      w.place({ body: focus.id, lat: 18, localHour: 9.5, altitude: alt, heading: 70, pitch: 2, throttle: 0.35 });
+    },
+  },
 };
+
+/** The most interesting body, or the one named by `?focus=<bodyId>` (handy for looking at a specific world). */
+function focusBody(w: World): BodyDef {
+  const system = w.universe.system;
+  const wanted = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('focus') : null;
+  return system.bodies.find((b) => b.id === wanted && b.kind !== 'star') ?? pickFocusBody(system);
+}
+
+/** Parks the ship in space on the day side of the best planet, looking at it with the star off to one side. */
+function arrive(w: World): void {
+  const focus = w.universe.get(focusBody(w).id);
+  w.clock.time = 0;
+  w.universe.update(0);
+  const sun = w.universe.root.position.clone().sub(focus.position).normalize();
+  const side = new Vector3().crossVectors(sun, new Vector3(0, 1, 0));
+  if (side.lengthSq() < 1e-6) side.set(1, 0, 0);
+  side.normalize();
+  const from = sun.multiplyScalar(Math.cos(0.95)).addScaledVector(side, Math.sin(0.95)).add(new Vector3(0, 0.18, 0));
+  w.placeInSpace(focus.id, focus.radius * (focus.def.rings ? 7.5 : 6), from);
+}
 
 /** A sim time within the body's year when the sun stands about `deg` degrees off its equatorial plane. */
 function sunElevationTime(w: World, bodyId: string, deg: number): number {

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Headless visual smoke test.
- *   node scripts/smoke.mjs [scenario ...] [--no-build] [--wait=ms]
+ *   node scripts/smoke.mjs [scenario | query ...] [--no-build] [--wait=ms]
+ *   A positional arg containing "=" is a full query string, e.g. "system=s1p1tszi&scenario=arrival-low".
  * Builds, serves dist with `vite preview`, loads each scenario in Chromium, and checks:
  *   - no console errors / page errors
  *   - the frame is not black and not uniform
@@ -83,7 +84,7 @@ try {
     page.on('pageerror', (e) => errors.push(String(e)));
     const res = { scenario: name, ok: true, problems: [] };
     try {
-      await page.goto(`http://localhost:${PORT}/?scenario=${name}`);
+      await page.goto(`http://localhost:${PORT}/?${name.includes('=') ? name : `scenario=${name}`}`);
       await page.waitForFunction(() => window.__game?.getState?.().ready, null, { timeout: 30000 });
       await page.waitForTimeout(settleMs);
       // Wait for terrain or other async content if the game reports pending work.
@@ -116,7 +117,7 @@ try {
         const mean = sum / n;
         return { mean, std: Math.sqrt(Math.max(0, sum2 / n - mean * mean)) };
       });
-      await page.screenshot({ path: `${OUT}/${name}.png` });
+      await page.screenshot({ path: `${OUT}/${name.replace(/[^a-zA-Z0-9]+/g, '_')}.png` });
       Object.assign(res, { state, stats, errors });
       if (errors.length) res.problems.push(`console errors: ${errors.slice(0, 3).join(' | ')}`);
       if (stats.mean < 2) res.problems.push(`frame is black (mean ${stats.mean.toFixed(1)})`);

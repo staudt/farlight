@@ -1,6 +1,7 @@
 import { Vector3 } from 'three';
 import { config } from './core/config';
-import { SOLAR_SYSTEM } from './data/solarSystem';
+import { createGalaxy, generateSystem } from './data/generate';
+import { PROGRESS_STORAGE_KEY, type PlayerProgress } from './data/galaxy';
 import { AudioEngine } from './audio/audio';
 import { Input } from './input/input';
 import { detectTouch, TouchControls } from './input/touch';
@@ -27,9 +28,18 @@ if (touchOn) {
   config.render.pixelRatioMax = Math.min(config.render.pixelRatioMax, config.touch.pixelRatioMax); // before GameRenderer
 }
 
-const world = new World(SOLAR_SYSTEM, 0);
-const scenarioName = params.get('scenario') ?? DEFAULT_SCENARIO;
-const scenario = SCENARIOS[scenarioName] ?? SCENARIOS[DEFAULT_SCENARIO]!;
+// ?system=<id> picks a star from the galaxy; unknown ids fall back to Sol.
+const galaxy = createGalaxy();
+const galaxyStar = galaxy.stars.find((s) => s.id === params.get('system')) ?? galaxy.stars.find((s) => s.id === galaxy.homeId)!;
+const system = generateSystem(galaxyStar);
+const inSol = system.id === 'sol';
+const world = new World(system, 0);
+// Scenarios that name Sol bodies only apply in Sol. Generated systems default to the generic arrival.
+const requested = params.get('scenario') ?? (inSol ? DEFAULT_SCENARIO : 'arrival');
+const usable = (n: string): boolean => SCENARIOS[n] !== undefined && (inSol || SCENARIOS[n]!.generic === true);
+const scenarioName = usable(requested) ? requested : inSol ? DEFAULT_SCENARIO : 'arrival';
+const scenario = SCENARIOS[scenarioName]!;
+recordVisit(system.id);
 world.setHeightProvider((b) => createHeightSamplerForBody(b)); // terrain: before placement queries ground height
 scenario.apply(world);
 
@@ -45,6 +55,10 @@ input.touchMode = touchOn;
 const touch = touchOn ? new TouchControls(document.getElementById('touch')!, input, world, gfx) : null;
 // Title card fades on the first click (or after a while).
 const title = document.getElementById('title');
+if (!inSol) {
+  const tagline = title?.querySelector('p');
+  if (tagline) tagline.textContent = `${system.name.toUpperCase()} SYSTEM`;
+}
 const hideTitle = (): void => title?.classList.add('gone');
 canvas.addEventListener('click', hideTitle, { once: true });
 if (touchOn) window.addEventListener('pointerdown', hideTitle, { once: true });
@@ -120,6 +134,19 @@ function frame(now: number): void {
 }
 requestAnimationFrame(frame);
 
+function recordVisit(id: string): void {
+  try {
+    const raw = localStorage.getItem(PROGRESS_STORAGE_KEY);
+    const progress: PlayerProgress = raw ? (JSON.parse(raw) as PlayerProgress) : { visited: [], surveyed: [] };
+    if (!Array.isArray(progress.visited)) progress.visited = [];
+    if (!Array.isArray(progress.surveyed)) progress.surveyed = [];
+    if (!progress.visited.includes(id)) progress.visited.push(id);
+    localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
+  } catch {
+    /* storage unavailable: progress is optional */
+  }
+}
+
 function clamp(v: number, a: number, b: number): number {
   return v < a ? a : v > b ? b : v;
 }
@@ -138,6 +165,7 @@ window.__game = {
   input,
   post,
   config,
+  system: { id: system.id, name: system.name },
   scenarios: Object.keys(SCENARIOS),
   getState: () => ({
     scenario: scenarioName,
