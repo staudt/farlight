@@ -45,15 +45,18 @@ function stormSpot(w: World, bodyId: string, kind: 'rain' | 'lightning' | 'snow'
  * Keep them stable: the smoke test asserts on them.
  */
 export const SCENARIOS: Record<string, Scenario> = {
-  'earth-low-morning': surface('Low over Earth in the morning, Moon up', {
-    body: 'earth', lat: 22, localHour: 8.5, altitude: 1500, heading: 70, pitch: 2, throttle: 0.6,
-  }),
-  'earth-surface-day': surface('Landed on Earth at noon', {
-    body: 'earth', lat: 35, localHour: 13, altitude: 0, heading: 0, landed: true,
-  }),
-  'earth-surface-night': surface('Landed on Earth at night', {
-    body: 'earth', lat: 40, localHour: 23, altitude: 0, heading: 180, landed: true,
-  }),
+  'earth-low-morning': {
+    description: 'Low along the green coast of Portugal in the morning',
+    apply: (w) => w.place({ body: 'earth', lat: 39.4, lon: -8.6, altitude: 1500, heading: 330, pitch: 2, throttle: 0.6, time: findLocalHourTime(w, 'earth', -8.6, 8.5) }),
+  },
+  'earth-surface-day': {
+    description: 'Landed in the Kenyan highlands at noon',
+    apply: (w) => w.place({ body: 'earth', lat: -0.5, lon: 36.5, altitude: 0, heading: 0, landed: true, time: findLocalHourTime(w, 'earth', 36.5, 13) }),
+  },
+  'earth-surface-night': {
+    description: 'Landed in the Colorado plains at night',
+    apply: (w) => w.place({ body: 'earth', lat: 39.5, lon: -104, altitude: 0, heading: 180, landed: true, time: findLocalHourTime(w, 'earth', -104, 23) }),
+  },
   'earth-sunset': surface('Gliding over the sea at sunset', {
     body: 'earth', lat: 10, localHour: 18.2, altitude: 900, heading: 270, pitch: 0, throttle: 0.5,
   }),
@@ -264,11 +267,22 @@ function faceLatLon(w: World, bodyId: string, latDeg: number, lonDeg: number, ra
 
 /** Sim time when a tidally locked moon's longitude has the given local solar hour. */
 function findLockedMorning(w: World, bodyId: string, lonDeg: number, hour: number): number {
+  return findLocalHourTime(w, bodyId, lonDeg, hour);
+}
+
+/**
+ * Sim time when a longitude has the given local solar hour. Searches one rotation for spinning
+ * bodies, one orbit for tidally locked moons. Lets scenarios name real places on real maps.
+ */
+function findLocalHourTime(w: World, bodyId: string, lonDeg: number, hour: number): number {
   const moon = w.universe.get(bodyId);
+  const locked = moon.def.physical.tidallyLocked && moon.orbit;
+  const span = locked ? Math.abs(moon.orbit!.period) : Math.abs(moon.def.physical.rotationPeriod);
+  const step = span / 2000;
   const target = ((lonDeg - (hour - 12) * 15) * Math.PI) / 180;
   let best = 0;
   let bestErr = Infinity;
-  for (let t = 0; t < moon.orbit!.period; t += 1800) {
+  for (let t = 0; t < span; t += step) {
     w.universe.update(t);
     const s = moon.worldToLocalDir(_dir.copy(w.universe.root.position).sub(moon.position).normalize(), _dir);
     const sub = Math.atan2(-s.z, s.x);
