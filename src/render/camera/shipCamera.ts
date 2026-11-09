@@ -2,6 +2,13 @@ import { Matrix4, type PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { config } from '../../core/config';
 import type { World } from '../../sim/world';
 
+/** Replaces the ship camera (photo mode). Sets camera orientation and `worldPos` through `out`. */
+export interface CameraOverride {
+  shipVisible: boolean;
+  fov: number;
+  update(world: World, camera: PerspectiveCamera, out: Vector3, realDt: number): void;
+}
+
 export type CameraMode = 'chase' | 'cockpit';
 
 /**
@@ -19,6 +26,7 @@ export class ShipCamera {
   lookYaw = 0;
   lookPitch = 0;
   freeLook = false;
+  override: CameraOverride | null = null;
 
   toggle(): void {
     this.mode = this.mode === 'chase' ? 'cockpit' : 'chase';
@@ -26,6 +34,16 @@ export class ShipCamera {
 
   update(world: World, camera: PerspectiveCamera, realDt: number): void {
     const c = config.camera;
+    if (this.override) {
+      this.override.update(world, camera, this.worldPos, realDt);
+      camera.position.set(0, 0, 0);
+      if (Math.abs(camera.fov - this.override.fov) > 0.01) {
+        camera.fov = this.override.fov;
+        camera.updateProjectionMatrix();
+      }
+      camera.updateMatrixWorld(true);
+      return;
+    }
     const shipQ = world.shipWorldQuat;
 
     // Radial up in world space, for leveling the view inside an atmosphere.

@@ -1,0 +1,123 @@
+/* Photo mode: hides the HUD and touch controls, shows a small panel bottom centre. */
+body.photo #hud,
+body.photo #touch,
+body.photo #title,
+body.photo .sky-labels {
+  display: none !important;
+}
+
+.pm-panel {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 30;
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  max-width: calc(100vw - 24px);
+  background: rgba(6, 14, 28, 0.55);
+  border: 1px solid rgba(95, 242, 255, 0.22);
+  border-radius: 4px;
+  backdrop-filter: blur(6px);
+  font-family: 'Rajdhani', system-ui, sans-serif;
+  color: #d9fbff;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 12px;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: opacity 0.4s ease;
+  touch-action: manipulation;
+}
+.pm-panel.on {
+  display: flex;
+}
+.pm-panel.hide {
+  opacity: 0;
+  pointer-events: none;
+}
+.pm-sliders {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.pm-sliders label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 180px;
+}
+.pm-l {
+  color: rgba(95, 242, 255, 0.55);
+}
+.pm-v {
+  min-width: 78px;
+  text-align: right;
+  color: #5ff2ff;
+}
+.pm-panel input[type='range'] {
+  flex: 1;
+  min-width: 80px;
+  accent-color: #5ff2ff;
+}
+.pm-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.pm-b {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: rgba(95, 242, 255, 0.55);
+  background: transparent;
+  border: 1px solid rgba(95, 242, 255, 0.22);
+  border-radius: 3px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.pm-b.on {
+  color: #5ff2ff;
+  border-color: rgba(95, 242, 255, 0.6);
+}
+.pm-b:hover {
+  background: rgba(95, 242, 255, 0.12);
+}
+.pm-cap {
+  color: #06101c;
+  background: #5ff2ff;
+  border-color: #5ff2ff;
+}
+.pm-cap:hover {
+  background: #a8f8ff;
+}
+.pm-x {
+  padding: 5px 8px;
+}
+.pm-x svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+.pm-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+}
+.pm-flash.go {
+  animation: pm-flash 0.35s ease-out;
+}
+@keyframes pm-flash {
+  0% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 0;
+  }
+}

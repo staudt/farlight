@@ -61,6 +61,14 @@ export class DebugPanel {
     touch.add(config.touch, 'idleOpacity', 0.1, 1);
 
     const cam = this.gui.addFolder('Camera').close();
+    const pad = this.gui.addFolder('Gamepad and photo');
+    pad.add(config.gamepad, 'deadzone', 0, 0.5);
+    pad.add(config.gamepad, 'invertPitch');
+    pad.add(config.gamepad, 'lookSpeed', 100, 1000);
+    pad.add(config.photo, 'orbitSpeed', 0.001, 0.02);
+    pad.add(config.photo, 'wheelZoom', 1, 20);
+    pad.add(config.photo, 'panSpeed', 0.1, 2);
+    pad.add(config.photo, 'panelHide', 0.5, 10);
     cam.add(config.camera, 'fov', 30, 100);
     cam.add(config.camera, 'chaseDistance', 5, 150);
     cam.add(config.camera, 'chaseHeight', 0, 40);

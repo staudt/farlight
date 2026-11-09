@@ -126,6 +126,17 @@ export class World {
     this.updateSnapshot();
   }
 
+  /**
+   * Re-evaluates bodies at the current clock time without moving the ship. The ship keeps its
+   * frame coordinates, so in a rotating frame it turns with the planet. Photo mode time scrub.
+   */
+  refresh(): void {
+    this.universe.update(this.clock.time);
+    this.computeEnv();
+    this.updatePhase();
+    this.updateSnapshot();
+  }
+
   private groundEta(): number {
     if (!this.env.solidGround) return Infinity;
     const vr = this.ship.vel.dot(this.env.up);

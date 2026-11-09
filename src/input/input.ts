@@ -10,7 +10,10 @@ export type Action =
   | 'target'
   | 'hud'
   | 'debug'
-  | 'stop';
+  | 'stop'
+  | 'photo'
+  | 'capture'
+  | 'back';
 
 /**
  * Mouse + keyboard. The mouse drives a virtual joystick that slowly recenters, so small
@@ -35,7 +38,13 @@ export class Input {
     align: false,
     /** Absolute throttle 0..1, consumed by the next poll. */
     throttleSet: null as number | null,
+    /** Gamepad channel, rewritten every frame by Gamepad. Always merged (zeros when absent). */
+    pad: { pitch: 0, yaw: 0, roll: 0, throttleDelta: 0, boost: false, brake: false, align: false, look: false },
   };
+  /** False in photo mode: clicks no longer grab the pointer. */
+  lockEnabled = true;
+  /** Wheel notches consumed by the last poll (signed, 0.08 per notch), for photo zoom. */
+  wheelUsed = 0;
   /** Raw mouse delta this frame while right mouse is held (free look). */
   readonly look = { x: 0, y: 0 };
   private keys = new Set<string>();
@@ -46,7 +55,7 @@ export class Input {
   constructor(canvas: HTMLElement) {
     this.canvas = canvas;
     canvas.addEventListener('click', () => {
-      if (document.pointerLockElement !== canvas) void canvas.requestPointerLock?.();
+      if (this.lockEnabled && document.pointerLockElement !== canvas) void canvas.requestPointerLock?.();
     });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     window.addEventListener('mousemove', (e) => {
@@ -135,11 +144,17 @@ export class Input {
       inp.yaw += ext.yaw;
       inp.roll = clamp(inp.roll + ext.roll, -1, 1);
     }
+    const pad = ext.pad;
+    inp.pitch += pad.pitch;
+    inp.yaw += pad.yaw;
+    inp.roll = clamp(inp.roll + pad.roll, -1, 1);
     inp.yaw = clamp(inp.yaw, -1, 1);
     inp.pitch = clamp(inp.pitch, -1, 1);
 
     if (this.down('KeyW')) inp.throttleDelta += 1;
     if (this.down('KeyS')) inp.throttleDelta -= 1;
+    inp.throttleDelta += pad.throttleDelta;
+    this.wheelUsed = this.wheel;
     if (this.wheel !== 0) {
       inp.throttleDelta += this.wheel / Math.max(realDt, 1e-3) / 0.6;
       this.wheel = 0;
@@ -147,8 +162,8 @@ export class Input {
     inp.throttleSet = this.throttleSet ?? ext.throttleSet;
     this.throttleSet = null;
     ext.throttleSet = null;
-    inp.boost = this.down('ShiftLeft') || this.down('ShiftRight') || ext.boost;
-    inp.brake = this.down('KeyX');
+    inp.boost = this.down('ShiftLeft') || this.down('ShiftRight') || ext.boost || pad.boost;
+    inp.brake = this.down('KeyX') || pad.brake;
     return inp;
   }
 
@@ -161,7 +176,7 @@ export class Input {
 
   /** True while the align key is held. */
   get aligning(): boolean {
-    return this.down('KeyF') || this.external.align;
+    return this.down('KeyF') || this.external.align || this.external.pad.align;
   }
 }
 
@@ -174,6 +189,7 @@ const KEY_ACTIONS: Record<string, Action> = {
   KeyJ: 'journal',
   KeyT: 'target',
   KeyH: 'hud',
+  KeyP: 'photo',
   F3: 'debug',
   KeyX: 'stop',
 };
