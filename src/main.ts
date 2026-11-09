@@ -3,6 +3,7 @@ import { config } from './core/config';
 import { createGalaxy, generateSystem } from './data/generate';
 import { AudioEngine } from './audio/audio';
 import { Input } from './input/input';
+import { GamepadControls, type PadMode } from './input/gamepad';
 import { detectTouch, TouchControls } from './input/touch';
 import { PostStack } from './render/post';
 import { createGasGiantView } from './render/bodies';
@@ -23,6 +24,7 @@ import { clearPendingJump, Hyperspace, playArrival, readPendingJump } from './re
 import { buildTravelUrl } from './ui/galaxyMath';
 import { SkyLabels } from './ui/skyLabels';
 import { FpsCounter } from './ui/fpsCounter';
+import { PhotoMode } from './ui/photoMode';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
@@ -102,12 +104,16 @@ for (const [name, o] of Object.entries({ rain: rainSettings, snow: snowSettings,
 }
 wxFolder.add({ strike: () => weather.lightning.strikeNow() }, 'strike');
 
-input.on('warpUp', () => world.clock.step(1));
-input.on('warpDown', () => world.clock.step(-1));
-input.on('camera', () => gfx.shipCamera.toggle());
+const photo = new PhotoMode(world, gfx, post, input, system.id);
+input.on('warpUp', () => !photo.active && world.clock.step(1));
+input.on('warpDown', () => !photo.active && world.clock.step(-1));
+input.on('camera', () => !photo.active && gfx.shipCamera.toggle());
 input.on('debug', () => debug.toggle());
 const hud = new Hud(document.getElementById('hud')!, world, gfx, input);
 const overlay = new MapOverlay(document.getElementById('map')!, input);
+input.on('back', () => overlay.close());
+const padMode = (): PadMode => (photo.active ? 'photo' : overlay.isOpen ? 'overlay' : 'flight');
+const gamepad = new GamepadControls(input, { mode: padMode, notify: (a, b) => hud.notify(a, b) });
 const systemMap = new SystemMap(overlay.pane('system'), world);
 const hyper = new Hyperspace(gfx, input);
 const galaxyMap = new GalaxyMap(overlay.pane('galaxy'), galaxy, {
@@ -152,17 +158,19 @@ function frame(now: number): void {
   last = now;
 
   touch?.update(realDt);
+  gamepad.update(realDt);
   const flight = input.poll(realDt);
   if (input.aligning && world.target) {
     alignDir.copy(world.target.position).sub(world.shipWorldPos).normalize();
     flight.alignDir = world.toFrameDir(alignDir, new Vector3());
   }
   const look = input.consumeLook();
-  gfx.shipCamera.freeLook = input.rightMouse;
+  gfx.shipCamera.freeLook = input.rightMouse || input.external.pad.look;
   gfx.shipCamera.lookYaw = clamp(gfx.shipCamera.lookYaw - look.x * 0.004, -Math.PI, Math.PI);
   gfx.shipCamera.lookPitch = clamp(gfx.shipCamera.lookPitch - look.y * 0.004, -1.3, 1.3);
 
-  world.step(realDt, flight);
+  photo.tick(realDt, gamepad.frame);
+  if (!photo.active) world.step(realDt, flight);
   audio.update(realDt);
   gfx.render(world, realDt);
   debug.update();
@@ -203,6 +211,8 @@ window.__game = {
   gfx,
   touch,
   input,
+  gamepad,
+  photo,
   post,
   config,
   system: { id: system.id, name: system.name },

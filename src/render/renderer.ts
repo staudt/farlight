@@ -139,7 +139,7 @@ export class GameRenderer {
     ctx.simTime = world.clock.time;
 
     this.shipCamera.update(world, this.camera, realDt);
-    if (this.cameraShake) {
+    if (this.cameraShake && !this.shipCamera.override) {
       const s = this.cameraShake();
       _shake.set(s.x, s.y, 0).applyQuaternion(this.camera.quaternion);
       this.shipCamera.worldPos.add(_shake);
@@ -154,7 +154,7 @@ export class GameRenderer {
 
     for (const v of this.bodyViews) v.update(ctx);
     this.shipView.update(ctx);
-    this.shipView.object.visible = this.shipCamera.mode === 'chase';
+    this.shipView.object.visible = this.shipCamera.override ? this.shipCamera.override.shipVisible : this.shipCamera.mode === 'chase';
     for (const u of this.updaters) u(ctx);
 
     this.renderFn(ctx);

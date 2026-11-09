@@ -28,6 +28,7 @@ const ICONS = {
   hud: I('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
   full: I('<path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>'),
   tilt: I('<rect x="8" y="3" width="8" height="14" rx="2" transform="rotate(28 12 12)"/><path d="M4 19c3 2.5 8 2.5 11 0"/>'),
+  photo: I('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>'),
   invert: I('<path d="M8 5v14M5 8l3-3 3 3M16 19V5M13 16l3 3 3-3"/>'),
 };
 
@@ -47,6 +48,7 @@ const BUTTONS: Btn[] = [
   { key: 'target', label: 'Next target', tap: 'target' },
   { key: 'align', label: 'Hold to align' },
   { key: 'hud', label: 'Hide HUD', tap: 'hud' },
+  { key: 'photo', label: 'Photo mode', tap: 'photo' },
   { key: 'tilt', label: 'Tilt steering' },
   { key: 'invert', label: 'Invert pitch' },
   { key: 'full', label: 'Fullscreen' },

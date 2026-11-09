@@ -80,6 +80,31 @@ export const config = {
     tiltDeadzone: 0.1,
     idleOpacity: 0.35,
   },
+  /** Gamepad (standard mapping). */
+  gamepad: {
+    deadzone: 0.16,
+    invertPitch: false,
+    /** Free look speed at full right stick, mouse pixel equivalents per second. */
+    lookSpeed: 420,
+  },
+  /** Photo mode. */
+  photo: {
+    fov: 55,
+    fovMin: 15,
+    fovMax: 100,
+    /** Orbit distance limits, game meters. */
+    distMin: 5,
+    distMax: 50000,
+    /** Radians per pixel dragged. */
+    orbitSpeed: 0.005,
+    /** Zoom e-folds per wheel notch (wheel unit is 0.08). */
+    wheelZoom: 3,
+    /** Pan speed in orbit distances per second. */
+    panSpeed: 0.6,
+    rollSpeed: 0.8,
+    /** Seconds of inactivity before the panel hides. */
+    panelHide: 2,
+  },
   /** Surface props (trees, rocks, spires, crystals, mesas). */
   props: {
     enabled: true,
