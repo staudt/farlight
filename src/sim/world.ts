@@ -50,6 +50,7 @@ export class World {
     up: new Vector3(0, 1, 0),
     altitude: Infinity,
     altitudeAhead: Infinity,
+    climbDemand: 0,
     density: 0,
     gravity: 0,
     surfaceDistance: Infinity,
@@ -158,15 +159,22 @@ export class World {
     this.radialAltitude = r - body.radius;
 
     env.altitudeAhead = env.altitude;
+    env.climbDemand = 0;
     if (env.solidGround && env.altitude < config.flight.cushionHeight * 10) {
       // Horizontal velocity only: a vertical descent is not "terrain rising ahead".
       _vh.copy(ship.vel).addScaledVector(env.up, -ship.vel.dot(env.up));
-      for (const t of [0.6, 1.5]) {
-        _p.copy(ship.pos).addScaledVector(_vh, t);
+      const f = config.flight;
+      const clearance = (f.cushionHeight + _vh.length() * f.cushionLead) * 0.5;
+      const warp = Math.max(1, this.clock.warp);
+      for (const t of f.lookAheadTimes) {
+        _p.copy(ship.pos).addScaledVector(_vh, t * warp);
         const rr = _p.length();
         _p.divideScalar(rr);
         const dl = ship.frame.rotating ? _p : body.worldToLocalDir(_p, _d2);
-        env.altitudeAhead = Math.min(env.altitudeAhead, rr - body.radius - this.groundHeight(body, dl));
+        const alt = rr - body.radius - this.groundHeight(body, dl);
+        env.altitudeAhead = Math.min(env.altitudeAhead, alt);
+        // Climb rate that clears this sample with room to spare by the time we reach it.
+        env.climbDemand = Math.max(env.climbDemand, (clearance - alt) / t);
       }
     }
 

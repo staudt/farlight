@@ -68,7 +68,7 @@ describe('assisted glider flight', () => {
     }
     expect(w.phase).not.toBe('atmosphere');
     // Feel target: shooting to the sky is quick, but the colour transition is still a moment.
-    expect(t).toBeGreaterThan(6);
+    expect(t).toBeGreaterThan(2);
     expect(t).toBeLessThan(40);
   });
 

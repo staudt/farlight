@@ -36,9 +36,9 @@ export class DebugPanel {
       .onChange((v: string) => jump(v));
 
     const flight = this.gui.addFolder('Flight').close();
-    flight.add(config.flight, 'impactTime', 2, 60);
-    flight.add(config.flight, 'minSpeedCap', 10, 500);
-    flight.add(config.flight, 'maxSpeedCap', 1000, 100000);
+    flight.add(config.flight, 'impactTime', 0.5, 15);
+    flight.add(config.flight, 'minSpeedCap', 40, 2000);
+    flight.add(config.flight, 'maxSpeedCap', 4000, 400000);
     flight.add(config.flight, 'boostMultiplier', 1, 5);
     flight.add(config.flight, 'accelTau', 0.1, 5);
     flight.add(config.flight, 'pitchRate', 0.1, 3);
@@ -48,6 +48,8 @@ export class DebugPanel {
     flight.add(config.flight, 'levelPitchRate', 0, 1);
     flight.add(config.flight, 'bankAngle', 0, 1.2);
     flight.add(config.flight, 'cushionHeight', 20, 1000);
+    flight.add(config.flight, 'cushionLead', 0, 1);
+    flight.add(config.flight, 'sinkTau', 0.1, 3);
     const props = this.gui.addFolder('Props').close();
     props.add(config.props, 'enabled');
     props.add(config.props, 'fadeNear', 100, 5000);

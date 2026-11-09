@@ -8,14 +8,14 @@ export const config = {
      * Speed cap = distance to nearest surface / impactTime. Feel over realism: a boosted trip
      * from Earth to the Moon takes about half a minute, and a planet can be crossed in minutes.
      */
-    impactTime: 8,
-    minSpeedCap: 160,
-    maxSpeedCap: 1000000,
+    impactTime: 2,
+    minSpeedCap: 640,
+    maxSpeedCap: 4000000,
     boostMultiplier: 4,
     /** Seconds to approach the target velocity. */
-    accelTau: 1.4,
+    accelTau: 0.5,
     /** Slowing down is quicker than speeding up, so arrivals brake in time. */
-    decelTau: 0.45,
+    decelTau: 0.2,
     /** Angular rates at full input, rad/s. */
     pitchRate: 1.0,
     yawRate: 0.6,
@@ -25,9 +25,15 @@ export const config = {
     liftSpeed: 70,
     /** Descent rate (m/s at 1 g) when the wings have too little airspeed to hold the ship. */
     sinkRate: 30,
+    /** Seconds for the descent to settle on the sink rate (kept short against decelTau). */
+    sinkTau: 0.5,
     /** Re-entry stress per unit of speed above the local cap (in air). */
     entryStressGain: 2.5,
     cushionHeight: 220,
+    /** Extra cushion height per m/s of horizontal speed (s), so fast flight clears hills sooner. */
+    cushionLead: 0.25,
+    /** Seconds ahead where the terrain is sampled for the cushion. */
+    lookAheadTimes: [0.15, 0.5, 1.2, 2.5] as number[],
     gearHeight: 3,
     landSpeed: 14,
     /** Max auto leveling rates at sea level density, rad/s. */
@@ -57,6 +63,13 @@ export const config = {
     rotationLag: 0.16,
     horizonUpBlend: 0.85,
     cockpitOffset: [0, 1.1, -3.2] as [number, number, number],
+    /** Look mode: radians per mouse pixel, pitch limit (85 deg), orbit zoom range as a multiple of the chase distance. */
+    lookSensitivity: 0.004,
+    lookPitchMax: 1.4835,
+    lookZoomMin: 0.5,
+    lookZoomMax: 8,
+    /** Seconds for the orbit to settle back behind the ship when look mode ends. */
+    lookReturnTau: 0.3,
   },
   render: {
     near: 0.5,
@@ -106,6 +119,8 @@ export const config = {
     invertPitch: false,
     /** Free look speed at full right stick, mouse pixel equivalents per second. */
     lookSpeed: 420,
+    /** Seconds View/Back must be held to save a snapshot (a tap opens the map). */
+    snapshotHold: 0.6,
   },
   /** Photo mode. */
   photo: {

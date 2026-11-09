@@ -32,7 +32,7 @@ function flyTo(w: World, targetId: string, boost: boolean, maxSeconds: number): 
 }
 
 describe('travel times', () => {
-  test('Earth orbit to the Moon takes about 30 s with boost', () => {
+  test('Earth orbit to the Moon takes about 12 s with boost', () => {
     const w = new World(SOLAR_SYSTEM, 0);
     const moon = w.universe.get('moon');
     const earth = w.universe.get('earth');
@@ -41,13 +41,13 @@ describe('travel times', () => {
     w.placeInSpace('earth', earth.radius * 1.4, toMoon.clone().negate().negate());
     const r = flyTo(w, 'moon', true, 120);
     console.log(`moon trip with boost: ${r.seconds.toFixed(1)} s`);
-    expect(r.seconds).toBeGreaterThan(15);
-    expect(r.seconds).toBeLessThan(45);
+    expect(r.seconds).toBeGreaterThan(8);
+    expect(r.seconds).toBeLessThan(15);
     // Arrives without hitting the surface.
     expect(r.minAlt).toBeGreaterThan(0);
   });
 
-  test('without boost the Moon trip is still reasonable', () => {
+  test('without boost the Moon trip takes about 30 s', () => {
     const w = new World(SOLAR_SYSTEM, 0);
     const moon = w.universe.get('moon');
     const earth = w.universe.get('earth');
@@ -55,10 +55,11 @@ describe('travel times', () => {
     w.placeInSpace('earth', earth.radius * 1.4, toMoon);
     const r = flyTo(w, 'moon', false, 300);
     console.log(`moon trip without boost: ${r.seconds.toFixed(1)} s`);
-    expect(r.seconds).toBeLessThan(120);
+    expect(r.seconds).toBeGreaterThan(20);
+    expect(r.seconds).toBeLessThan(36);
   });
 
-  test('cruising high in the atmosphere with boost reaches the night side in about a minute', () => {
+  test('cruising high in the atmosphere with boost reaches the night side in about 20 s', () => {
     const w = new World(SOLAR_SYSTEM, 0);
     // Level at 25 km, heading east, no input: the leveling assist follows the curvature.
     w.place({ body: 'earth', lat: 10, localHour: 15, altitude: 25000, heading: 90, pitch: 0, throttle: 1 });
@@ -78,11 +79,12 @@ describe('travel times', () => {
     }
     console.log(`quarter of Earth at 25 km: ${t.toFixed(1)} s, max altitude ${(maxAlt / 1000).toFixed(1)} km`);
     expect(angle).toBeGreaterThanOrEqual(Math.PI / 2);
-    expect(t).toBeLessThan(120);
+    expect(t).toBeGreaterThan(12);
+    expect(t).toBeLessThan(30);
     expect(w.phase).toBe('atmosphere');
   });
 
-  test('low flight stays scenic: under 1 km/s near the hills even with boost', () => {
+  test('low flight stays scenic: under 4 km/s near the hills even with boost', () => {
     const w = new World(SOLAR_SYSTEM, 0);
     SCENARIOS['earth-low-morning']!.apply(w);
     const go = emptyInput();
@@ -92,8 +94,31 @@ describe('travel times', () => {
       w.step(1 / 30, go);
       go.throttleSet = null;
     }
-    expect(w.ship.speed).toBeLessThan(1000);
-    expect(w.ship.speed).toBeGreaterThan(300);
+    expect(w.ship.speed).toBeLessThan(4000);
+    expect(w.ship.speed).toBeGreaterThan(1200);
+  });
+
+  test('diving at a planet brakes to a gentle speed near the ground and never impacts', () => {
+    const w = new World(SOLAR_SYSTEM, 0);
+    const earth = w.universe.get('earth');
+    w.placeInSpace('earth', earth.radius * 1.6);
+    const down = emptyInput();
+    down.throttleSet = 1;
+    down.boost = true;
+    let minAlt = Infinity;
+    let speedAt100 = -1;
+    const toCenter = new Vector3();
+    for (let t = 0; t < 60; t += 1 / 60) {
+      toCenter.copy(earth.position).sub(w.shipWorldPos).normalize();
+      down.alignDir = w.toFrameDir(toCenter, new Vector3());
+      w.step(1 / 60, down);
+      down.throttleSet = null;
+      minAlt = Math.min(minAlt, w.env.altitude);
+      if (speedAt100 < 0 && w.env.altitude < 100) speedAt100 = w.ship.speed;
+    }
+    expect(minAlt).toBeGreaterThan(0);
+    expect(speedAt100).toBeGreaterThan(0);
+    expect(speedAt100).toBeLessThan(200);
   });
 
   test('re-entry heat shows when diving in from space, not when cruising at the cap', () => {

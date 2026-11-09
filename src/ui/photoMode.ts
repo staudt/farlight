@@ -42,7 +42,6 @@ export class PhotoMode {
   readonly pan = new Vector3();
 
   private readonly panel: HTMLElement;
-  private readonly flash: HTMLElement;
   private readonly els: Record<string, HTMLElement> = {};
   private readonly quat = new Quaternion();
   private readonly pointers = new Map<number, { x: number; y: number }>();
@@ -81,9 +80,7 @@ export class PhotoMode {
         <button type="button" class="pm-b pm-cap" data-k="capture">CAPTURE</button>
         <button type="button" class="pm-b pm-x" data-k="close" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>`;
-    this.flash = document.createElement('div');
-    this.flash.className = 'pm-flash';
-    document.body.append(this.panel, this.flash);
+    document.body.append(this.panel);
     for (const el of this.panel.querySelectorAll<HTMLElement>('[data-k]')) this.els[el.dataset.k as string] = el;
 
     const fov = this.els.fov as HTMLInputElement;
@@ -311,25 +308,42 @@ export class PhotoMode {
 
   capture(): void {
     if (!this.active) return;
-    const canvas = this.gfx.renderer.domElement;
-    const body = this.world.ship.frame.body.id;
-    const stamp = new Date().toISOString().replace(/[:.]/g, '').replace('T', '-').slice(0, 17);
-    const name = `farlight-${this.systemId}-${body}-${stamp}.png`;
-    this.flash.classList.remove('go');
-    void this.flash.offsetWidth;
-    this.flash.classList.add('go');
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
-    }, 'image/png');
+    saveFrame(this.gfx, this.world, this.systemId);
   }
+}
+
+let flashEl: HTMLElement | null = null;
+
+/** Brief white flash over the canvas, shared by photo capture and quick snapshots. */
+export function flashScreen(): void {
+  if (!flashEl) {
+    flashEl = document.createElement('div');
+    flashEl.className = 'pm-flash';
+    document.body.append(flashEl);
+  }
+  flashEl.classList.remove('go');
+  void flashEl.offsetWidth;
+  flashEl.classList.add('go');
+}
+
+/** Saves the current canvas frame as a PNG download: farlight-system-body-stamp.png. */
+export function saveFrame(gfx: GameRenderer, world: World, systemId: string): void {
+  const canvas = gfx.renderer.domElement;
+  const body = world.ship.frame.body.id;
+  const stamp = new Date().toISOString().replace(/[:.]/g, '').replace('T', '-').slice(0, 17);
+  const name = `farlight-${systemId}-${body}-${stamp}.png`;
+  flashScreen();
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }, 'image/png');
 }
 
 function clamp(v: number, a: number, b: number): number {

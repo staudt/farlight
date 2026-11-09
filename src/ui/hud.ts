@@ -32,6 +32,11 @@ export class Hud {
   private readonly speedFill: HTMLElement;
   private readonly speedTick: HTMLElement;
   private readonly boost: HTMLElement;
+  private readonly leverPct: HTMLElement;
+  private readonly leverFill: HTMLElement;
+  private readonly leverKnob: HTMLElement;
+  private readonly lookFlag: HTMLElement;
+  private leverShown = -1;
   private readonly timeBox: HTMLElement;
   private readonly timeValue: HTMLElement;
   private readonly card: HTMLElement;
@@ -77,7 +82,9 @@ export class Hud {
           <div class="gauge-row"><span class="hud-label">ALT</span><span class="hud-value" data-k="alt"></span></div>
           <div class="gauge-row"><span class="hud-label">SPD</span><span class="hud-value" data-k="spd"></span><span class="boost" data-k="boost">BOOST</span></div>
           <div class="speedbar"><div class="speedbar-fill" data-k="fill"></div><div class="speedbar-tick" data-k="tick"></div></div>
+          <div class="lever"><div class="lever-pct" data-k="lpct"></div><div class="lever-track">${Array.from({ length: 11 }, (_, i) => `<i class="${i % 5 === 0 ? 'big' : ''}" style="bottom:${i * 10}%"></i>`).join('')}<div class="lever-fill" data-k="lfill"></div><div class="lever-knob" data-k="lknob"></div></div></div>
         </div>
+        <div class="lookflag" data-k="look">LOOK</div>
         <div class="timebox" data-k="time"><div class="note">WARP LIMITED</div><div><span class="hud-label">TIME </span><span class="hud-value" data-k="timev"></span></div></div>
         <div class="bodycard hud-panel" data-k="card"><div class="card-name"><span class="glyph"></span><span data-k="cname"></span></div><div data-k="crows"></div></div>
         <div class="crosshair"><i class="h" style="left:-14px"></i><i class="h" style="left:6px"></i><i class="v" style="top:-14px"></i><i class="v" style="top:6px"></i><i class="ring"></i><div class="stickdot" data-k="stick"></div></div>
@@ -86,7 +93,7 @@ export class Hud {
         <div class="alignhint" data-k="align">HOLD F TO ALIGN</div>
         <div class="toast" data-k="toast"><div class="big" data-k="tbig"></div><div class="small" data-k="tsmall"></div></div>
         <div class="hints hud-panel" data-k="hints">
-          <b>CLICK</b> TO FLY · <b>MOUSE</b> STEER · <b>W S</b> THROTTLE · <b>A D</b> ROLL · <b>Q E</b> YAW · <b>SHIFT</b> BOOST · <b>, .</b> TIME · <b>C</b> CAMERA · <b>M</b> MAP · <b>T</b> TARGET · <b>F</b> ALIGN · <b>H</b> HIDE
+          <b>CLICK</b> TO FLY · <b>MOUSE</b> STEER · <b>W S</b> THROTTLE · <b>A D</b> ROLL · <b>Q E</b> YAW · <b>SHIFT</b> BOOST · <b>, .</b> TIME · <b>C</b> CAMERA · <b>V</b> LOOK · <b>K</b> SNAP · <b>M</b> MAP · <b>T</b> TARGET · <b>F</b> ALIGN · <b>H</b> HIDE
         </div>
         <div class="clickprompt" data-k="prompt">CLICK TO FLY</div>
       </div>`;
@@ -98,6 +105,10 @@ export class Hud {
     this.speedFill = q('fill');
     this.speedTick = q('tick');
     this.boost = q('boost');
+    this.leverPct = q('lpct');
+    this.leverFill = q('lfill');
+    this.leverKnob = q('lknob');
+    this.lookFlag = q('look');
     this.timeBox = q('time');
     this.timeValue = q('timev');
     this.card = q('card');
@@ -176,6 +187,7 @@ export class Hud {
     this.updateHeading();
     this.updateCompass();
     this.updateStick();
+    this.updateLever();
     this.updateTarget();
 
     this.textTimer -= realDt;
@@ -265,6 +277,20 @@ export class Hud {
       it.el.style.transform = `translateX(${half + d * COMPASS_PX_PER_DEG}px)`;
       it.el.style.display = Math.abs(d) > 100 ? 'none' : '';
     }
+  }
+
+  // Throttle lever and look flag, every frame so taps read instantly
+
+  private updateLever(): void {
+    const t = this.world.ship.throttle;
+    if (Math.abs(t - this.leverShown) > 0.0005) {
+      this.leverShown = t;
+      const pct = `${(t * 100).toFixed(1)}%`;
+      this.leverFill.style.height = pct;
+      this.leverKnob.style.bottom = pct;
+      this.leverPct.textContent = `${Math.round(t * 100)}%`;
+    }
+    this.lookFlag.classList.toggle('on', this.input.lookMode);
   }
 
   // Crosshair stick

@@ -56,6 +56,11 @@ function btn(pad: PadLike, i: number): number {
   return b ? (b.value > 0 ? b.value : b.pressed ? 1 : 0) : 0;
 }
 
+/** Small deadzone so a resting trigger never nudges the lever. */
+function trigger(v: number): number {
+  return v < 0.06 ? 0 : v;
+}
+
 /** Radial deadzone plus expo on a stick pair. */
 export function shapeStick(x: number, y: number, deadzone: number): { x: number; y: number } {
   const len = Math.hypot(x, y);
@@ -83,7 +88,7 @@ export function mapPad(pad: PadLike, invert: boolean, deadzone = 0.16): PadFrame
     lookY: r.y,
     moveX: l.x,
     moveY: l.y,
-    throttleDelta: rt - lt,
+    throttleDelta: trigger(rt) - trigger(lt),
     boost: btn(pad, BTN.A) > 0.5,
     brake: btn(pad, BTN.B) > 0.5,
     align: btn(pad, BTN.X) > 0.5,
@@ -124,6 +129,8 @@ export function actionFor(button: number, mode: PadMode): Action | null {
       return 'map';
     case BTN.R3:
       return 'photo';
+    case BTN.L3:
+      return 'look';
     default:
       return null;
   }
@@ -160,6 +167,8 @@ export class GamepadControls {
   connected = false;
   private prev: boolean[] = [];
   private index = -1;
+  private backHeld = 0;
+  private backFired = false;
 
   constructor(
     private readonly input: Input,
@@ -241,7 +250,26 @@ export class GamepadControls {
       this.clear();
     }
 
+    // View/Back: a tap opens the map on release, a 0.6 s hold saves a snapshot.
+    const back = pad.buttons[BTN.BACK]?.pressed ?? false;
+    if (mode === 'flight') {
+      if (back) {
+        this.backHeld += realDt;
+        if (!this.backFired && this.backHeld >= config.gamepad.snapshotHold) {
+          this.backFired = true;
+          this.input.emit('snapshot');
+        }
+      } else if (this.prev[BTN.BACK]) {
+        if (!this.backFired) this.input.emit('map');
+      }
+    }
+    if (!back) {
+      this.backHeld = 0;
+      this.backFired = false;
+    }
+
     for (const b of risingEdges(this.prev, pad)) {
+      if (b === BTN.BACK && mode === 'flight') continue;
       const action = actionFor(b, mode);
       if (action) this.input.emit(action);
       else if (mode === 'overlay' && ARROWS[b]) {

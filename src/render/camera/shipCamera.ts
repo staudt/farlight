@@ -26,10 +26,24 @@ export class ShipCamera {
   lookYaw = 0;
   lookPitch = 0;
   freeLook = false;
+  /** Look mode: orbit the ship freely, no spring back. Set from input each frame. */
+  lookMode = false;
+  orbitYaw = 0;
+  orbitPitch = 0;
+  /** Orbit distance multiplier (config.camera.lookZoomMin..Max). */
+  orbitZoom = 1;
   override: CameraOverride | null = null;
 
   toggle(): void {
     this.mode = this.mode === 'chase' ? 'cockpit' : 'chase';
+  }
+
+  /** Applies mouse, touch or stick deltas (pixels) and zoom (log units) to the orbit. */
+  orbit(dx: number, dy: number, zoom: number): void {
+    const c = config.camera;
+    this.orbitYaw = wrapPi(this.orbitYaw - dx * c.lookSensitivity);
+    this.orbitPitch = Math.min(c.lookPitchMax, Math.max(-c.lookPitchMax, this.orbitPitch - dy * c.lookSensitivity));
+    this.orbitZoom = Math.min(c.lookZoomMax, Math.max(c.lookZoomMin, this.orbitZoom * Math.exp(zoom)));
   }
 
   update(world: World, camera: PerspectiveCamera, realDt: number): void {
@@ -76,14 +90,31 @@ export class ShipCamera {
       this.lookYaw -= this.lookYaw * k;
       this.lookPitch -= this.lookPitch * k;
     }
-    _look.setFromAxisAngle(_Y, this.lookYaw);
-    _look2.setFromAxisAngle(_X, this.lookPitch);
+    // Orbit (look mode) holds where it is, then eases back behind the ship when released.
+    if (!this.lookMode && (this.orbitYaw !== 0 || this.orbitPitch !== 0 || this.orbitZoom !== 1)) {
+      const k = 1 - Math.exp(-realDt / c.lookReturnTau);
+      this.orbitYaw = wrapPi(this.orbitYaw);
+      this.orbitYaw -= this.orbitYaw * k;
+      this.orbitPitch -= this.orbitPitch * k;
+      this.orbitZoom = Math.exp(Math.log(this.orbitZoom) * (1 - k));
+      if (Math.abs(this.orbitYaw) < 1e-4 && Math.abs(this.orbitPitch) < 1e-4 && Math.abs(this.orbitZoom - 1) < 1e-3) {
+        this.orbitYaw = this.orbitPitch = 0;
+        this.orbitZoom = 1;
+      }
+    }
+    const orbiting = this.lookMode || this.orbitYaw !== 0 || this.orbitPitch !== 0 || this.orbitZoom !== 1;
+    _look.setFromAxisAngle(_Y, this.lookYaw + this.orbitYaw);
+    _look2.setFromAxisAngle(_X, this.lookPitch + this.orbitPitch);
     _viewQ.copy(this.smoothQuat).multiply(_look).multiply(_look2);
 
     const speedFrac = world.ship.speedCap > 0 ? Math.min(1, world.ship.speed / world.ship.speedCap) : 0;
-    if (this.mode === 'chase') {
-      const dist = c.chaseDistance * (1 + 0.15 * speedFrac);
-      _off.set(0, c.chaseHeight, dist).applyQuaternion(_viewQ);
+    if (this.mode === 'chase' || orbiting) {
+      const dist = c.chaseDistance * (1 + 0.15 * speedFrac) * this.orbitZoom;
+      _off.set(0, c.chaseHeight * this.orbitZoom, dist).applyQuaternion(_viewQ);
+      // Keep the orbit above the ground: lift the camera if it would dip under the terrain.
+      const floor = -Math.max(0, world.env.altitude - 4) * 0.85;
+      const h = _off.dot(_up);
+      if (orbiting && h < floor) _off.addScaledVector(_up, floor - h);
       this.worldPos.copy(world.shipWorldPos).add(_off);
       // Aim slightly above the ship so it sits in the lower part of the frame.
       _aim.set(0, c.lookAheadHeight, 0).applyQuaternion(_viewQ).add(world.shipWorldPos).sub(this.worldPos);
@@ -106,6 +137,10 @@ export class ShipCamera {
     }
     camera.updateMatrixWorld(true);
   }
+}
+
+function wrapPi(a: number): number {
+  return a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
 }
 
 const _up = new Vector3();

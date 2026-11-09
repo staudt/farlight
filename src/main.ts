@@ -25,7 +25,7 @@ import { clearPendingJump, Hyperspace, playArrival, readPendingJump } from './re
 import { buildTravelUrl } from './ui/galaxyMath';
 import { SkyLabels } from './ui/skyLabels';
 import { FpsCounter } from './ui/fpsCounter';
-import { PhotoMode } from './ui/photoMode';
+import { PhotoMode, saveFrame } from './ui/photoMode';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
@@ -113,7 +113,13 @@ input.on('warpUp', () => !photo.active && world.clock.step(1));
 input.on('warpDown', () => !photo.active && world.clock.step(-1));
 input.on('camera', () => !photo.active && gfx.shipCamera.toggle());
 input.on('debug', () => debug.toggle());
+input.throttleNow = () => world.ship.throttle;
 const hud = new Hud(document.getElementById('hud')!, world, gfx, input);
+input.on('snapshot', () => {
+  if (photo.active) return;
+  saveFrame(gfx, world, system.id);
+  hud.notify('SNAPSHOT SAVED', '');
+});
 const overlay = new MapOverlay(document.getElementById('map')!, input);
 input.on('back', () => overlay.close());
 const padMode = (): PadMode => (photo.active ? 'photo' : overlay.isOpen ? 'overlay' : 'flight');
@@ -169,9 +175,17 @@ function frame(now: number): void {
     flight.alignDir = world.toFrameDir(alignDir, new Vector3());
   }
   const look = input.consumeLook();
-  gfx.shipCamera.freeLook = input.rightMouse || input.external.pad.look;
-  gfx.shipCamera.lookYaw = clamp(gfx.shipCamera.lookYaw - look.x * 0.004, -Math.PI, Math.PI);
-  gfx.shipCamera.lookPitch = clamp(gfx.shipCamera.lookPitch - look.y * 0.004, -1.3, 1.3);
+  const zoom = input.consumeZoom();
+  const cam = gfx.shipCamera;
+  cam.lookMode = input.lookMode;
+  if (input.lookMode) {
+    cam.freeLook = false;
+    cam.orbit(look.x, look.y, zoom);
+  } else {
+    cam.freeLook = input.rightMouse || input.external.pad.look;
+    cam.lookYaw = clamp(cam.lookYaw - look.x * 0.004, -Math.PI, Math.PI);
+    cam.lookPitch = clamp(cam.lookPitch - look.y * 0.004, -1.3, 1.3);
+  }
 
   photo.tick(realDt, gamepad.frame);
   if (!photo.active) world.step(realDt, flight);

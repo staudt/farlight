@@ -29,6 +29,8 @@ export interface FlightEnv {
   altitude: number;
   /** Height above the terrain a little ahead of the ship (min of samples). */
   altitudeAhead: number;
+  /** Climb rate (m/s) needed to clear the terrain samples ahead, 0 when clear. */
+  climbDemand: number;
   /** 0..1 air density relative to sea level. */
   density: number;
   /** m/s^2 */
@@ -182,7 +184,7 @@ export class Ship {
       const unsupported = Math.pow(Math.max(0, 1 - speed / f.liftSpeed), 2);
       const sink = f.sinkRate * Math.sqrt(env.gravity / 9.81) * unsupported * Math.min(1, env.density * 4);
       const vr = this.vel.dot(env.up);
-      if (vr > -sink) this.vel.addScaledVector(env.up, (-sink - vr) * (1 - Math.exp(-dt / 1.2)));
+      if (vr > -sink) this.vel.addScaledVector(env.up, (-sink - vr) * (1 - Math.exp(-dt / f.sinkTau)));
     }
 
     // Re-entry stress: the air is braking the ship (speed above the local cap). Cruising at the
@@ -193,13 +195,17 @@ export class Ship {
     // Ground cushion: descent rate shrinks with height so the ship never hits the ground.
     if (env.solidGround) {
       const alt = Math.min(env.altitude, env.altitudeAhead);
-      if (alt < f.cushionHeight) {
+      // Faster flight needs more room to clear hills.
+      const vUp = this.vel.dot(env.up);
+      const hSpeed = Math.sqrt(Math.max(0, this.vel.lengthSq() - vUp * vUp));
+      const cushion = f.cushionHeight + hSpeed * f.cushionLead;
+      if (alt < cushion) {
         const vr = this.vel.dot(env.up);
         const maxDescent = Math.max(0, alt - f.gearHeight) * 0.9 + 1.5;
         if (vr < -maxDescent) this.vel.addScaledVector(env.up, -vr - maxDescent);
         // Terrain rising ahead: lift the ship over it.
-        if (env.altitudeAhead < env.altitude && env.altitudeAhead < f.cushionHeight * 0.5) {
-          const lift = (f.cushionHeight * 0.5 - env.altitudeAhead) * 0.5;
+        if (env.altitudeAhead < env.altitude && env.altitudeAhead < cushion * 0.5) {
+          const lift = Math.max((cushion * 0.5 - env.altitudeAhead) * 0.5, env.climbDemand);
           if (vr < lift) this.vel.addScaledVector(env.up, (lift - Math.max(vr, 0)) * Math.min(1, dt * 4));
         }
       }
