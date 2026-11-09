@@ -63,6 +63,23 @@ export const config = {
     far: 1e11,
     pixelRatioMax: 1.5,
   },
+  /** Touch controls (phones). */
+  touch: {
+    /** Pixel ratio cap on touch devices, read at startup. */
+    pixelRatioMax: 1.25,
+    /** Floating stick travel in CSS px. */
+    stickRadius: 60,
+    deadzone: 0.08,
+    /** Roll fed from stick x in space, for coordinated turns. */
+    spaceRoll: 0.4,
+    invertPitch: false,
+    /** Free look drag, mouse pixel equivalents per touch pixel. */
+    lookScale: 1.6,
+    /** Tilt for full deflection, degrees. */
+    tiltRange: 22,
+    tiltDeadzone: 0.1,
+    idleOpacity: 0.35,
+  },
   debug: {
     showPanel: false,
   },

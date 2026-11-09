@@ -44,6 +44,15 @@ export class DebugPanel {
     flight.add(config.flight, 'levelPitchRate', 0, 1);
     flight.add(config.flight, 'bankAngle', 0, 1.2);
     flight.add(config.flight, 'cushionHeight', 20, 1000);
+    const touch = this.gui.addFolder('Touch').close();
+    touch.add(config.touch, 'stickRadius', 30, 120);
+    touch.add(config.touch, 'deadzone', 0, 0.4);
+    touch.add(config.touch, 'spaceRoll', 0, 1);
+    touch.add(config.touch, 'invertPitch');
+    touch.add(config.touch, 'lookScale', 0.2, 4);
+    touch.add(config.touch, 'tiltRange', 8, 45);
+    touch.add(config.touch, 'tiltDeadzone', 0, 0.4);
+    touch.add(config.touch, 'idleOpacity', 0.1, 1);
 
     const cam = this.gui.addFolder('Camera').close();
     cam.add(config.camera, 'fov', 30, 100);

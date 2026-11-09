@@ -30,7 +30,7 @@ export class SystemMap {
   private pan: P2 = { x: 0, y: 0 };
   private hover: Body | null = null;
   private mouse: P2 = { x: -999, y: -999 };
-  private dragging = false;
+  private readonly pointers = new Map<number, P2>();
   private dragMoved = 0;
   private dpr = 1;
   private w = 0;
@@ -53,6 +53,8 @@ export class SystemMap {
       <canvas></canvas>
       <div class="map-title">SYSTEM MAP</div>
       <div class="map-sub">DRAG TO PAN · WHEEL TO ZOOM · CLICK TO TARGET · M TO CLOSE</div>
+      <div class="map-sub touch">DRAG TO PAN · PINCH TO ZOOM · TAP TO TARGET</div>
+      <button type="button" class="map-close" aria-label="Close map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="map-card"></div>`;
     this.canvas = root.querySelector('canvas') as HTMLCanvasElement;
     this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -80,41 +82,91 @@ export class SystemMap {
       (e) => {
         e.preventDefault();
         e.stopPropagation(); // keep the throttle wheel handler out of it
-        const f = Math.exp(-e.deltaY * 0.0012);
-        const nz = Math.min(40, Math.max(0.3, this.zoom * f));
-        const k = nz / this.zoom;
-        // Zoom about the cursor.
-        const cx = e.clientX - this.w / 2;
-        const cy = e.clientY - this.h / 2;
-        this.pan.x = cx - (cx - this.pan.x) * k;
-        this.pan.y = cy - (cy - this.pan.y) * k;
-        this.zoom = nz;
+        this.zoomAbout(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0012));
       },
       { passive: false },
     );
-    root.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
-      this.dragging = true;
-      this.dragMoved = 0;
+    root.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      this.mouse = { x: e.clientX, y: e.clientY };
+      this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      try {
+        root.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      if (this.pointers.size === 1) this.dragMoved = 0;
+      else this.dragMoved = 1e3; // a pinch is never a tap
       root.classList.add('dragging');
     });
-    window.addEventListener('mouseup', () => {
-      if (!this.dragging) return;
-      this.dragging = false;
+    const up = (e: PointerEvent): void => {
+      const p = this.pointers.get(e.pointerId);
+      if (!p) return;
+      this.pointers.delete(e.pointerId);
+      if (this.pointers.size > 0) return;
       root.classList.remove('dragging');
-      if (this.dragMoved < 5 && this.open && this.hover) {
-        this.world.target = this.hover;
+      const touch = e.pointerType !== 'mouse';
+      if (e.type === 'pointerup' && this.dragMoved < (touch ? 10 : 5) && this.open) {
+        const hit = touch ? this.nearest(e.clientX, e.clientY, 32) : this.hover;
+        if (hit) this.world.target = hit;
       }
-    });
-    root.addEventListener('mousemove', (e) => {
-      this.mouse = { x: e.clientX, y: e.clientY };
-      if (this.dragging) {
-        this.pan.x += e.movementX;
-        this.pan.y += e.movementY;
-        this.dragMoved += Math.abs(e.movementX) + Math.abs(e.movementY);
+    };
+    root.addEventListener('pointerup', up);
+    root.addEventListener('pointercancel', up);
+    root.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'mouse') this.mouse = { x: e.clientX, y: e.clientY };
+      const prev = this.pointers.get(e.pointerId);
+      if (!prev) return;
+      const nx = e.clientX;
+      const ny = e.clientY;
+      if (this.pointers.size >= 2) {
+        const other = [...this.pointers.entries()].find(([id]) => id !== e.pointerId)![1];
+        const d0 = Math.hypot(prev.x - other.x, prev.y - other.y);
+        const d1 = Math.hypot(nx - other.x, ny - other.y);
+        const mx0 = (prev.x + other.x) / 2;
+        const my0 = (prev.y + other.y) / 2;
+        const mx1 = (nx + other.x) / 2;
+        const my1 = (ny + other.y) / 2;
+        this.pan.x += mx1 - mx0;
+        this.pan.y += my1 - my0;
+        if (d0 > 1) this.zoomAbout(mx1, my1, d1 / d0);
+      } else {
+        this.pan.x += nx - prev.x;
+        this.pan.y += ny - prev.y;
+        this.dragMoved += Math.abs(nx - prev.x) + Math.abs(ny - prev.y);
       }
+      prev.x = nx;
+      prev.y = ny;
+      this.mouse = { x: nx, y: ny };
     });
+    const close = root.querySelector('.map-close') as HTMLElement;
+    close.addEventListener('pointerdown', (e) => e.stopPropagation());
+    close.addEventListener('click', () => this.setOpen(false));
     root.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
+  /** Zoom by factor f keeping the screen point (cx, cy) fixed. */
+  private zoomAbout(cx0: number, cy0: number, f: number): void {
+    const nz = Math.min(40, Math.max(0.3, this.zoom * f));
+    const k = nz / this.zoom;
+    const cx = cx0 - this.w / 2;
+    const cy = cy0 - this.h / 2;
+    this.pan.x = cx - (cx - this.pan.x) * k;
+    this.pan.y = cy - (cy - this.pan.y) * k;
+    this.zoom = nz;
+  }
+
+  private nearest(x: number, y: number, radius: number): Body | null {
+    let best: Body | null = null;
+    let bestD = radius;
+    for (const [b, p] of this.screen) {
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (d < bestD) {
+        bestD = d;
+        best = b;
+      }
+    }
+    return best;
   }
 
   get isOpen(): boolean {
@@ -227,16 +279,7 @@ export class SystemMap {
     }
 
     // Hover
-    let best: Body | null = null;
-    let bestD = 16;
-    for (const [b, p] of this.screen) {
-      const d = Math.hypot(p.x - this.mouse.x, p.y - this.mouse.y);
-      if (d < bestD) {
-        bestD = d;
-        best = b;
-      }
-    }
-    this.hover = best;
+    this.hover = this.nearest(this.mouse.x, this.mouse.y, 16);
 
     // Bodies
     ctx.font = '600 12px Rajdhani, sans-serif';

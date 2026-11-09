@@ -86,3 +86,61 @@
   font-weight: 600;
   font-size: 12px;
 }
+
+#map {
+  touch-action: none;
+}
+.map-sub.touch,
+.map-close {
+  display: none;
+}
+body.touch .map-sub:not(.touch) {
+  display: none;
+}
+body.touch .map-sub.touch {
+  display: block;
+}
+body.touch .map-close {
+  display: block;
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  width: 40px;
+  height: 40px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(95, 242, 255, 0.45);
+  background: rgba(6, 14, 28, 0.55);
+  color: var(--hud-line);
+}
+@media (max-height: 500px) {
+  .map-title {
+    top: 14px;
+    left: 20px;
+  }
+  .map-sub {
+    bottom: 12px;
+    left: 20px;
+  }
+  .map-card {
+    top: 58px;
+    right: 14px;
+    width: 220px;
+    padding: 8px 12px 6px;
+  }
+  .map-card .card-name {
+    font-size: 15px;
+    padding-bottom: 5px;
+    margin-bottom: 5px;
+  }
+  .map-card .card-row {
+    font-size: 11px;
+    padding: 1px 0;
+  }
+  .map-card .eta-head {
+    display: none;
+  }
+  .map-card .eta-row {
+    display: none;
+  }
+}

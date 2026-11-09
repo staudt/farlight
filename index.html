@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>Farlight</title>
     <style>
       html,
@@ -17,6 +17,7 @@
         height: 100vh;
       }
       #hud,
+      #touch,
       #map {
         position: absolute;
         inset: 0;
@@ -47,6 +48,18 @@
         letter-spacing: 0.38em;
         color: rgba(140, 225, 255, 0.75);
       }
+      @media (max-height: 500px) {
+        #title {
+          top: 22px;
+          left: 28px;
+        }
+        #title h1 {
+          font-size: 30px;
+        }
+        #title p {
+          font-size: 10px;
+        }
+      }
       #title.gone {
         opacity: 0;
       }
@@ -55,6 +68,7 @@
   <body>
     <canvas id="game"></canvas>
     <div id="hud"></div>
+    <div id="touch"></div>
     <div id="map"></div>
     <div id="title"><h1>FARLIGHT</h1><p>A SOLAR SYSTEM GLIDER</p></div>
     <script type="module" src="/src/main.ts"></script>

@@ -466,3 +466,103 @@
     filter: brightness(0.6);
   }
 }
+
+/* Touch mode: phone landscape */
+body.touch .hints.touch {
+  width: auto;
+  min-width: 0;
+  bottom: 96px;
+  white-space: nowrap;
+  font-size: 11px;
+  padding: 6px 14px;
+}
+body.touch .compass {
+  left: 36%;
+  top: 10px;
+  transform: scale(0.75);
+}
+body.touch .compass-deg {
+  left: 36%;
+  top: 40px;
+}
+body.touch .bodycard {
+  top: 56px;
+  right: 80px;
+}
+body.touch .timebox {
+  right: 172px;
+  bottom: 22px;
+}
+body.touch .gauges {
+  left: 20px;
+  bottom: 18px;
+}
+@media (max-height: 500px) {
+  .hud-value {
+    font-size: 18px;
+  }
+  .timebox .hud-value {
+    font-size: 16px;
+  }
+  .gauges {
+    width: 170px;
+    gap: 6px;
+  }
+  .toast .big {
+    font-size: 30px;
+  }
+  .toast {
+    top: 22%;
+  }
+  .bodycard {
+    width: 190px;
+    padding: 8px 12px 6px;
+  }
+  .bodycard .card-name {
+    font-size: 15px;
+    padding-bottom: 5px;
+    margin-bottom: 5px;
+  }
+  .bodycard .card-row {
+    font-size: 11px;
+    padding: 1px 0;
+  }
+  .bodycard .card-row .k {
+    font-size: 9px;
+  }
+  .bodycard [data-k='crows'] .card-row:nth-child(n + 5) {
+    display: none;
+  }
+  .target .info {
+    font-size: 10px;
+  }
+  .target .info b {
+    font-size: 12px;
+  }
+}
+
+body.touch .gauges .hud-value {
+  white-space: nowrap;
+}
+body.touch .gauges {
+  width: 200px;
+}
+@media (orientation: portrait) {
+  body.touch .bodycard {
+    display: none;
+  }
+  body.touch .hints.touch {
+    white-space: normal;
+    width: calc(100vw - 32px);
+    bottom: 150px;
+  }
+  body.touch .timebox {
+    right: 12px;
+    bottom: 110px;
+  }
+  body.touch .compass,
+  body.touch .compass-deg {
+    left: 30%;
+    top: 70px;
+  }
+}

@@ -3,6 +3,7 @@ import { config } from './core/config';
 import { SOLAR_SYSTEM } from './data/solarSystem';
 import { AudioEngine } from './audio/audio';
 import { Input } from './input/input';
+import { detectTouch, TouchControls } from './input/touch';
 import { PostStack } from './render/post';
 import { createGasGiantView } from './render/bodies';
 import { GameRenderer } from './render/renderer';
@@ -20,6 +21,12 @@ import { FpsCounter } from './ui/fpsCounter';
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
 
+const touchOn = detectTouch(params);
+if (touchOn) {
+  document.body.classList.add('touch');
+  config.render.pixelRatioMax = Math.min(config.render.pixelRatioMax, config.touch.pixelRatioMax); // before GameRenderer
+}
+
 const world = new World(SOLAR_SYSTEM, 0);
 const scenarioName = params.get('scenario') ?? DEFAULT_SCENARIO;
 const scenario = SCENARIOS[scenarioName] ?? SCENARIOS[DEFAULT_SCENARIO]!;
@@ -34,10 +41,13 @@ const post = new PostStack(gfx);
 const weather = installWeather(gfx, post);
 weather.lightning.onStrike = (distance) => audio.thunder(distance);
 const input = new Input(canvas);
+input.touchMode = touchOn;
+const touch = touchOn ? new TouchControls(document.getElementById('touch')!, input, world, gfx) : null;
 // Title card fades on the first click (or after a while).
 const title = document.getElementById('title');
 const hideTitle = (): void => title?.classList.add('gone');
 canvas.addEventListener('click', hideTitle, { once: true });
+if (touchOn) window.addEventListener('pointerdown', hideTitle, { once: true });
 setTimeout(hideTitle, 15000);
 const debug = new DebugPanel(world, gfx, (name) => SCENARIOS[name]?.apply(world));
 if (params.has('debug')) debug.toggle();
@@ -78,6 +88,7 @@ function frame(now: number): void {
   const realDt = Math.min(0.1, Math.max(0, (now - last) / 1000));
   last = now;
 
+  touch?.update(realDt);
   const flight = input.poll(realDt);
   if (input.aligning && world.target) {
     alignDir.copy(world.target.position).sub(world.shipWorldPos).normalize();
@@ -123,6 +134,8 @@ window.__game = {
   world,
   audio,
   gfx,
+  touch,
+  input,
   post,
   config,
   scenarios: Object.keys(SCENARIOS),

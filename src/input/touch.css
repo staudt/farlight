@@ -1,0 +1,249 @@
+/* Touch controls. Calm: low opacity when idle, brighter while touched. */
+#touch {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: 'Rajdhani', system-ui, sans-serif;
+  color: #5ff2ff;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  --idle: 0.35;
+}
+#touch:empty {
+  display: none;
+}
+#touch * {
+  box-sizing: border-box;
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+
+body.touch {
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+.t-surface {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+}
+
+/* Floating stick */
+.t-base {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.t-base::before {
+  content: '';
+  position: absolute;
+  left: -60px;
+  top: -60px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 1px solid #5ff2ff;
+  background: rgba(6, 14, 28, 0.35);
+}
+.t-base i {
+  position: absolute;
+  left: -22px;
+  top: -22px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid #5ff2ff;
+  background: rgba(95, 242, 255, 0.22);
+  box-shadow: 0 0 14px rgba(95, 242, 255, 0.4);
+}
+#touch.on-stick .t-base {
+  opacity: 0.85;
+}
+/* Ghost stick shows where the left thumb goes. */
+.t-ghost {
+  position: absolute;
+  left: calc(env(safe-area-inset-left) + 130px);
+  top: 55%;
+  width: 96px;
+  height: 96px;
+  margin: -48px 0 0 -48px;
+  border-radius: 50%;
+  border: 1px solid #5ff2ff;
+  opacity: var(--idle);
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+#touch.on-stick .t-ghost {
+  opacity: 0;
+}
+
+/* Throttle slider */
+.t-slider {
+  --t: 0;
+  position: absolute;
+  right: calc(env(safe-area-inset-right) + 6px);
+  top: calc(env(safe-area-inset-top) + 56px);
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  width: 60px;
+  pointer-events: auto;
+  opacity: var(--idle);
+  transition: opacity 0.2s ease;
+}
+#touch.on-slider .t-slider {
+  opacity: 1;
+}
+.t-track {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  margin-left: -2px;
+  background: rgba(95, 242, 255, 0.25);
+  border-radius: 2px;
+}
+.t-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 14px;
+  height: calc(var(--t) * (100% - 28px));
+  background: #5ff2ff;
+  box-shadow: 0 0 8px #5ff2ff;
+  border-radius: 2px;
+}
+.t-knob {
+  position: absolute;
+  left: 50%;
+  bottom: calc(14px + var(--t) * (100% - 28px));
+  width: 30px;
+  height: 30px;
+  margin: 0 0 -15px -15px;
+  border-radius: 50%;
+  border: 1px solid #5ff2ff;
+  background: rgba(6, 14, 28, 0.7);
+  box-shadow: 0 0 10px rgba(95, 242, 255, 0.4);
+}
+
+/* Boost */
+.t-boost {
+  position: absolute;
+  right: calc(env(safe-area-inset-right) + 76px);
+  bottom: calc(env(safe-area-inset-bottom) + 18px);
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  border: 1px solid #5ff2ff;
+  background: rgba(6, 14, 28, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: auto;
+  opacity: var(--idle);
+  transition: opacity 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+.t-boost span {
+  margin-right: -0.2em;
+}
+#touch.on-boost .t-boost,
+.t-boost.lit {
+  opacity: 1;
+  color: #ffd27a;
+  border-color: #ffd27a;
+  background: rgba(255, 210, 122, 0.18);
+  box-shadow: 0 0 18px rgba(255, 210, 122, 0.35);
+}
+
+/* Button row */
+.t-row {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 8px);
+  right: calc(env(safe-area-inset-right) + 10px);
+  display: flex;
+  gap: 4px;
+}
+.t-btn {
+  width: 34px;
+  height: 34px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(95, 242, 255, 0.45);
+  background: rgba(6, 14, 28, 0.45);
+  color: #5ff2ff;
+  pointer-events: auto;
+  opacity: var(--idle);
+  transition: opacity 0.15s ease, background 0.15s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+}
+.t-btn svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.t-btn:active,
+.t-btn.active,
+#touch.on-align .t-btn[data-b='align'] {
+  opacity: 1;
+  background: rgba(95, 242, 255, 0.25);
+}
+
+/* Portrait: gentle rotate hint, play still works */
+.t-rotate {
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  font-size: 13px;
+  letter-spacing: 0.4em;
+  color: #d9fbff;
+  pointer-events: none;
+  text-shadow: 0 0 12px rgba(5, 12, 26, 0.9);
+}
+.t-rotate svg {
+  width: 56px;
+  height: 56px;
+  display: block;
+  margin: 0 auto 10px;
+  color: #5ff2ff;
+  animation: t-rot 3.2s ease-in-out infinite;
+}
+@keyframes t-rot {
+  0%,
+  25% {
+    transform: rotate(0);
+  }
+  65%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
+@media (orientation: portrait) {
+  .t-rotate {
+    display: block;
+  }
+  .t-row {
+    flex-wrap: wrap;
+    width: 180px;
+    justify-content: flex-end;
+  }
+  .t-boost {
+    right: calc(env(safe-area-inset-right) + 76px);
+  }
+}

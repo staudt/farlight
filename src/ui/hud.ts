@@ -140,6 +140,12 @@ export class Hud {
     input.on('target', () => this.cycleTarget());
     window.addEventListener('keydown', () => this.dismissHints(), { once: true });
     window.addEventListener('click', () => this.dismissHints(), { once: true });
+    if (input.touchMode) {
+      window.addEventListener('pointerdown', () => this.dismissHints(), { once: true });
+      this.hints.innerHTML = 'LEFT THUMB STEER · RIGHT SLIDER THROTTLE · HOLD BOOST';
+      this.hints.classList.add('touch');
+      this.alignHint.textContent = 'HOLD ALIGN';
+    }
   }
 
   private hintsDismissed = false;
@@ -184,7 +190,7 @@ export class Hud {
     this.timeBox.classList.toggle('limited', this.limitedTimer > 0);
     this.hints.classList.toggle('on', this.age < HINT_SECONDS && this.hudVisible);
     const mapOpen = this.root.ownerDocument.getElementById('map')?.style.display === 'block';
-    this.prompt.classList.toggle('on', !this.input.pointerLocked && !mapOpen && this.age > 0.5);
+    this.prompt.classList.toggle('on', !this.input.touchMode && !this.input.pointerLocked && !mapOpen && this.age > 0.5);
     this.root.style.visibility = mapOpen ? 'hidden' : 'visible';
   }
 
@@ -261,7 +267,7 @@ export class Hud {
   private updateStick(): void {
     const s = this.input.stick;
     this.stickDot.style.transform = `translate(${s.x * 60}px, ${s.y * 60}px)`;
-    this.stickDot.style.opacity = this.input.pointerLocked ? '0.85' : '0';
+    this.stickDot.style.opacity = this.input.pointerLocked && !this.input.touchMode ? '0.85' : '0';
   }
 
   // Target

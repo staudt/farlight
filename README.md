@@ -31,6 +31,10 @@ Io beneath a looming Jupiter, Saturn's rings, and a dive into Jupiter's cloud se
 | N | Mute |
 | F3 | Tuning panel |
 
+**On a phone** (landscape): left thumb anywhere steers with a floating stick, the right edge slider
+sets throttle, and the big button boosts. Drag on the right to look around. The top row has time
+warp, camera, map, target, hold to align, HUD, tilt steering and fullscreen.
+
 Fly slowly near the ground to land. Once landed, you can warp time to watch sunsets and moonrises.
 
 Try a scenario with `?scenario=` in the URL, for example `earth-low-morning`, `atmo-entry`,

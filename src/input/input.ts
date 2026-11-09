@@ -21,6 +21,19 @@ export class Input {
   recenterTime = 0.9;
   invertY = false;
   rightMouse = false;
+  /** True on touch devices; the HUD adapts. */
+  touchMode = false;
+  /** Axes injected by other devices (touch). Merged in poll(); values are -1..1. */
+  readonly external = {
+    active: false,
+    pitch: 0,
+    yaw: 0,
+    roll: 0,
+    boost: false,
+    align: false,
+    /** Absolute throttle 0..1, consumed by the next poll. */
+    throttleSet: null as number | null,
+  };
   /** Raw mouse delta this frame while right mouse is held (free look). */
   readonly look = { x: 0, y: 0 };
   private keys = new Set<string>();
@@ -114,6 +127,12 @@ export class Input {
     if (this.down('ArrowDown')) inp.pitch += 1;
     if (this.down('ArrowLeft')) inp.yaw -= 1;
     if (this.down('ArrowRight')) inp.yaw += 1;
+    const ext = this.external;
+    if (ext.active) {
+      inp.pitch += ext.pitch;
+      inp.yaw += ext.yaw;
+      inp.roll = clamp(inp.roll + ext.roll, -1, 1);
+    }
     inp.yaw = clamp(inp.yaw, -1, 1);
     inp.pitch = clamp(inp.pitch, -1, 1);
 
@@ -123,9 +142,10 @@ export class Input {
       inp.throttleDelta += this.wheel / Math.max(realDt, 1e-3) / 0.6;
       this.wheel = 0;
     }
-    inp.throttleSet = this.throttleSet;
+    inp.throttleSet = this.throttleSet ?? ext.throttleSet;
     this.throttleSet = null;
-    inp.boost = this.down('ShiftLeft') || this.down('ShiftRight');
+    ext.throttleSet = null;
+    inp.boost = this.down('ShiftLeft') || this.down('ShiftRight') || ext.boost;
     inp.brake = this.down('KeyX');
     return inp;
   }
@@ -139,7 +159,7 @@ export class Input {
 
   /** True while the align key is held. */
   get aligning(): boolean {
-    return this.down('KeyF');
+    return this.down('KeyF') || this.external.align;
   }
 }
 
