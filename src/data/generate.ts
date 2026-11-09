@@ -390,6 +390,9 @@ interface Built {
   type: string;
   features: string[];
   summary: string;
+  /** Surface and sky effects that do not need an atmosphere. */
+  effects?: WeatherDef[];
+  hazards?: string[];
 }
 
 interface Flora {
@@ -661,7 +664,7 @@ function buildDesert(rng: Rng): Built {
     sunIntensity: round(rng.range(11, 14), 1),
     stabilization: 0.7,
     clouds: { altitude: 0.5, thickness: 0.2, coverage: round(rng.range(0.05, 0.25), 2), color: [0.95, 0.9, 0.85], scale: round(rng.range(0.03, 0.05), 3), speed: 20 },
-    weather: [{ kind: 'dust', intensity: round(rng.range(0.4, 0.8), 2) }],
+    weather: [{ kind: 'dust', intensity: round(rng.range(0.4, 0.8), 2) }, { kind: 'dustDevil', intensity: 1, size: 0.002 }],
   };
   return {
     archetype: 'desert',
@@ -674,6 +677,7 @@ function buildDesert(rng: Rng): Built {
     atmosphereText: 'Thin carbon dioxide',
     type: 'Terrestrial',
     features: ['Dunes', feats.some((f) => f.kind === 'canyon') ? 'Canyons' : 'Plateaus', 'Polar caps', 'Dust storms'],
+    hazards: ['Dust devils'],
     summary: rng.pick([
       `A dry ${p.name} desert under a dusty butterscotch sky.`,
       `Wind scoured ${p.name} plains and dust storms that rise at noon.`,
@@ -744,6 +748,12 @@ function buildLava(rng: Rng): Built {
     atmosphereText: haze ? 'Sulfur smoke' : 'None',
     type: 'Terrestrial',
     features: ['Lava seas', 'Volcanoes', haze ? 'Ash clouds' : 'Glowing cracks'],
+    effects: [
+      { kind: 'heatShimmer', intensity: 0.9 },
+      { kind: 'scorching', intensity: 0.8 },
+      { kind: 'volcanicPlume', intensity: 0.8, size: 0.12, color: [1.0, 0.55, 0.3] },
+    ],
+    hazards: ['Searing heat', 'Erupting volcanoes'],
     summary: rng.pick([
       'A scorched world where rivers of lava glow under black crust.',
       'Molten lowlands burn red beneath a sky of drifting ash.',
@@ -810,6 +820,8 @@ function buildIce(rng: Rng): Built {
     atmosphereText: 'Thin nitrogen',
     type: 'Terrestrial',
     features: ['Glaciers', 'Crevasses', 'Snowfall', ...(atmosphere.aurora ? ['Auroras'] : [])],
+    effects: [{ kind: 'geyser', intensity: 0.7, size: 0.03, count: 4 }],
+    hazards: ['Freezing winds', 'Ice geysers'],
     summary: rng.pick([
       `A frozen ${tint.name} world of glaciers split by deep crevasses.`,
       'Endless ice fields under a pale sky and slow falling snow.',
@@ -857,7 +869,11 @@ function buildToxic(rng: Rng): Built {
     sunIntensity: round(rng.range(20, 25), 1),
     stabilization: 1,
     clouds: { altitude: 0.35, thickness: 0.3, coverage: round(rng.range(0.85, 0.97), 2), color: v.cloud, scale: round(rng.range(0.04, 0.06), 3), speed: round(rng.range(40, 70), 1) },
-    weather: [{ kind: 'lightning', intensity: round(rng.range(0.4, 0.7), 2) }],
+    weather: [
+      { kind: 'lightning', intensity: round(rng.range(0.4, 0.7), 2) },
+      { kind: 'acidRain', intensity: 0.8 },
+      { kind: 'heatShimmer', intensity: 0.7 },
+    ],
   };
   return {
     archetype: 'toxic',
@@ -870,6 +886,7 @@ function buildToxic(rng: Rng): Built {
     atmosphereText: rng.pick(['Thick carbon dioxide', 'Thick sulfur and chlorine', 'Crushing acid fog']),
     type: 'Terrestrial',
     features: ['Volcanoes', 'Lightning', `${v.name.replace(/^./, (c) => c.toUpperCase())} clouds`],
+    hazards: ['Acid rain', 'Crushing heat'],
     summary: rng.pick([
       `A shrouded ${v.name} world under a crushing, cloud thick sky.`,
       `Acid ${v.name} fog hides a land of volcanoes and constant lightning.`,
@@ -1172,7 +1189,12 @@ function buildMoon(rng: Rng, kind: MoonKind, name: string, parent: BodyDef, rati
     orbit,
     visual: { color },
     terrain,
-    info,
+    ...(kind === 'ice'
+      ? { effects: [{ kind: 'geyser' as const, intensity: 0.8, size: 0.09, count: 6 }] }
+      : kind === 'volcanic'
+        ? { effects: [{ kind: 'volcanicPlume' as const, intensity: 1, size: 0.4, color: [0.55, 0.7, 1.0] as const }] }
+        : {}),
+    info: kind === 'ice' ? { ...info, hazards: ['Ice geysers'] } : kind === 'volcanic' ? { ...info, hazards: ['Erupting volcanoes'] } : info,
   };
 }
 
@@ -1257,6 +1279,12 @@ export function generateSystem(star: GalaxyStar): StarSystemDef {
     const rotationPeriod = (built.kind === 'gas' ? rng.range(8, 18) : rng.range(10, 40)) * 3600 * retro;
     const hasRings = colossus ? rng.chance(0.85) : rng.chance(built.kind === 'gas' ? (built.archetype === 'iceGiant' ? 0.5 : 0.35) : 0.05);
     const living = built.archetype === 'earthlike' || built.archetype === 'ocean' || built.archetype === 'alien';
+    // Worlds baked by their star (equilibrium temperature, no extra effects yet) get the scorching sun.
+    const baked = built.kind === 'rocky' && tEq - built.greenhouse > 200 && !built.effects?.length;
+    const effects = baked
+      ? [{ kind: 'heatShimmer' as const, intensity: 0.8 }, { kind: 'scorching' as const, intensity: 0.7 }]
+      : built.effects;
+    const hazards = baked ? ['Searing heat'] : built.hazards;
     const def: BodyDef = {
       id,
       name,
@@ -1282,12 +1310,14 @@ export function generateSystem(star: GalaxyStar): StarSystemDef {
       ...(built.atmosphere ? { atmosphere: built.atmosphere } : {}),
       ...(built.terrain ? { terrain: built.terrain } : {}),
       ...(built.gas ? { gas: built.gas } : {}),
+      ...(effects ? { effects } : {}),
       ...(hasRings ? { rings: buildRings(rng, built.color, built.kind !== 'gas', built.kind === 'gas' && rng.chance(colossus ? 0.8 : 0.25)) } : {}),
       info: {
         type: built.type,
         atmosphere: built.atmosphereText,
         temperature: celsiusText(built.kind === 'gas' ? Math.max(-215, tEq - 20) : surfaceTemp(built.archetype, tEq)),
         features: hasRings ? [...built.features, 'Rings'] : built.features,
+        ...(hazards ? { hazards } : {}),
         summary: built.summary,
       },
     };

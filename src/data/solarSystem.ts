@@ -170,6 +170,10 @@ const mercury: BodyDef = {
     period: 87.969 * DAY,
   },
   visual: { color: [0.5, 0.46, 0.42] },
+  effects: [
+    { kind: 'heatShimmer', intensity: 0.9 },
+    { kind: 'scorching', intensity: 1 },
+  ],
   terrain: {
     amplitude: 0.02,
     layers: [
@@ -190,6 +194,7 @@ const mercury: BodyDef = {
     atmosphere: 'None',
     temperature: 'minus 173 °C to 427 °C',
     features: ['Craters', 'Scarps', 'Plains'],
+    hazards: ['Blinding sun', 'Searing heat'],
     summary: 'A small grey world, cratered and airless, that circles closest to the Sun.',
   },
 };
@@ -214,14 +219,18 @@ const venus: BodyDef = {
   atmosphere: {
     height: 0.12,
     scaleHeight: 0.2,
-    rayleighDepth: [0.16, 0.11, 0.045],
-    mieDepth: 0.22,
+    rayleighDepth: [0.04, 0.03, 0.02],
+    mieDepth: 1.0,
     mieG: 0.7,
-    mieColor: [1.0, 0.85, 0.55],
-    sunIntensity: 24,
+    mieColor: [1.0, 0.42, 0.12],
+    sunIntensity: 14,
     stabilization: 1,
-    clouds: { altitude: 0.35, thickness: 0.3, coverage: 0.95, color: [1.0, 0.92, 0.72], scale: 0.05, speed: 60 },
-    weather: [{ kind: 'lightning', intensity: 0.6 }],
+    clouds: { altitude: 0.35, thickness: 0.3, coverage: 0.95, color: [0.9, 0.6, 0.28], scale: 0.05, speed: 60 },
+    weather: [
+      { kind: 'lightning', intensity: 0.6 },
+      { kind: 'acidRain', intensity: 0.9, color: [0.72, 0.82, 0.2] },
+      { kind: 'heatShimmer', intensity: 0.8 },
+    ],
   },
   terrain: {
     amplitude: 0.015,
@@ -246,6 +255,7 @@ const venus: BodyDef = {
     atmosphere: 'Thick carbon dioxide',
     temperature: '464 °C',
     features: ['Volcanoes', 'Lightning', 'Yellow clouds'],
+    hazards: ['Acid rain', 'Crushing heat'],
     summary: 'A shrouded yellow world under a crushing, cloud thick sky.',
   },
 };
@@ -277,7 +287,10 @@ const mars: BodyDef = {
     sunIntensity: 14,
     stabilization: 0.7,
     clouds: { altitude: 0.5, thickness: 0.2, coverage: 0.15, color: [0.95, 0.9, 0.85], scale: 0.04, speed: 20 },
-    weather: [{ kind: 'dust', intensity: 0.6 }],
+    weather: [
+      { kind: 'dust', intensity: 0.6 },
+      { kind: 'dustDevil', intensity: 1, size: 0.002 },
+    ],
   },
   terrain: {
     amplitude: 0.03,
@@ -308,6 +321,7 @@ const mars: BodyDef = {
     atmosphere: 'Thin carbon dioxide',
     temperature: 'minus 63 °C',
     features: ['Olympus Mons', 'Valles Marineris', 'Polar caps', 'Dust storms'],
+    hazards: ['Dust devils', 'Thin air'],
     summary: 'A cold red desert with butterscotch skies and the tallest volcano known.',
   },
 };
@@ -454,6 +468,7 @@ const io: BodyDef = {
     period: 1.769138 * DAY,
   },
   visual: { color: [0.95, 0.8, 0.3] },
+  effects: [{ kind: 'volcanicPlume', intensity: 1, size: 0.3, color: [0.35, 0.6, 1.0] }],
   terrain: {
     amplitude: 0.02,
     layers: [
@@ -482,6 +497,7 @@ const io: BodyDef = {
     atmosphere: 'Thin sulfur dioxide',
     temperature: 'minus 130 °C',
     features: ['Volcanoes', 'Lava lakes', 'Sulfur plains'],
+    hazards: ['Erupting volcanoes', 'Radiation'],
     summary: 'The most volcanic body known, painted in sulfur yellow and orange.',
   },
 };
@@ -503,6 +519,7 @@ const europa: BodyDef = {
     period: 3.551181 * DAY,
   },
   visual: { color: [0.9, 0.87, 0.8] },
+  effects: [{ kind: 'geyser', intensity: 1, size: 0.17, count: 6 }],
   terrain: {
     amplitude: 0.004,
     layers: [
@@ -520,6 +537,7 @@ const europa: BodyDef = {
     atmosphere: 'Thin oxygen',
     temperature: 'minus 160 °C',
     features: ['Ice shell', 'Cracks', 'Hidden ocean'],
+    hazards: ['Ice geysers', 'Radiation'],
     summary: 'A smooth white moon scored by brown cracks over a possible ocean.',
   },
 };
@@ -682,7 +700,8 @@ const titan: BodyDef = {
     mieColor: [1.0, 0.7, 0.35],
     sunIntensity: 18,
     stabilization: 1,
-    clouds: { altitude: 0.3, thickness: 0.2, coverage: 0.1, color: [1.0, 0.85, 0.6], scale: 0.12, speed: 15 },
+    clouds: { altitude: 0.3, thickness: 0.2, coverage: 0.5, color: [1.0, 0.85, 0.6], scale: 0.12, speed: 15 },
+    weather: [{ kind: 'methaneRain', intensity: 0.8, color: [1.0, 0.62, 0.22] }],
   },
   terrain: {
     amplitude: 0.02,
@@ -704,6 +723,7 @@ const titan: BodyDef = {
     atmosphere: 'Thick nitrogen haze',
     temperature: 'minus 179 °C',
     features: ['Dunes', 'Methane lakes', 'Orange haze'],
+    hazards: ['Methane rain', 'Deep cold'],
     summary: 'A hazy orange moon with dark dunes and lakes of liquid methane.',
   },
 };

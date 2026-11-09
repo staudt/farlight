@@ -15,6 +15,8 @@ import { PerfStats } from './perf';
 import { quality, type QualitySettings } from './quality';
 import { VolumetricComposite, VolumetricPass } from './volumetricPass';
 import { SunView } from './bodies/sunView';
+import { HeatShimmer } from './fx/heatShimmer';
+import { Scorch } from './fx/scorch';
 
 /**
  * HDR post stack: scene -> atmosphere scattering -> bloom -> ACES tone mapping -> vignette.
@@ -28,6 +30,8 @@ export class PostStack {
   readonly vol: VolumetricPass;
   readonly composite = new VolumetricComposite();
   readonly perf: PerfStats;
+  readonly shimmer = new HeatShimmer();
+  readonly scorch = new Scorch();
   readonly bloom: BloomEffect;
   readonly toneMapping: ToneMappingEffect;
   readonly vignette: VignetteEffect;
@@ -51,8 +55,8 @@ export class PostStack {
     });
     this.toneMapping = new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC });
     this.vignette = new VignetteEffect({ darkness: 0.38, offset: 0.32 });
-    this.passWithBloom = new EffectPass(gfx.camera, this.composite, this.bloom, this.toneMapping, this.vignette);
-    this.passNoBloom = new EffectPass(gfx.camera, this.composite, this.toneMapping, this.vignette);
+    this.passWithBloom = new EffectPass(gfx.camera, this.shimmer, this.composite, this.bloom, this.toneMapping, this.vignette);
+    this.passNoBloom = new EffectPass(gfx.camera, this.shimmer, this.composite, this.toneMapping, this.vignette);
     this.finalPass = this.passWithBloom;
     this.composer.addPass(this.finalPass);
 
@@ -71,6 +75,8 @@ export class PostStack {
       this.skyBrightness = this.estimateSky(gfx);
       gfx.starfield.brightness = 1 - 0.97 * this.skyBrightness;
       if (sunView) sunView.glowIntensity = 1 - 0.5 * this.skyBrightness;
+      if (sunView) sunView.scorch = this.scorch.update(ctx.realDt, ctx.cameraWorld, bodies);
+      this.shimmer.updateFrame(ctx.realDt, Math.log2(ctx.camera.far + 1), ctx.camera.aspect, ctx.cameraWorld, world.universe.root.position, bodies);
       this.perf.begin();
       this.composer.render(ctx.realDt);
       this.perf.end();
