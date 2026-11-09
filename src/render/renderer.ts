@@ -16,6 +16,7 @@ import { SimpleBodyView } from './bodies/simpleBodyView';
 import { SunView } from './bodies/sunView';
 import type { BodyView, FrameContext } from './context';
 import { ShipCamera } from './camera/shipCamera';
+import { quality } from './quality';
 import { Starfield } from './sky/starfield';
 import { ShipView } from './ship/shipView';
 
@@ -57,7 +58,7 @@ export class GameRenderer {
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.toneMapping = ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, config.render.pixelRatioMax));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, config.render.pixelRatioMax, quality.settings.pixelRatioMax));
 
     this.camera = new PerspectiveCamera(config.camera.fov, 1, config.render.near, config.render.far);
     this.scene.add(this.camera, this.starfield.object, this.shipView.object, this.sunLight, this.sunLight.target);
@@ -101,6 +102,14 @@ export class GameRenderer {
   }
 
   onResize?: (w: number, h: number) => void;
+
+  /** Quality hook: new pixel ratio cap, then resize everything. */
+  applyPixelRatio(cap: number): void {
+    const pr = Math.min(window.devicePixelRatio, config.render.pixelRatioMax, cap);
+    if (pr === this.renderer.getPixelRatio()) return;
+    this.renderer.setPixelRatio(pr);
+    this.resize();
+  }
 
   private updateFillLights(world: World): void {
     // Camera fill: from slightly above and behind the camera.

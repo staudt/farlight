@@ -11,6 +11,9 @@ import { HalfFloatType, NoToneMapping, Vector3 } from 'three';
 import type { GameRenderer } from './renderer';
 import { AtmosphereEffect } from './atmosphere/atmosphereEffect';
 import { CloudEffect } from './clouds/cloudEffect';
+import { PerfStats } from './perf';
+import { quality, type QualitySettings } from './quality';
+import { VolumetricComposite, VolumetricPass } from './volumetricPass';
 import { SunView } from './bodies/sunView';
 
 /**
@@ -22,6 +25,9 @@ export class PostStack {
   readonly composer: EffectComposer;
   readonly atmosphere = new AtmosphereEffect();
   readonly clouds = new CloudEffect();
+  readonly vol: VolumetricPass;
+  readonly composite = new VolumetricComposite();
+  readonly perf: PerfStats;
   readonly bloom: BloomEffect;
   readonly toneMapping: ToneMappingEffect;
   readonly vignette: VignetteEffect;
@@ -31,9 +37,11 @@ export class PostStack {
   constructor(gfx: GameRenderer) {
     const r = gfx.renderer;
     r.toneMapping = NoToneMapping;
-    this.composer = new EffectComposer(r, { frameBufferType: HalfFloatType, multisampling: 4 });
+    this.composer = new EffectComposer(r, { frameBufferType: HalfFloatType, multisampling: quality.settings.msaa });
+    this.perf = new PerfStats(r);
     this.composer.addPass(new RenderPass(gfx.scene, gfx.camera));
-    this.composer.addPass(new EffectPass(gfx.camera, this.clouds, this.atmosphere));
+    this.vol = new VolumetricPass([this.clouds.uniforms, this.atmosphere.uniforms]);
+    this.composer.addPass(this.vol);
     this.bloom = new BloomEffect({
       intensity: 0.85,
       luminanceThreshold: 0.85,
@@ -43,22 +51,58 @@ export class PostStack {
     });
     this.toneMapping = new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC });
     this.vignette = new VignetteEffect({ darkness: 0.38, offset: 0.32 });
-    this.composer.addPass(new EffectPass(gfx.camera, this.bloom, this.toneMapping, this.vignette));
+    this.passWithBloom = new EffectPass(gfx.camera, this.composite, this.bloom, this.toneMapping, this.vignette);
+    this.passNoBloom = new EffectPass(gfx.camera, this.composite, this.toneMapping, this.vignette);
+    this.finalPass = this.passWithBloom;
+    this.composer.addPass(this.finalPass);
 
     const sunView = gfx.bodyViews.find((v) => v instanceof SunView) as SunView | undefined;
 
     gfx.renderFn = (ctx) => {
       const world = ctx.world;
       const bodies = world.universe.bodies;
+      quality.update(ctx.realDt);
       this.clouds.updateFrame(ctx.camera, ctx.cameraWorld, world.universe.root, bodies, ctx.simTime);
       this.atmosphere.updateFrame(ctx.camera, ctx.cameraWorld, world.universe.root, bodies);
+      // Skip the volumetric pass entirely when no cloud layer or atmosphere is in range.
+      const volOn = this.clouds.body !== null || (this.atmosphere.uniforms.get('uCount')!.value as number) > 0;
+      this.vol.enabled = volOn;
+      this.composite.bind(this.vol, Math.log2(ctx.camera.far + 1), volOn);
       this.skyBrightness = this.estimateSky(gfx);
       gfx.starfield.brightness = 1 - 0.97 * this.skyBrightness;
       if (sunView) sunView.glowIntensity = 1 - 0.5 * this.skyBrightness;
+      this.perf.begin();
       this.composer.render(ctx.realDt);
+      this.perf.end();
     };
     gfx.onResize = (w, h) => this.composer.setSize(w, h);
     this.composer.setSize(window.innerWidth, window.innerHeight);
+    quality.onChange((q) => this.applyQuality(gfx, q));
+  }
+
+  private readonly passWithBloom: EffectPass;
+  private readonly passNoBloom: EffectPass;
+  private finalPass: EffectPass;
+
+  /** Pushes a quality preset into the post stack, the renderer and the shaders. */
+  private applyQuality(gfx: GameRenderer, q: QualitySettings): void {
+    gfx.applyPixelRatio(q.pixelRatioMax); // resizes the composer too
+    this.composer.multisampling = q.msaa;
+    this.vol.setScale(q.volScale);
+    const c = this.clouds.uniforms;
+    c.get('uCloudSteps')!.value = q.cloudSteps;
+    c.get('uCloudLight')!.value = q.cloudLight;
+    c.get('uCloudShadows')!.value = q.cloudShadows ? 1 : 0;
+    const a = this.atmosphere.uniforms;
+    a.get('uAtmoSteps')!.value = q.atmoSteps;
+    a.get('uAtmoLight')!.value = q.atmoLight;
+    this.bloom.mipmapBlurPass.levels = q.bloomLevels;
+    const want = q.bloom ? this.passWithBloom : this.passNoBloom;
+    if (want !== this.finalPass) {
+      this.composer.removePass(this.finalPass);
+      this.composer.addPass(want);
+      this.finalPass = want;
+    }
   }
 
   /** Cheap CPU estimate of how bright the sky around the camera is. */

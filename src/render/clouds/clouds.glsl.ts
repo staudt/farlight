@@ -3,28 +3,29 @@
  * in body fixed coordinates so clouds turn with the planet and drift with (warped) time.
  * Runs before the atmosphere effect so distant clouds get aerial perspective for free.
  */
-export const cloudFragment = /* glsl */ `
+export const cloudLib = /* glsl */ `
 precision highp sampler3D;
 #define CLOUD_STEPS 30
 #define CLOUD_LIGHT_STEPS 3
+// Quality (live): uCloudSteps <= CLOUD_STEPS, uCloudLight <= CLOUD_LIGHT_STEPS, uCloudShadows 0/1.
+uniform int uCloudSteps;
+uniform int uCloudLight;
+uniform int uCloudShadows;
 
 uniform sampler3D uNoise;
 uniform int uActive;
-uniform mat4 uInvProj;
-uniform mat4 uCamToWorld;
-uniform float uLogFar;
-uniform vec3 uCenter;        // planet center relative to camera
+uniform vec3 uCCenter;        // planet center relative to camera
 uniform mat3 uToLocal;       // world -> body fixed rotation
 uniform float uR;            // sea level radius
-uniform float uCamAlt;       // camera altitude (float64 on CPU)
+uniform float uCCamAlt;       // camera altitude (float64 on CPU)
 uniform float uBase;         // cloud base altitude (m)
-uniform float uTop;          // cloud top altitude (m)
+uniform float uCTop;          // cloud top altitude (m)
 uniform float uScale;        // feature size (m)
 uniform float uCoverage;
 uniform vec3 uDrift;         // body fixed noise offset (m)
-uniform vec3 uSunDir;
+uniform vec3 uCSunDir;
 uniform vec3 uCloudColor;
-uniform float uSunI;
+uniform float uCSunI;
 uniform float uFlash;        // lightning flash 0..1
 uniform vec3 uFlashPos;      // body fixed flash position (m)
 uniform float uFrame;
@@ -75,13 +76,13 @@ float exitSphere(vec3 p, vec3 d, float r) {
 
 // Fraction of sunlight reaching a surface point under the cloud layer (0 = deep shadow).
 float cloudShadow(vec3 pw, float rIn, float rOut, float thickness) {
-  if (dot(normalize(pw), uSunDir) < -0.05) return 1.0;
-  float tIn = exitSphere(pw, uSunDir, rIn);
-  float tOut = exitSphere(pw, uSunDir, rOut);
+  if (dot(normalize(pw), uCSunDir) < -0.05) return 1.0;
+  float tIn = exitSphere(pw, uCSunDir, rIn);
+  float tOut = exitSphere(pw, uCSunDir, rOut);
   float seg = (tOut - tIn) / 4.0;
   float od = 0.0;
   for (int j = 0; j < 4; j++) {
-    vec3 q = pw + uSunDir * (tIn + (float(j) + 0.5) * seg);
+    vec3 q = pw + uCSunDir * (tIn + (float(j) + 0.5) * seg);
     float qh = (length(q) - rIn) / thickness;
     od += cloudDensity(uToLocal * q, qh, 0.0) * seg;
   }
@@ -96,10 +97,10 @@ float hgPhase(float mu, float g) {
 // Far mode: one smooth coverage sample on the mid shell. Cheap and grain free from orbit.
 vec4 farClouds(vec3 d, float tScene, float rIn, float thickness) {
   float rMid = rIn + thickness * 0.5;
-  float hMid = uCamAlt - (rMid - uR);
-  vec2 tm = hitShell(d, uCenter, hMid * (2.0 * rMid + hMid));
+  float hMid = uCCamAlt - (rMid - uR);
+  vec2 tm = hitShell(d, uCCenter, hMid * (2.0 * rMid + hMid));
   if (tm.x > tm.y || tm.x < 0.0 || tm.x > tScene) return vec4(0.0);
-  vec3 pw = d * tm.x - uCenter;
+  vec3 pw = d * tm.x - uCCenter;
   vec3 pl = uToLocal * pw;
   float weather = texture(uNoise, (pl + uDrift) / (uScale * 28.0)).r;
   float weather2 = texture(uNoise, pl / (uScale * 9.0) + 0.37).r;
@@ -108,57 +109,51 @@ vec4 farClouds(vec3 d, float tScene, float rIn, float thickness) {
   float base = texture(uNoise, (pl + uDrift) / (uScale * 3.0)).r;
   float dens = smoothstep(1.0 - cov, 1.0 - cov + 0.35, base * 0.85 + 0.15 * weather2);
   vec3 up = pw / length(pw);
-  float cosSun = dot(up, uSunDir);
+  float cosSun = dot(up, uCSunDir);
   float day = smoothstep(-0.12, 0.06, cosSun);
   vec3 sunCol = mix(vec3(1.0, 0.45, 0.2), vec3(1.0, 0.97, 0.92), smoothstep(0.0, 0.35, cosSun)) * day;
   // Thicker cloud reads brighter; a soft self shadow keeps some relief.
   float lambert = 0.35 + 0.65 * max(cosSun, 0.0);
-  vec3 col = uCloudColor * (sunCol * uSunI * 0.62 * lambert * (0.7 + 0.3 * dens) + vec3(0.03, 0.04, 0.06) * day);
+  vec3 col = uCloudColor * (sunCol * uCSunI * 0.62 * lambert * (0.7 + 0.3 * dens) + vec3(0.03, 0.04, 0.06) * day);
   // Grazing angles near the limb thicken the layer visually.
   float graze = 1.0 - abs(dot(d, up));
   float a = clamp(dens * (0.85 + 0.6 * graze), 0.0, 0.97);
   return vec4(col * a, a);
 }
 
-void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth, out vec4 outputColor) {
-  outputColor = inputColor;
+// Writes the cloud layer as an affine function of the scene color: out = scene * T + L.
+void cloudCompute(vec3 d, vec3 dView, float tScene, out float T, out vec3 L) {
+  T = 1.0;
+  L = vec3(0.0);
   if (uActive == 0) return;
 
-  vec4 clip = vec4(uv * 2.0 - 1.0, -1.0, 1.0);
-  vec4 view = uInvProj * clip;
-  vec3 dView = normalize(view.xyz / view.w);
-  vec3 d = normalize(mat3(uCamToWorld) * dView);
-
-  float raw = texture2D(depthBuffer, uv).r;
-  float tScene = 1e30;
-  if (raw < 0.99999) tScene = (exp2(raw * uLogFar) - 1.0) / max(-dView.z, 1e-4);
-
   float rIn = uR + uBase;
-  float rOut = uR + uTop;
-  vec4 sceneIn = inputColor;
+  float rOut = uR + uCTop;
+  float sceneMul = 1.0;
   // Cloud shadows on terrain (and anything else) below the cloud base.
-  if (tScene < 1e29) {
-    vec3 pg = d * tScene - uCenter;
-    float rg = length(pg);
-    if (rg < rIn) {
-      float sh = cloudShadow(pg, rIn, rOut, uTop - uBase);
-      float fade = 1.0 - smoothstep(uScale * 6.0, uScale * 20.0, tScene);
-      sceneIn.rgb *= mix(1.0, 0.18 + 0.82 * sh, fade);
+  if (uCloudShadows != 0 && tScene < 1e29) {
+    float fade = 1.0 - smoothstep(uScale * 6.0, uScale * 20.0, tScene);
+    if (fade > 0.0) {
+      vec3 pg = d * tScene - uCCenter;
+      float rg = length(pg);
+      if (rg < rIn) {
+        float sh = cloudShadow(pg, rIn, rOut, uCTop - uBase);
+        sceneMul = mix(1.0, 0.18 + 0.82 * sh, fade);
+      }
     }
   }
-  float farMix = smoothstep(uTop + 15000.0, uTop + 120000.0, uCamAlt);
+  float farMix = smoothstep(uCTop + 15000.0, uCTop + 120000.0, uCCamAlt);
   vec4 far = vec4(0.0);
   if (farMix > 0.0) {
-    far = farClouds(d, tScene, rIn, uTop - uBase);
-    if (farMix >= 1.0) { outputColor = vec4(sceneIn.rgb * (1.0 - far.a) + far.rgb, inputColor.a); return; }
+    far = farClouds(d, tScene, rIn, uCTop - uBase);
+    if (farMix >= 1.0) { T = sceneMul * (1.0 - far.a); L = far.rgb; return; }
   }
-  float hIn = uCamAlt - uBase;   // camera altitude above the inner shell
-  float hOut = uCamAlt - uTop;
-  vec2 tOut = hitShell(d, uCenter, hOut * (2.0 * rOut + hOut));
-  vec4 vol = vec4(0.0, 0.0, 0.0, 0.0); // rgb = light, a = 1 - transmittance
+  float hIn = uCCamAlt - uBase;   // camera altitude above the inner shell
+  float hOut = uCCamAlt - uCTop;
+  vec2 tOut = hitShell(d, uCCenter, hOut * (2.0 * rOut + hOut));
   bool march = !(tOut.x > tOut.y || tOut.y < 0.0);
-  vec2 tInn = hitShell(d, uCenter, hIn * (2.0 * rIn + hIn));
-  vec2 tGround = hitShell(d, uCenter, uCamAlt * (2.0 * uR + uCamAlt));
+  vec2 tInn = hitShell(d, uCCenter, hIn * (2.0 * rIn + hIn));
+  vec2 tGround = hitShell(d, uCCenter, uCCamAlt * (2.0 * uR + uCCamAlt));
 
   float t0, t1;
   if (hOut > 0.0) {                       // above the layer
@@ -175,29 +170,29 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
   t1 = min(t1, tScene);
   if (t1 <= t0) march = false;
   if (!march) {
-    outputColor = vec4(sceneIn.rgb * (1.0 - far.a * farMix) + far.rgb * farMix, inputColor.a);
+    T = sceneMul * (1.0 - far.a * farMix);
+    L = far.rgb * farMix;
     return;
   }
 
   float len = t1 - t0;
   // Adaptive step count: short paths (looking up through the layer) need few samples.
-  float thicknessM = uTop - uBase;
-  int steps = int(clamp(len / (thicknessM * 0.12), 10.0, float(CLOUD_STEPS)));
+  float thicknessM = uCTop - uBase;
+  int steps = int(clamp(len / (thicknessM * 0.12), min(10.0, float(uCloudSteps)), float(uCloudSteps)));
   float stepLen = len / float(steps);
-  // Keep near steps fine when the layer is long (horizon, orbit views).
   float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy + mod(uFrame, 64.0) * 5.588238, vec2(0.06711056, 0.00583715))));
   float sigma = 1.0 / 180.0;               // extinction per meter at density 1
-  float thickness = uTop - uBase;
+  float thickness = uCTop - uBase;
 
   float trans = 1.0;
   vec3 light = vec3(0.0);
-  float mu = dot(d, uSunDir);
+  float mu = dot(d, uCSunDir);
   float phase = mix(hgPhase(mu, 0.65), hgPhase(mu, -0.2), 0.35) * 4.0 * 3.14159265;
 
   for (int i = 0; i < CLOUD_STEPS; i++) {
     if (i >= steps) break;
     float t = t0 + (float(i) + jitter) * stepLen;
-    vec3 pw = d * t - uCenter;             // world axes, planet centered
+    vec3 pw = d * t - uCCenter;             // world axes, planet centered
     float r = length(pw);
     float h01 = (r - rIn) / thickness;
     vec3 pl = uToLocal * pw;
@@ -205,22 +200,25 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
     float dens = cloudDensity(pl, h01, detail);
     if (dens > 0.003) {
       vec3 up = pw / r;
-      float cosSun = dot(up, uSunDir);
+      float cosSun = dot(up, uCSunDir);
       float day = smoothstep(-0.12, 0.06, cosSun);
-      // Light march toward the sun.
+      // Light march toward the sun. Far samples get fewer steps (their detail is gone anyway).
       float od = 0.0;
       float ls = thickness * 0.28;
+      int nl = detail > 0.01 ? uCloudLight : min(uCloudLight, 2);
       for (int j = 1; j <= CLOUD_LIGHT_STEPS; j++) {
-        vec3 q = pw + uSunDir * (ls * float(j));
+        if (j > nl) break;
+        vec3 q = pw + uCSunDir * (ls * float(j));
         float qh = (length(q) - rIn) / thickness;
         od += cloudDensity(uToLocal * q, qh, 0.0) * ls;
       }
+      od *= 3.0 / float(max(nl, 1)); // keep the optical depth of the full 3 step march
       float lightT = exp(-od * sigma * 0.6);
       float powder = 1.0 - exp(-dens * 2.0);
       // Sunlight gets warm when the sun is low.
       vec3 sunCol = mix(vec3(1.0, 0.42, 0.18), vec3(1.0, 0.97, 0.92), smoothstep(0.0, 0.35, cosSun)) * day;
       vec3 ambient = mix(vec3(0.015, 0.02, 0.035), vec3(0.42, 0.55, 0.78), day) * (0.45 + 0.55 * h01);
-      vec3 col = uCloudColor * (sunCol * uSunI * lightT * phase * mix(1.0, powder, 0.5) + ambient);
+      vec3 col = uCloudColor * (sunCol * uCSunI * lightT * phase * mix(1.0, powder, 0.5) + ambient);
       // Lightning lights the cloud from inside.
       if (uFlash > 0.0) {
         float fd = length(pl - uFlashPos);
@@ -232,8 +230,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
       if (trans < 0.02) break;
     }
   }
-  vec3 volColor = sceneIn.rgb * trans + light;
-  vec3 farColor = sceneIn.rgb * (1.0 - far.a) + far.rgb;
-  outputColor = vec4(mix(volColor, farColor, farMix), inputColor.a);
+  T = sceneMul * mix(trans, 1.0 - far.a, farMix);
+  L = mix(light, far.rgb, farMix);
 }
 `;

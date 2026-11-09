@@ -44,6 +44,8 @@ export class SkyLabels {
     }
   }
 
+  private readonly state = new Map<HTMLElement, { show: boolean; x: number; y: number }>();
+
   update(): void {
     const w = this.world;
     const cam = this.gfx.camera;
@@ -81,8 +83,18 @@ export class SkyLabels {
           }
         }
       }
-      el.style.opacity = show ? '1' : '0';
-      if (show) el.style.transform = `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px)`;
+      // Touch the DOM only on change: style writes and string building are per frame costs.
+      let st = this.state.get(el);
+      if (!st) this.state.set(el, (st = { show: false, x: -1e9, y: -1e9 }));
+      if (st.show !== show) {
+        st.show = show;
+        el.style.opacity = show ? '1' : '0';
+      }
+      if (show && (Math.abs(sx - st.x) >= 0.5 || Math.abs(sy - st.y) >= 0.5)) {
+        st.x = sx;
+        st.y = sy;
+        el.style.transform = `translate(${sx.toFixed(1)}px, ${sy.toFixed(1)}px)`;
+      }
     }
   }
 }
