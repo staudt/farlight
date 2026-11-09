@@ -27,6 +27,7 @@ Io beneath a looming Jupiter, Saturn's rings, and a dive into Jupiter's cloud se
 | M | System map, click a body to target it |
 | G | Galaxy map: pick a star and Begin Travel to jump there |
 | J | Journal: visited systems and survey progress |
+| P | Photo mode: time pauses, orbit a free camera, scrub the time of day, capture a PNG |
 | T | Cycle targets |
 | F (hold) | Align the nose with the target |
 | H | Hide the HUD |
@@ -36,6 +37,9 @@ Io beneath a looming Jupiter, Saturn's rings, and a dive into Jupiter's cloud se
 **On a phone** (landscape): left thumb anywhere steers with a floating stick, the right edge slider
 sets throttle, and the big button boosts. Drag on the right to look around. The top row has time
 warp, camera, map, target, hold to align, HUD, tilt steering and fullscreen.
+
+**Gamepad:** left stick steers, right stick looks, triggers throttle, bumpers roll, A boost, B brake,
+X hold to align, Y next target, D-pad for time and camera, Start for the galaxy map.
 
 Fly slowly near the ground to land. Once landed, you can warp time to watch sunsets and moonrises.
 
