@@ -1,6 +1,5 @@
 import { Vector3 } from 'three';
 import { config } from '../core/config';
-import type { Input } from '../input/input';
 import type { Body } from '../sim/universe';
 import type { World } from '../sim/world';
 import { escapeHtml, formatDistance, formatDuration, noDashes, rgbCss } from './format';
@@ -19,7 +18,6 @@ const _fwd = new Vector3();
 
 /**
  * Top down schematic of the system, log scaled so planets and moons fit one screen.
- * Seed of the future galaxy map: layout is computed from the body tree only.
  */
 export class SystemMap {
   private open = false;
@@ -47,14 +45,11 @@ export class SystemMap {
   constructor(
     private readonly root: HTMLElement,
     private readonly world: World,
-    input: Input,
   ) {
     root.innerHTML = `
       <canvas></canvas>
-      <div class="map-title">SYSTEM MAP</div>
       <div class="map-sub">DRAG TO PAN · WHEEL TO ZOOM · CLICK TO TARGET · M TO CLOSE</div>
       <div class="map-sub touch">DRAG TO PAN · PINCH TO ZOOM · TAP TO TARGET</div>
-      <button type="button" class="map-close" aria-label="Close map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <div class="map-card"></div>`;
     this.canvas = root.querySelector('canvas') as HTMLCanvasElement;
     this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -71,11 +66,6 @@ export class SystemMap {
     const ma = moons.map((b) => b.orbit?.a ?? 1);
     this.m0 = moons.length ? Math.max(1, Math.min(...ma) * 0.5) : 1;
     this.mMax = moons.length ? Math.max(...ma, this.m0 * 2) : 2;
-
-    input.on('map', () => this.toggle());
-    window.addEventListener('keydown', (e) => {
-      if (e.code === 'Escape' && this.open) this.setOpen(false);
-    });
 
     root.addEventListener(
       'wheel',
@@ -139,9 +129,6 @@ export class SystemMap {
       prev.y = ny;
       this.mouse = { x: nx, y: ny };
     });
-    const close = root.querySelector('.map-close') as HTMLElement;
-    close.addEventListener('pointerdown', (e) => e.stopPropagation());
-    close.addEventListener('click', () => this.setOpen(false));
     root.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
@@ -173,15 +160,10 @@ export class SystemMap {
     return this.open;
   }
 
-  toggle(): void {
-    this.setOpen(!this.open);
-  }
-
-  private setOpen(v: boolean): void {
+  /** The overlay shows or hides the pane; this starts and stops drawing. */
+  setActive(v: boolean): void {
     this.open = v;
-    this.root.style.display = v ? 'block' : 'none';
     if (v) {
-      if (document.pointerLockElement) document.exitPointerLock();
       this.resize();
       this.hover = null;
     }

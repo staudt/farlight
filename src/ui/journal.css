@@ -1,0 +1,140 @@
+.map-pane[data-tab='journal'] {
+  touch-action: pan-y;
+  background: radial-gradient(ellipse at 50% 0%, rgba(40, 24, 90, 0.5), rgba(4, 6, 16, 0.92) 70%);
+}
+.jr-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 72px 24px 40px;
+  touch-action: pan-y;
+}
+.jr-col {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.jr-empty {
+  text-align: center;
+  padding-top: 60px;
+  color: var(--hud-dim);
+  letter-spacing: 0.3em;
+  font-size: 13px;
+}
+.jr-sys {
+  background: rgba(6, 12, 30, 0.66);
+  border: 1px solid rgba(95, 242, 255, 0.26);
+}
+.jr-sys.here {
+  border-color: rgba(95, 242, 255, 0.6);
+  box-shadow: 0 0 22px rgba(95, 242, 255, 0.12);
+}
+.jr-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+.jr-dot {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+.jr-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.jr-title b {
+  display: block;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+}
+.jr-title span {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  color: var(--hud-dim);
+}
+.jr-prog {
+  flex: 0 0 150px;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--hud-dim);
+}
+.jr-prog .gm-bar {
+  margin-top: 5px;
+}
+.jr-prog b {
+  color: #fff;
+  font-weight: 600;
+}
+.jr-bodies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 16px 14px;
+}
+.jr-body {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px 6px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--hud-dim);
+  background: rgba(95, 242, 255, 0.04);
+  border: 1px solid rgba(95, 242, 255, 0.18);
+}
+.jr-body.done {
+  color: var(--hud-text);
+  border-color: rgba(95, 242, 255, 0.45);
+}
+.jr-body.tap {
+  cursor: pointer;
+}
+.jr-body.tap:hover {
+  background: rgba(95, 242, 255, 0.14);
+}
+.jr-body svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+.jr-body .box {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(95, 242, 255, 0.3);
+  border-radius: 2px;
+}
+@media (max-height: 500px) {
+  .jr-scroll {
+    padding: 52px 14px 20px;
+  }
+  .jr-head {
+    padding: 8px 12px;
+    gap: 10px;
+  }
+  .jr-title b {
+    font-size: 15px;
+  }
+  .jr-prog {
+    flex-basis: 110px;
+  }
+  .jr-bodies {
+    padding: 0 12px 10px;
+  }
+  .jr-body {
+    font-size: 11px;
+    padding: 5px 9px 4px;
+  }
+}

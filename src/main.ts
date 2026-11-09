@@ -1,7 +1,6 @@
 import { Vector3 } from 'three';
 import { config } from './core/config';
 import { createGalaxy, generateSystem } from './data/generate';
-import { PROGRESS_STORAGE_KEY, type PlayerProgress } from './data/galaxy';
 import { AudioEngine } from './audio/audio';
 import { Input } from './input/input';
 import { detectTouch, TouchControls } from './input/touch';
@@ -16,6 +15,12 @@ import { World } from './sim/world';
 import { DebugPanel } from './ui/debugPanel';
 import { Hud } from './ui/hud';
 import { SystemMap } from './ui/map';
+import { GalaxyMap } from './ui/galaxyMap';
+import { Journal } from './ui/journal';
+import { MapOverlay } from './ui/mapOverlay';
+import { markVisited, SurveyTracker } from './sim/survey';
+import { clearPendingJump, Hyperspace, playArrival, readPendingJump } from './render/fx/hyperspace';
+import { buildTravelUrl } from './ui/galaxyMath';
 import { SkyLabels } from './ui/skyLabels';
 import { FpsCounter } from './ui/fpsCounter';
 
@@ -26,6 +31,20 @@ const touchOn = detectTouch(params);
 if (touchOn) {
   document.body.classList.add('touch');
   config.render.pixelRatioMax = Math.min(config.render.pixelRatioMax, config.touch.pixelRatioMax); // before GameRenderer
+}
+
+// A reload during a jump lands at the destination.
+const pendingJump = readPendingJump();
+if (pendingJump && params.get('system') !== pendingJump) {
+  location.replace(buildTravelUrl(location.search, pendingJump, location.pathname));
+  await new Promise<never>(() => undefined);
+}
+const releaseArrival = params.has('arrive') ? playArrival() : null;
+if (params.has('arrive')) {
+  clearPendingJump();
+  params.delete('arrive');
+  const q = params.toString();
+  history.replaceState(null, '', `${location.pathname}${q ? `?${q}` : ''}${location.hash}`);
 }
 
 // ?system=<id> picks a star from the galaxy; unknown ids fall back to Sol.
@@ -39,7 +58,8 @@ const requested = params.get('scenario') ?? (inSol ? DEFAULT_SCENARIO : 'arrival
 const usable = (n: string): boolean => SCENARIOS[n] !== undefined && (inSol || SCENARIOS[n]!.generic === true);
 const scenarioName = usable(requested) ? requested : inSol ? DEFAULT_SCENARIO : 'arrival';
 const scenario = SCENARIOS[scenarioName]!;
-recordVisit(system.id);
+markVisited(system.id);
+if (!params.has('arrive') && pendingJump === system.id) clearPendingJump();
 world.setHeightProvider((b) => createHeightSamplerForBody(b)); // terrain: before placement queries ground height
 await loadTerrainData(world.universe.bodies); // terrain data maps before ground height queries
 scenario.apply(world);
@@ -87,7 +107,35 @@ input.on('warpDown', () => world.clock.step(-1));
 input.on('camera', () => gfx.shipCamera.toggle());
 input.on('debug', () => debug.toggle());
 const hud = new Hud(document.getElementById('hud')!, world, gfx, input);
-const systemMap = new SystemMap(document.getElementById('map')!, world, input);
+const overlay = new MapOverlay(document.getElementById('map')!, input);
+const systemMap = new SystemMap(overlay.pane('system'), world);
+const hyper = new Hyperspace(gfx, input);
+const galaxyMap = new GalaxyMap(overlay.pane('galaxy'), galaxy, {
+  currentId: system.id,
+  onTravel: (star, _factor, seconds) => {
+    overlay.close();
+    overlay.locked = true;
+    hyper.start(star, seconds);
+  },
+});
+const journal = new Journal(overlay.pane('journal'), world, galaxy, {
+  currentId: system.id,
+  onSelectSystem: (id) => {
+    overlay.open('galaxy');
+    galaxyMap.select(id);
+    const star = galaxy.stars.find((s) => s.id === id);
+    if (star) galaxyMap.centerOn(star, 3);
+  },
+  onTargetBody: () => overlay.close(),
+});
+overlay.bind('system', { onShow: () => systemMap.setActive(true), onHide: () => systemMap.setActive(false) });
+overlay.bind('galaxy', { onShow: () => galaxyMap.setActive(true), onHide: () => galaxyMap.setActive(false) });
+overlay.bind('journal', { onShow: () => journal.setActive(true), onHide: () => journal.setActive(false) });
+const survey = new SurveyTracker(world, system.id);
+survey.onSurveyed = (body) => {
+  hud.notify(body.name, 'SURVEYED');
+  journal.refresh();
+};
 const skyLabels = new SkyLabels(document.getElementById('hud')!, world, gfx);
 const fpsCounter = new FpsCounter(document.getElementById('hud')!);
 
@@ -119,13 +167,17 @@ function frame(now: number): void {
   gfx.render(world, realDt);
   debug.update();
   hud.update(realDt);
+  survey.update();
+  hyper.update(realDt);
   systemMap.update();
+  galaxyMap.update();
   skyLabels.update();
   fpsCounter.update(realDt);
 
   fpsAcc += realDt;
   fpsFrames++;
   frameCount++;
+  if (frameCount === 12) releaseArrival?.();
   if (fpsAcc > 0.5) {
     fps = fpsFrames / fpsAcc;
     fpsAcc = 0;
@@ -134,19 +186,6 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-
-function recordVisit(id: string): void {
-  try {
-    const raw = localStorage.getItem(PROGRESS_STORAGE_KEY);
-    const progress: PlayerProgress = raw ? (JSON.parse(raw) as PlayerProgress) : { visited: [], surveyed: [] };
-    if (!Array.isArray(progress.visited)) progress.visited = [];
-    if (!Array.isArray(progress.surveyed)) progress.surveyed = [];
-    if (!progress.visited.includes(id)) progress.visited.push(id);
-    localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
-  } catch {
-    /* storage unavailable: progress is optional */
-  }
-}
 
 function clamp(v: number, a: number, b: number): number {
   return v < a ? a : v > b ? b : v;
@@ -167,6 +206,9 @@ window.__game = {
   post,
   config,
   system: { id: system.id, name: system.name },
+  overlay,
+  galaxyMap,
+  hyper,
   scenarios: Object.keys(SCENARIOS),
   getState: () => ({
     scenario: scenarioName,

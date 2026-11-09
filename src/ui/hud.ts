@@ -196,6 +196,11 @@ export class Hud {
 
   // Events and toasts
 
+  /** Gentle message from other systems (survey, travel). */
+  notify(big: string, small: string): void {
+    this.showToast(big, small);
+  }
+
   private showToast(big: string, small: string): void {
     this.toastBig.textContent = noDashes(big);
     this.toastSmall.textContent = noDashes(small);

@@ -31,7 +31,7 @@ const AU = 1.495978707e11;
 const G_CONST = 6.674e-11;
 const R_EARTH = 6.371e6;
 const STAR_COUNT = 240;
-const GALAXY_RADIUS = 50000;
+export const GALAXY_RADIUS = 50000;
 
 // ---------------------------------------------------------------------------------------------
 // Small helpers
@@ -143,12 +143,17 @@ function planetCountFor(rng: Rng, cls: StarClass): number {
   }
 }
 
-const SPIRAL_R0 = 3000;
-const SPIRAL_PITCH = 0.25;
+export const SPIRAL_R0 = 3000;
+export const SPIRAL_PITCH = 0.25;
+
+/** Number of spiral arms the generator uses for a galaxy seed. */
+export function galaxyArms(seed: number): number {
+  return seed % 7 === 0 ? 4 : 2;
+}
 
 export function createGalaxy(seed = 1977): GalaxyDef {
   const rng = new Rng(seed);
-  const arms = seed % 7 === 0 ? 4 : 2;
+  const arms = galaxyArms(seed);
   const names = makeUniqueNames(seed, STAR_COUNT, ['Sol']);
   const stars: GalaxyStar[] = [];
   const usedIds = new Set<string>(['sol']);

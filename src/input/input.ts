@@ -5,6 +5,8 @@ export type Action =
   | 'warpDown'
   | 'camera'
   | 'map'
+  | 'galaxy'
+  | 'journal'
   | 'target'
   | 'hud'
   | 'debug'
@@ -168,6 +170,8 @@ const KEY_ACTIONS: Record<string, Action> = {
   Comma: 'warpDown',
   KeyC: 'camera',
   KeyM: 'map',
+  KeyG: 'galaxy',
+  KeyJ: 'journal',
   KeyT: 'target',
   KeyH: 'hud',
   F3: 'debug',

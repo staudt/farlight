@@ -10,6 +10,8 @@ export type CameraMode = 'chase' | 'cockpit';
  */
 export class ShipCamera {
   mode: CameraMode = 'chase';
+  /** Extra field of view in degrees (hyperspace kick). */
+  fovExtra = 0;
   readonly worldPos = new Vector3();
   private smoothQuat = new Quaternion();
   private initialized = false;
@@ -79,7 +81,7 @@ export class ShipCamera {
     camera.position.set(0, 0, 0);
 
     const boost = world.ship.boosting ? 1 : 0;
-    const fov = c.fov + c.fovBoost * (0.4 * speedFrac + 0.6 * boost * speedFrac);
+    const fov = c.fov + c.fovBoost * (0.4 * speedFrac + 0.6 * boost * speedFrac) + this.fovExtra;
     if (Math.abs(camera.fov - fov) > 0.01) {
       camera.fov += (fov - camera.fov) * (1 - Math.exp(-realDt / 0.5));
       camera.updateProjectionMatrix();
