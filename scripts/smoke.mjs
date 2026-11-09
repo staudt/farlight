@@ -146,9 +146,11 @@ try {
     }
     const crashed = !browser.isConnected() || res.problems.some((p) => /has been closed|crash/i.test(p));
     const serverDown = serverExited || res.problems.some((p) => /ERR_CONNECTION_REFUSED/.test(p));
-    if ((crashed || serverDown) && attempt === 0) {
+    // A navigation that fails at the HTTP level right after a build is transient: retry once.
+    const navFailed = res.problems.some((p) => /page\.goto|ERR_HTTP_RESPONSE_CODE_FAILURE|HTTP 404/.test(p));
+    if ((crashed || serverDown || navFailed) && attempt === 0) {
       // Under memory pressure (parallel agents) the OOM killer may take the browser or the server.
-      console.log(`RETRY ${name}: ${serverDown ? 'preview server died, restarting' : 'browser crashed, relaunching'}`);
+      console.log(`RETRY ${name}: ${serverDown ? 'preview server died, restarting' : crashed ? 'browser crashed, relaunching' : 'page load failed, retrying'}`);
       await page.close().catch(() => {});
       if (serverDown) {
         server.kill('SIGTERM');
