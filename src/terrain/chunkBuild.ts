@@ -3,6 +3,7 @@ import type { BodyDef } from '../data/types';
 import { biomeColor } from './biomes';
 import { type TerrainSample, type TerrainSampler, createHeightSampler, makeSample } from './heightfield';
 import { chunkEdgeLength, chunkRect, faceToDir } from './quadtree';
+import { type PropBatch, scatterProps } from './props';
 
 export interface ChunkRequest {
   id: number;
@@ -16,6 +17,8 @@ export interface ChunkRequest {
   grid: number;
   /** Absolute base url that terrain map urls resolve against (workers have no document). */
   mapBase?: string;
+  /** Prop scattering, only for chunks at `minLevel` or finer (props matter within a few km). */
+  props?: { minLevel: number; gridLevel: number };
 }
 
 export interface ChunkResult {
@@ -31,6 +34,8 @@ export interface ChunkResult {
   maxR: number;
   /** Bounding sphere radius around `center`. */
   boundRadius: number;
+  /** Surface props, chunk local transforms (empty on coarse chunks). */
+  props: PropBatch[];
 }
 
 const samplers = new Map<string, TerrainSampler>();
@@ -283,6 +288,19 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
     skirtQuad(j * V + G, (j + 1) * V + G, G - 1 + j * G, 1); // right edge (i = G)
   }
 
+  const props =
+    req.props && req.level >= req.props.minLevel
+      ? scatterProps(req.def, sampler, {
+          face: req.face,
+          level: req.level,
+          x: req.x,
+          y: req.y,
+          radius: R,
+          gridLevel: req.props.gridLevel,
+          center: [cx, cy, cz],
+        })
+      : [];
+
   return {
     id: req.id,
     positions,
@@ -292,5 +310,6 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
     minR,
     maxR,
     boundRadius: Math.sqrt(maxDist2),
+    props,
   };
 }

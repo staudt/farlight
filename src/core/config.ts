@@ -80,6 +80,15 @@ export const config = {
     tiltDeadzone: 0.1,
     idleOpacity: 0.35,
   },
+  /** Surface props (trees, rocks, spires, crystals, mesas). */
+  props: {
+    enabled: true,
+    /** Props shrink to nothing between these camera distances, game meters. */
+    fadeNear: 900,
+    fadeFar: 1900,
+    /** HDR strength of crystal glow. */
+    emissive: 2.2,
+  },
   debug: {
     showPanel: false,
   },

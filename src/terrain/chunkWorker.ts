@@ -8,5 +8,7 @@ ctx.onmessage = async (e: MessageEvent<ChunkRequest>) => {
   const req = e.data;
   if (req.mapBase) await loadTerrainMaps(req.def.terrain?.maps, req.mapBase);
   const res = buildChunk(req);
-  ctx.postMessage(res, [res.positions.buffer, res.colors.buffer, res.water.buffer]);
+  const transfer: ArrayBuffer[] = [res.positions.buffer as ArrayBuffer, res.colors.buffer as ArrayBuffer, res.water.buffer as ArrayBuffer];
+  for (const b of res.props) transfer.push(b.matrices.buffer as ArrayBuffer, b.colors.buffer as ArrayBuffer);
+  ctx.postMessage(res, transfer);
 };

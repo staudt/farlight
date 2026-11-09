@@ -95,8 +95,10 @@ const earth: BodyDef = {
     water: { color: [0.04, 0.46, 0.58], deepColor: [0.01, 0.1, 0.34] },
     polarCaps: { latitude: 1.32, color: [0.92, 0.95, 0.98] },
     props: [
-      { kind: 'tree', density: 60, color: [0.14, 0.34, 0.15], minSize: 12, maxSize: 30, biomes: ['forest', 'grass'], maxSlope: 0.5 },
-      { kind: 'rock', density: 8, color: [0.45, 0.42, 0.4], minSize: 4, maxSize: 20, biomes: ['rock', 'tundra', 'desert'] },
+      { kind: 'tree', density: 750, color: [0.1, 0.3, 0.12], minSize: 14, maxSize: 32, biomes: ['forest'], maxSlope: 0.75 },
+      { kind: 'tree', density: 110, color: [0.2, 0.45, 0.1], minSize: 9, maxSize: 22, biomes: ['grass', 'meadow'], maxSlope: 0.6 },
+      { kind: 'rock', density: 50, color: [0.5, 0.46, 0.42], minSize: 3, maxSize: 15, biomes: ['rock', 'tundra', 'desert'] },
+      { kind: 'mesa', density: 4, color: [0.85, 0.5, 0.3], minSize: 30, maxSize: 90, biomes: ['desert'], maxSlope: 0.5 },
     ],
   },
   info: {
@@ -140,7 +142,7 @@ const moon: BodyDef = {
       { name: 'rim', color: [0.42, 0.415, 0.4], minHeight: 0.3 },
       { name: 'highlands', color: [0.27, 0.265, 0.25] },
     ],
-    props: [{ kind: 'rock', density: 15, color: [0.6, 0.6, 0.58], minSize: 2, maxSize: 14 }],
+    props: [{ kind: 'rock', density: 140, color: [0.55, 0.55, 0.53], minSize: 2, maxSize: 14 }],
   },
   info: {
     type: 'Moon',
@@ -181,7 +183,7 @@ const mercury: BodyDef = {
       { name: 'grey highlands', color: [0.5, 0.48, 0.45] },
       { name: 'brown dust', color: [0.42, 0.34, 0.26] },
     ],
-    props: [{ kind: 'rock', density: 12, color: [0.4, 0.38, 0.36], minSize: 2, maxSize: 12 }],
+    props: [{ kind: 'rock', density: 100, color: [0.4, 0.38, 0.36], minSize: 2, maxSize: 12 }],
   },
   info: {
     type: 'Terrestrial',
@@ -296,6 +298,10 @@ const mars: BodyDef = {
       { name: 'red dust', color: [0.6, 0.26, 0.13] },
     ],
     polarCaps: { latitude: 1.3, color: [0.95, 0.95, 0.97] },
+    props: [
+      { kind: 'rock', density: 120, color: [0.5, 0.28, 0.17], minSize: 3, maxSize: 16, maxSlope: 0.8 },
+      { kind: 'mesa', density: 10, color: [0.82, 0.44, 0.24], minSize: 30, maxSize: 90, maxSlope: 0.6 },
+    ],
   },
   info: {
     type: 'Terrestrial',
@@ -465,6 +471,10 @@ const io: BodyDef = {
       { name: 'white frost', color: [0.92, 0.9, 0.85], latitude: [1.2, 1.6] },
       { name: 'orange sulfur', color: [0.82, 0.48, 0.14], minHeight: 0.2 },
       { name: 'sulfur yellow', color: [0.95, 0.82, 0.28] },
+    ],
+    props: [
+      { kind: 'crystal', density: 160, color: [1.0, 0.8, 0.2], minSize: 8, maxSize: 34, biomes: ['orange sulfur', 'sulfur yellow'], maxSlope: 0.7 },
+      { kind: 'spire', density: 30, color: [0.9, 0.7, 0.25], minSize: 14, maxSize: 60, biomes: ['orange sulfur', 'sulfur yellow'], maxSlope: 0.7 },
     ],
   },
   info: {
@@ -687,6 +697,7 @@ const titan: BodyDef = {
       { name: 'bright highlands', color: [0.55, 0.38, 0.2] },
     ],
     water: { color: [0.08, 0.06, 0.04], deepColor: [0.04, 0.03, 0.02] },
+    props: [{ kind: 'rock', density: 70, color: [0.42, 0.28, 0.16], minSize: 3, maxSize: 16, maxSlope: 0.8 }],
   },
   info: {
     type: 'Moon',

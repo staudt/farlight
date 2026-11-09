@@ -95,3 +95,39 @@ export function biomeColor(def: TerrainDef, s: TerrainSample, slope: number, det
   }
   return [r, g, b];
 }
+
+/**
+ * Name of the dominant biome rule at a sample (same membership logic as `biomeColor` at full
+ * detail). Water returns 'water'. Used by prop scattering, so props agree with the ground color.
+ */
+export function biomeNameAt(def: TerrainDef, s: TerrainSample, slope: number): string {
+  if (s.water) return 'water';
+  jitterNoise ??= new Simplex3(4242);
+  const j = jitterNoise;
+  const jn = j.noise(s.x * 55, s.y * 55, s.z * 55);
+  const jn2 = j.noise(s.x * 23 + 9, s.y * 23, s.z * 23 + 5);
+  const patch = j.noise(s.x * 9 + 3, s.y * 9 + 7, s.z * 9);
+  const absLat = Math.abs(s.lat) + jn2 * 0.03;
+  const n = s.n + jn * 0.03;
+  const moist = s.moisture + patch * 0.22;
+  let rem = 1;
+  const rules = def.biomes;
+  let best = rules[rules.length - 1]?.name ?? '';
+  let bestW = -1;
+  for (let i = 0; i < rules.length; i++) {
+    const rule = rules[i]!;
+    let m = window(n, rule.minHeight, rule.maxHeight, 0.012);
+    if (rule.maxSlope !== undefined) m *= 1 - smoothstep(rule.maxSlope - 0.1, rule.maxSlope + 0.1, slope);
+    if (rule.latitude) m *= window(absLat, rule.latitude[0], rule.latitude[1], 0.04);
+    if (rule.moisture) m *= window(moist, rule.moisture[0], rule.moisture[1], 0.05);
+    const wgt = i === rules.length - 1 ? rem : m * rem;
+    if (wgt > bestW) {
+      bestW = wgt;
+      best = rule.name;
+    }
+    rem -= wgt;
+    if (rem <= 0.001) break;
+  }
+  if (s.ice > 0.5) return 'ice';
+  return best;
+}
