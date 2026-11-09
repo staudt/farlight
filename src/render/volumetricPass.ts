@@ -12,6 +12,7 @@ import {
   type WebGLRenderer,
 } from 'three';
 import { atmosphereLib } from './atmosphere/atmosphere.glsl';
+import { starLight } from './starLight';
 import { cloudLib } from './clouds/clouds.glsl';
 
 const VERT = /* glsl */ `
@@ -40,6 +41,7 @@ uniform sampler2D uDepth;
 uniform mat4 uInvProj;
 uniform mat4 uCamToWorld;
 uniform float uLogFar;
+uniform vec3 uStarColor;       // tint * intensity of the star (white for Sol)
 ${cloudLib}
 ${atmosphereLib}
 
@@ -71,6 +73,10 @@ export class VolumetricPass extends Pass {
   private readonly material: RawShaderMaterial;
   /** Fraction of the full resolution. */
   private scale = 0.5;
+  /** True at 0.55 scale or lower (medium, low): the composite blurs the jitter grain. */
+  get blur(): boolean {
+    return this.scale <= 0.55;
+  }
   private fullW = 1;
   private fullH = 1;
   private depth: Texture | null = null;
@@ -87,7 +93,7 @@ export class VolumetricPass extends Pass {
       magFilter: NearestFilter,
       depthBuffer: false,
     });
-    const u: Record<string, Uniform> = { uDepth: new Uniform(null) };
+    const u: Record<string, Uniform> = { uDepth: new Uniform(null), uStarColor: starLight.uniform as Uniform };
     for (const m of uniforms) for (const [k, v] of m) u[k] = v;
     this.material = new RawShaderMaterial({
       glslVersion: GLSL3,
@@ -158,6 +164,7 @@ uniform sampler2D uVolT;
 uniform vec2 uVolSize;
 uniform float uVolOn;
 uniform float uVolLogFar;
+uniform float uVolBlur;
 
 void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth, out vec4 outputColor) {
   if (uVolOn < 0.5) { outputColor = inputColor; return; }
@@ -170,6 +177,25 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
   vec3 T = vec3(0.0);
   vec3 L = vec3(0.0);
   float wSum = 0.0;
+  if (uVolBlur > 0.5) {
+    // Low resolution buffers: a small gaussian over 3x3 texels, still weighted by depth, so the
+    // per pixel march jitter melts into soft cloud edges without smearing terrain or the ship.
+    ivec2 n0 = ivec2(floor(p + 0.5));
+    for (int k = 0; k < 9; k++) {
+      ivec2 c = clamp(n0 + ivec2(k % 3 - 1, k / 3 - 1), ivec2(0), hi);
+      vec2 dv = vec2(c) - p;
+      vec4 t = texelFetch(uVolT, c, 0);
+      float dd = abs(t.a - raw) * uVolLogFar * 20.0;
+      float w = exp(-dot(dv, dv) * 0.85) / (1.0 + dd * dd);
+      T += t.rgb * w;
+      L += texelFetch(uVolL, c, 0).rgb * w;
+      wSum += w;
+    }
+    T /= wSum;
+    L /= wSum;
+    outputColor = vec4(inputColor.rgb * T + L, inputColor.a);
+    return;
+  }
   for (int k = 0; k < 4; k++) {
     ivec2 o = ivec2(k & 1, k >> 1);
     ivec2 c = clamp(i0 + o, ivec2(0), hi);
@@ -194,6 +220,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
           ['uVolSize', new Uniform(new Vector2(1, 1))],
           ['uVolOn', new Uniform(0)],
           ['uVolLogFar', new Uniform(1)],
+          ['uVolBlur', new Uniform(0)],
         ]),
       },
     );
@@ -206,5 +233,6 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth,
     (u.get('uVolSize')!.value as Vector2).set(pass.width, pass.height);
     u.get('uVolLogFar')!.value = logFar;
     u.get('uVolOn')!.value = on ? 1 : 0;
+    u.get('uVolBlur')!.value = pass.blur ? 1 : 0;
   }
 }

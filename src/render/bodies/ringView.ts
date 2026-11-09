@@ -1,5 +1,6 @@
 import { Color, DoubleSide, Mesh, RingGeometry, ShaderMaterial, Vector3 } from 'three';
 import type { RingDef } from '../../data/types';
+import { starLight } from '../starLight';
 
 /**
  * Shared GLSL: radial ring density at a body-fixed radius `r` (planet radii). Used by the
@@ -67,6 +68,7 @@ export class RingMesh {
   /** Sun direction in view space. */
   readonly sunView = { value: new Vector3(1, 0, 0) };
   private readonly material: ShaderMaterial;
+  private readonly depthMaterial: ShaderMaterial;
 
   constructor(def: RingDef, shared: RingUniforms) {
     this.material = new ShaderMaterial({
@@ -76,6 +78,7 @@ export class RingMesh {
         uSunLocal: this.sunLocal,
         uCamLocal: this.camLocal,
         uSunView: this.sunView,
+        uStarColor: starLight.uniform,
       },
       vertexShader: /* glsl */ `
         #include <common>
@@ -93,7 +96,7 @@ export class RingMesh {
         #include <common>
         #include <logdepthbuf_pars_fragment>
         ${RING_GLSL}
-        uniform vec3 uColor, uSunLocal, uCamLocal, uSunView;
+        uniform vec3 uColor, uSunLocal, uCamLocal, uSunView, uStarColor;
         varying vec3 vLocal;
         varying vec3 vViewPos;
         void main() {
@@ -125,7 +128,7 @@ export class RingMesh {
             col = base * (0.2 + (1.0 - alpha) * 1.2 * dens) * (1.0 + 8.0 * fwd);
             alpha *= 0.9;
           }
-          col *= 1.0 - 0.97 * shadow;
+          col *= (1.0 - 0.97 * shadow) * uStarColor;
           gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
@@ -141,10 +144,46 @@ export class RingMesh {
     this.mesh.frustumCulled = false;
     this.mesh.name = 'rings';
     this.mesh.renderOrder = 2;
+
+    // Depth only twin: the blended ring writes no depth, so the volumetric pass would treat ring
+    // pixels as background. Where the ring is opaque enough, write its depth (after the colour
+    // pass, so the blend itself is not affected) and the atmosphere then stops at the ring.
+    this.depthMaterial = new ShaderMaterial({
+      uniforms: { ...shared },
+      vertexShader: /* glsl */ `
+        #include <common>
+        #include <logdepthbuf_pars_vertex>
+        varying vec3 vLocal;
+        void main() {
+          vLocal = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          #include <logdepthbuf_vertex>
+        }`,
+      fragmentShader: /* glsl */ `
+        #include <common>
+        #include <logdepthbuf_pars_fragment>
+        ${RING_GLSL}
+        varying vec3 vLocal;
+        void main() {
+          if (ringDensity(length(vLocal.xz)) * uRingOpacity < 0.35) discard;
+          #include <logdepthbuf_fragment>
+          gl_FragColor = vec4(0.0);
+        }`,
+      transparent: true,
+      colorWrite: false,
+      depthWrite: true,
+      side: DoubleSide,
+    });
+    const depthMesh = new Mesh(geo, this.depthMaterial);
+    depthMesh.frustumCulled = false;
+    depthMesh.name = 'rings-depth';
+    depthMesh.renderOrder = 3;
+    this.mesh.add(depthMesh);
   }
 
   dispose(): void {
     this.mesh.geometry.dispose();
     this.material.dispose();
+    this.depthMaterial.dispose();
   }
 }

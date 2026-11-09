@@ -89,6 +89,7 @@ export class PostStack {
     gfx.applyPixelRatio(q.pixelRatioMax); // resizes the composer too
     this.composer.multisampling = q.msaa;
     this.vol.setScale(q.volScale);
+    this.clouds.animateJitter = !this.vol.blur;
     const c = this.clouds.uniforms;
     c.get('uCloudSteps')!.value = q.cloudSteps;
     c.get('uCloudLight')!.value = q.cloudLight;

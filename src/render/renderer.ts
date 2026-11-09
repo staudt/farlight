@@ -17,8 +17,11 @@ import { SunView } from './bodies/sunView';
 import type { BodyView, FrameContext } from './context';
 import { ShipCamera } from './camera/shipCamera';
 import { quality } from './quality';
+import { starLight } from './starLight';
 import { Starfield } from './sky/starfield';
 import { ShipView } from './ship/shipView';
+
+const BASE_SUN_LIGHT = 3;
 
 export type BodyViewFactory = (body: Body) => BodyView | null;
 
@@ -34,7 +37,7 @@ export class GameRenderer {
   readonly starfield = new Starfield();
   readonly shipView = new ShipView();
   readonly bodyViews: BodyView[] = [];
-  readonly sunLight = new DirectionalLight(0xffffff, 3);
+  readonly sunLight = new DirectionalLight(0xffffff, BASE_SUN_LIGHT);
   readonly ambient = new AmbientLight(0x223344, 0.18);
   /** Planetshine: sky color above, the nearby planet's lit color below. */
   readonly hemi = new HemisphereLight(0x88aaff, 0x332211, 0);
@@ -156,6 +159,9 @@ export class GameRenderer {
 
     // Sun light shines on the ship from the sun's direction.
     const sun = world.universe.root;
+    starLight.update(sun.def.star);
+    starLight.applyTint(this.sunLight.color);
+    this.sunLight.intensity = BASE_SUN_LIGHT * starLight.intensity;
     _sunDir.copy(sun.position).sub(world.shipWorldPos).normalize();
     this.sunLight.position.copy(_sunDir).multiplyScalar(1000);
     this.sunLight.target.position.set(0, 0, 0);

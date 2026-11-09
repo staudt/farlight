@@ -10,6 +10,8 @@ export class CloudEffect {
   coverageBias = 0;
   sunIntensity = 1.6;
   private frame = 0;
+  /** Per frame march jitter (interleaved gradient noise). Off at low volumetric scales: a fixed 2x2 ordered pattern blurs clean, a moving one shimmers. */
+  animateJitter = true;
   /** Current cloud body, for weather systems that want to know. */
   body: Body | null = null;
   readonly flashPos = new Vector3();
@@ -37,6 +39,7 @@ export class CloudEffect {
         ['uFlash', new Uniform(0)],
         ['uFlashPos', new Uniform(new Vector3())],
         ['uFrame', new Uniform(0)],
+        ['uCloudBayer', new Uniform(0)],
         ['uCloudSteps', new Uniform(30)],
         ['uCloudLight', new Uniform(3)],
         ['uCloudShadows', new Uniform(1)],
@@ -85,6 +88,7 @@ export class CloudEffect {
     u.get('uFlash')!.value = this.flash;
     (u.get('uFlashPos')!.value as Vector3).copy(this.flashPos);
     u.get('uFrame')!.value = this.frame++;
+    u.get('uCloudBayer')!.value = this.animateJitter ? 0 : 1;
   }
 }
 
