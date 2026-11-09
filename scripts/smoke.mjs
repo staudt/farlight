@@ -86,7 +86,14 @@ try {
    // A browser that dies under memory pressure (parallel agents) gets one relaunch and retry.
    for (let attempt = 0; attempt < 2; attempt++) {
     if (!browser.isConnected()) browser = await launch();
-    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    let page;
+    try {
+      page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    } catch {
+      await browser.close().catch(() => {});
+      browser = await launch();
+      page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    }
     const errors = [];
     page.on('console', (m) => {
       if (m.type() === 'error') errors.push(m.text());
@@ -148,7 +155,10 @@ try {
         startServer();
         await waitForServer();
       }
-      if (!browser.isConnected()) browser = await launch();
+      if (crashed) {
+        await browser.close().catch(() => {});
+        browser = await launch();
+      }
       continue;
     }
     res.ok = res.problems.length === 0;

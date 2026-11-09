@@ -68,7 +68,7 @@ Farlight is a relaxed solar system glider (working title was Space Glider 3D). L
 - **PostToolUse** (`.claude/hooks/post-edit.sh`, on Edit, Write and MultiEdit of `.ts` or `.mjs`): incremental `tsc --noEmit`, and eslint for files in `src/` and `tests/`. Errors go straight back to the editing agent (exit 2).
 - **Stop and SubagentStop** (`.claude/hooks/stop-check.sh`):
   - If `src`, `tests`, `scripts`, `index.html` or `package.json` changed, runs `npm run check`.
-  - If `src/render`, `src/terrain`, `src/main.ts` or `src/scenarios.ts` changed, also runs `node scripts/smoke.mjs --no-build` (240 s timeout).
+  - If `src/render`, `src/terrain`, `src/main.ts` or `src/scenarios.ts` changed, also runs the smoke test on a core set of 8 scenarios (300 s timeout). Run your feature's scenarios yourself, and `npm run smoke` for everything. Screenshot names replace `-` with `_`.
   - Failure blocks the stop (exit 2) with the tail of the output.
   - **Loop guard:** after 3 consecutive failures the stop is let through with a warning. Stamp files live in `.claude/hooks/.state/`.
 - **Look at the screenshots.** After a render change, open `artifacts/smoke/*.png` and check them yourself. The non-black and non-uniform checks catch blank frames, not wrong looks. Read `summary.json` for the state of each scenario.

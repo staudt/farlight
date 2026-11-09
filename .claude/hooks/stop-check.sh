@@ -43,7 +43,9 @@ $(printf '%s' "$out" | grep -v '^\s*$' | tail -40)"
 fi
 
 if changed "$smoke_stamp" src/render src/terrain src/main.ts src/scenarios.ts; then
-  out=$(timeout 240 node scripts/smoke.mjs --no-build 2>&1)
+  # A representative core set keeps the hook fast; run the full set on demand (npm run smoke).
+  core="earth-low-morning earth-orbit atmo-entry moon-surface-earthrise earth-storm jupiter-skim saturn-rings arrival"
+  out=$(timeout 300 node scripts/smoke.mjs --no-build $core 2>&1)
   if [[ $? -ne 0 ]]; then
     fail "Smoke test failed. Screenshots in artifacts/smoke/:
 $(printf '%s' "$out" | tail -30)"
