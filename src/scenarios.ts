@@ -97,6 +97,10 @@ export const SCENARIOS: Record<string, Scenario> = {
     description: 'Low over Io among sulfur crystals, Jupiter on the horizon',
     apply: (w) => w.place({ body: 'io', lat: 5, lon: 68, altitude: 200, heading: 270, pitch: 0, throttle: 0.25, time: findLockedMorning(w, 'io', 68, 9) }),
   },
+  'mars-orbit': {
+    description: 'Day side of red Mars from orbit, Valles Marineris in view',
+    apply: (w) => faceLatLon(w, 'mars', -8, -70, 2.6),
+  },
   'mars-canyon': surface('Over the rim of Valles Marineris in the Martian morning', {
     body: 'mars', lat: -8, localHour: 9, altitude: 2500, heading: 270, pitch: -4, throttle: 0.4,
   }),
