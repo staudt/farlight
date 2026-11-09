@@ -1,5 +1,8 @@
-import { Vector3 } from 'three';
+import { Matrix4, Quaternion, Vector3 } from 'three';
 import { weatherAmount } from './render/weather/weatherMap';
+import { cloudCoverage } from './render/clouds/coverage';
+import { biomeNameAt } from './terrain/biomes';
+import { makeSample, type TerrainSampler } from './terrain/heightfield';
 import type { World, ShipPlacement } from './sim/world';
 import { latLonToDir } from './terrain/api';
 import { pickFocusBody } from './data/generate';
@@ -213,12 +216,16 @@ export const SCENARIOS: Record<string, Scenario> = {
     apply: (w) => arrive(w),
   },
   'arrival-low': {
-    description: 'Gliding 1.5 km over the most interesting planet, day side',
+    description: 'Gliding low over a scenic spot on the most interesting planet: day side, below the clouds, with relief ahead',
     generic: true,
     apply: (w) => {
       const focus = focusBody(w);
-      const alt = focus.kind === 'gas' ? gasAltitude(w, focus.id, -3000) : 1500;
-      w.place({ body: focus.id, lat: 18, localHour: 9.5, altitude: alt, heading: 70, pitch: 2, throttle: 0.35 });
+      if (focus.kind === 'gas') {
+        w.place({ body: focus.id, lat: 18, localHour: 9.5, altitude: gasAltitude(w, focus.id, -3000), heading: 70, pitch: 2, throttle: 0.35 });
+        return;
+      }
+      const spot = scenicSpot(w, focus.id);
+      w.place({ body: focus.id, lat: spot.lat, lon: spot.lon, altitude: spot.altitude, heading: spot.heading, pitch: 1, throttle: 0.3, time: 0 });
     },
   },
 };
@@ -230,7 +237,18 @@ function focusBody(w: World): BodyDef {
   return system.bodies.find((b) => b.id === wanted && b.kind !== 'star') ?? pickFocusBody(system);
 }
 
-/** Parks the ship in space on the day side of the best planet, looking at it with the star off to one side. */
+/** Biomes that make a dull backdrop unless the planet has nothing else. */
+const DULL_BIOME = /^(lava|caldera|ice|snow|rock|crevasse|cooled|highlands|rim|dust|basalt|dark|maria|floor|shadowed|cracks|volcanic|white|tundra)/;
+
+/** Biomes worth flying over: molten channels, cracks and calderas, crystal fields, lush ground. */
+const FEATURE_BIOME = /lava|caldera|crack|crystal|forest|meadow|beach/;
+
+const DEG2RAD = Math.PI / 180;
+
+/**
+ * Parks the ship in space on the day side of the best planet. The planet sits up and to one side
+ * (rule of thirds), the star is in frame near the other edge, and a moon is framed if there is one.
+ */
 function arrive(w: World): void {
   const focus = w.universe.get(focusBody(w).id);
   w.clock.time = 0;
@@ -239,8 +257,191 @@ function arrive(w: World): void {
   const side = new Vector3().crossVectors(sun, new Vector3(0, 1, 0));
   if (side.lengthSq() < 1e-6) side.set(1, 0, 0);
   side.normalize();
-  const from = sun.multiplyScalar(Math.cos(0.95)).addScaledVector(side, Math.sin(0.95)).add(new Vector3(0, 0.18, 0));
-  w.placeInSpace(focus.id, focus.radius * (focus.def.rings ? 7.5 : 6), from);
+  const up = new Vector3().crossVectors(side, sun).normalize();
+  const dist = focus.radius * (focus.def.rings ? 7.5 : focus.kind === 'gas' ? 6 : 5);
+  const moons = w.universe.system.bodies.filter((b) => b.parentId === focus.id).map((b) => w.universe.get(b.id).position.clone().sub(focus.position));
+
+  const view = new Matrix4();
+  const best = { score: -Infinity, from: new Vector3(), quat: new Quaternion() };
+  const from = new Vector3();
+  const q = new Quaternion();
+  const rot = new Quaternion();
+  const planetAng = Math.asin(Math.min(1, focus.radius / dist));
+  for (const A of [58, 66, 74]) {
+    for (let phi = 0; phi < 360; phi += 15) {
+      from.copy(sun).multiplyScalar(-Math.cos(A * DEG2RAD)).addScaledVector(side, Math.sin(A * DEG2RAD) * Math.cos(phi * DEG2RAD)).addScaledVector(up, Math.sin(A * DEG2RAD) * Math.sin(phi * DEG2RAD)).normalize();
+      for (const yaw of [22, -22]) {
+        view.lookAt(new Vector3(), from.clone().negate(), new Vector3(0, 1, 0));
+        q.setFromRotationMatrix(view);
+        q.multiply(rot.setFromAxisAngle(new Vector3(0, 1, 0), yaw * DEG2RAD));
+        q.multiply(rot.setFromAxisAngle(new Vector3(1, 0, 0), -8 * DEG2RAD));
+        const fwd = new Vector3(0, 0, -1).applyQuaternion(q);
+        let score = 0;
+        const starAng = Math.acos(Math.min(1, Math.max(-1, fwd.dot(sun))));
+        score += starAng < 46 * DEG2RAD ? 3 : -(starAng - 46 * DEG2RAD) * 4;
+        // Star left of centre when the planet is right, and the other way round.
+        const right = new Vector3(1, 0, 0).applyQuaternion(q);
+        if (Math.sign(sun.dot(right)) === Math.sign(yaw)) score -= 3;
+        score += Math.min(0.4, Math.max(-0.4, from.y)) * 2;
+        const cam = from.clone().multiplyScalar(dist);
+        for (const m of moons) {
+          const md = m.clone().sub(cam).normalize();
+          const toPlanet = from.clone().negate();
+          const sep = Math.acos(Math.min(1, md.dot(toPlanet)));
+          const off = Math.acos(Math.min(1, md.dot(fwd)));
+          if (off < 36 * DEG2RAD && sep > planetAng * 1.3) score += 2.5;
+        }
+        if (score > best.score) {
+          best.score = score;
+          best.from.copy(from);
+          best.quat.copy(q);
+        }
+      }
+    }
+  }
+  w.placeInSpace(focus.id, dist, best.from);
+  w.ship.quat.copy(best.quat);
+}
+
+interface Scenic {
+  lat: number;
+  lon: number;
+  altitude: number;
+  heading: number;
+}
+
+/**
+ * Looks for a good low flight start on the day side: sun well up but low enough for shadows,
+ * below the cloud base, on land in an interesting biome (or at a coast), with relief ahead.
+ * Falls back to anything lit when the planet is dull everywhere.
+ */
+function scenicSpot(w: World, bodyId: string): Scenic {
+  w.clock.time = 0;
+  w.universe.update(0);
+  const body = w.universe.get(bodyId);
+  const sampler = w.sampler(body) as Partial<TerrainSampler>;
+  const terrain = body.def.terrain;
+  const clouds = body.def.atmosphere?.clouds;
+  const sun = body.worldToLocalDir(w.universe.root.position.clone().sub(body.position).normalize(), new Vector3());
+  const dir = new Vector3();
+  const smp = makeSample();
+  const hasSample = typeof sampler.sample === 'function' && terrain !== undefined;
+  const biomeAt = (d: { x: number; y: number; z: number }): { name: string; water: boolean; h: number; n: number } => {
+    if (!hasSample) return { name: '', water: false, n: 0, h: w.groundHeight(body, _dir.set(d.x, d.y, d.z)) };
+    sampler.sample!(d.x, d.y, d.z, smp);
+    return { name: biomeNameAt(terrain!, smp, 0.1), water: smp.water, n: smp.n, h: smp.height };
+  };
+  const cover = (d: Vector3): number => (clouds ? cloudCoverage(clouds, body.radius, body.atmosphereHeight, d, 0) : 0);
+
+  interface Cand {
+    lat: number;
+    lon: number;
+    score: number;
+    dull: boolean;
+  }
+  const coarse: Cand[] = [];
+  const nbr = new Vector3();
+  const nrth = new Vector3();
+  const est = new Vector3();
+  // Stay out of the rock and snow zone of the highest ground unless the planet has nothing else.
+  for (const maxN of [0.4, 0.7, 9]) {
+    coarse.length = 0;
+    for (let lat = -48; lat <= 48; lat += 4) {
+      for (let lon = -180; lon < 180; lon += 4) {
+        latLonToDir(lat * DEG2RAD, lon * DEG2RAD, dir);
+        const elev = Math.asin(Math.min(1, Math.max(-1, dir.dot(sun)))) / DEG2RAD;
+        if (elev < 14 || elev > 55) continue;
+        const b = biomeAt(dir);
+        if (b.water || b.n > maxN) continue;
+        const c = cover(dir);
+        if (c > 0.75) continue;
+        let score = 3 - Math.abs(elev - 30) / 15 - c * 2;
+        score += DULL_BIOME.test(b.name) ? 0 : 2;
+        // Glowing or lush ground a few kilometres out counts too (thin lava channels, coasts).
+        for (let k = 0; k < 4; k++) {
+          const az = k * (Math.PI / 2) + 0.4;
+          const t = 4000 / body.radius;
+          const nb = biomeAt(
+            nbr.copy(dir).addScaledVector(nrth.set(0, 1, 0).addScaledVector(dir, -dir.y).normalize(), Math.cos(az) * t).addScaledVector(est.crossVectors(nrth, dir), Math.sin(az) * t).normalize(),
+          );
+          if (nb.water) score += 0.3;
+          else if (FEATURE_BIOME.test(nb.name)) score += 1.2;
+        }
+        coarse.push({ lat, lon, score, dull: DULL_BIOME.test(b.name) });
+      }
+    }
+    if (coarse.length >= 3) break;
+  }
+  // Only fall back to dull ground when the planet has little else.
+  const lush = coarse.filter((c) => !c.dull);
+  if (lush.length >= 3) coarse.splice(0, coarse.length, ...lush);
+  coarse.sort((a, b) => b.score - a.score);
+  // Keep the best few, spread out so one patch does not take every slot.
+  const picks: Cand[] = [];
+  for (const c of coarse) {
+    if (picks.every((p) => Math.hypot(p.lat - c.lat, (p.lon - c.lon) * Math.cos(c.lat * DEG2RAD)) > 10)) picks.push(c);
+    if (picks.length >= 30) break;
+  }
+  if (picks.length === 0) return { lat: 18, lon: -20, altitude: 1500, heading: 70 };
+
+  const east = new Vector3();
+  const north = new Vector3();
+  const ring = new Vector3();
+  let best: Scenic = { lat: picks[0]!.lat, lon: picks[0]!.lon, altitude: 1500, heading: 70 };
+  let bestScore = -Infinity;
+  const cloudBase = clouds ? clouds.altitude * body.atmosphereHeight : Infinity;
+  for (const c of picks) {
+    latLonToDir(c.lat * DEG2RAD, c.lon * DEG2RAD, dir);
+    east.set(-Math.sin(c.lon * DEG2RAD), 0, -Math.cos(c.lon * DEG2RAD));
+    north.crossVectors(dir, east).normalize();
+    let hMin = Infinity;
+    let hMax = -Infinity;
+    let water = 0;
+    let featNear = 0;
+    const names = new Set<string>();
+    let bestHeading = 70;
+    let bestH = -Infinity;
+    for (const km of [2500, 6000, 12000]) {
+      for (let k = 0; k < 8; k++) {
+        const az = (k / 8) * Math.PI * 2;
+        const t = km / body.radius;
+        ring.copy(dir).addScaledVector(north, Math.cos(az) * t).addScaledVector(east, Math.sin(az) * t).normalize();
+        const b = biomeAt(ring);
+        hMin = Math.min(hMin, b.h);
+        hMax = Math.max(hMax, b.h);
+        if (b.water) water++;
+        else {
+          names.add(b.name);
+          if (km <= 6000 && FEATURE_BIOME.test(b.name)) featNear++;
+        }
+        const view = b.h / Math.max(1, sampler.amplitudeMeters ?? 1000) + (FEATURE_BIOME.test(b.name) ? 1.5 : 0) + (b.water ? 0.8 : 0);
+        if (km === 6000 && view > bestH) {
+          bestH = view;
+          bestHeading = (Math.atan2(Math.sin(az), Math.cos(az)) / DEG2RAD + 360) % 360;
+        }
+      }
+    }
+    const here = biomeAt(dir);
+    const relief = hMax - hMin;
+    let score = c.score;
+    score += Math.min(1, relief / Math.max(1, (sampler.amplitudeMeters ?? relief) * 0.6)) * 2;
+    score += Math.min(3, names.size) * 0.5;
+    for (const n of names) if (FEATURE_BIOME.test(n)) score += 1;
+    score += Math.min(4, featNear * 0.5);
+    if (FEATURE_BIOME.test(here.name) && !DULL_BIOME.test(here.name)) score += 1;
+    if (water > 0 && water < 12) score += 1.5;
+    if (relief > (sampler.amplitudeMeters ?? 1e9) * 0.9) score -= 1;
+    if (DULL_BIOME.test(here.name)) score -= 2;
+    // Never start inside a molten sea: it floods the view with one flat colour.
+    if (/^(lava|caldera)/.test(here.name)) score -= 8;
+    if (score > bestScore) {
+      bestScore = score;
+      // Fly low enough to stay under the cloud base, and well above the local ridge tops.
+      const altitude = Math.min(1500, Math.max(250, cloudBase * 0.5, 0.35 * relief + 250));
+      best = { lat: c.lat, lon: c.lon, altitude: Math.min(altitude, Math.max(300, cloudBase * 0.6)), heading: bestHeading };
+    }
+  }
+  return best;
 }
 
 /** A sim time within the body's year when the sun stands about `deg` degrees off its equatorial plane. */

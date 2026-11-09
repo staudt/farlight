@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { createGalaxy, generateSystem } from '../src/data/generate';
 import { SOLAR_SYSTEM } from '../src/data/solarSystem';
 import { Universe } from '../src/sim/universe';
-import type { StarSystemDef } from '../src/data/types';
+import type { BodyDef, StarSystemDef } from '../src/data/types';
 import { expectValidLayout } from './layoutCheck';
 
 const galaxy = createGalaxy();
@@ -98,6 +98,59 @@ describe('generateSystem', () => {
         expect(c).toBeGreaterThanOrEqual(0);
         expect(c).toBeLessThanOrEqual(1);
       }
+    }
+  });
+});
+
+const tempOf = (t: string): number => (t.startsWith('minus ') ? -parseInt(t.slice(6), 10) : parseInt(t, 10));
+const hasBiome = (b: BodyDef, name: string): boolean => b.terrain?.biomes.some((x) => x.name === name) ?? false;
+
+describe('worlds', () => {
+  const systems = galaxy.stars.filter((s) => s.id !== 'sol').slice(0, 40).map((s) => generateSystem(s));
+  const planets = systems.flatMap((s) => s.bodies.filter((b) => b.kind === 'rocky' && b.parentId === s.bodies[0]!.id));
+
+  test('at least half of 40 systems have a living world', () => {
+    const living = systems.filter((s) => s.bodies.some((b) => b.parentId === s.bodies[0]!.id && b.terrain?.water !== undefined && b.atmosphere?.clouds !== undefined && b.terrain.props?.some((p) => p.kind === 'tree')));
+    expect(living.length).toBeGreaterThanOrEqual(20);
+  });
+
+  test('temperatures are plausible by archetype', () => {
+    for (const p of planets) {
+      const t = tempOf(p.info.temperature);
+      if (hasBiome(p, 'lava channel')) {
+        expect(t).toBeGreaterThanOrEqual(300);
+        expect(t).toBeLessThanOrEqual(1200);
+      } else if (hasBiome(p, 'blue ice')) {
+        expect(t).toBeGreaterThanOrEqual(-150);
+        expect(t).toBeLessThanOrEqual(-20);
+      } else if (hasBiome(p, 'beach')) {
+        expect(t).toBeGreaterThanOrEqual(-15);
+        expect(t).toBeLessThanOrEqual(40);
+      } else if (hasBiome(p, 'sand')) {
+        expect(t).toBeGreaterThanOrEqual(-80);
+        expect(t).toBeLessThanOrEqual(60);
+      }
+    }
+  });
+
+  test('alien worlds have their own palette: black beaches and glowing props', () => {
+    const aliens = planets.filter((p) => hasBiome(p, 'crystal field'));
+    expect(aliens.length).toBeGreaterThan(3);
+    for (const a of aliens) {
+      const beach = a.terrain!.biomes.find((x) => x.name === 'beach')!;
+      expect(Math.max(...beach.color)).toBeLessThan(0.15);
+      expect(a.terrain!.props!.some((p) => p.kind === 'crystal')).toBe(true);
+    }
+  });
+
+  test('lava worlds are dark crust with glow only in a narrow band', () => {
+    const lavas = planets.filter((p) => hasBiome(p, 'lava channel'));
+    expect(lavas.length).toBeGreaterThan(0);
+    for (const l of lavas) {
+      const biomes = l.terrain!.biomes;
+      expect(biomes[0]!.name).toBe('lava channel');
+      expect(biomes[0]!.maxHeight!).toBeLessThan(-0.05);
+      expect(Math.max(...biomes[biomes.length - 1]!.color)).toBeLessThan(0.15);
     }
   });
 });

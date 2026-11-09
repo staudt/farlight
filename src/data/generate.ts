@@ -118,6 +118,27 @@ function softFloor(c: number): number {
   return c < -150 ? -150 + (c + 150) * 0.35 : c;
 }
 
+/** Surface temperature plausible for the archetype: equilibrium temperature squashed into its range. */
+function surfaceTemp(a: Archetype, tEq: number): number {
+  const squash = (lo: number, hi: number, mid: number, scale: number): number => lo + (hi - lo) * (0.5 + 0.5 * Math.tanh((tEq - mid) / scale));
+  switch (a) {
+    case 'desert':
+      return squash(-80, 60, -20, 120);
+    case 'ice':
+      return squash(-150, -20, -120, 90);
+    case 'lava':
+      return Math.min(1200, Math.max(300, tEq));
+    case 'toxic':
+      return Math.min(480, Math.max(150, tEq));
+    case 'earthlike':
+    case 'ocean':
+    case 'alien':
+      return squash(-10, 40, 15, 60);
+    default:
+      return softFloor(tEq);
+  }
+}
+
 function celsiusText(c: number): string {
   const v = Math.round(c / 5) * 5;
   return v < 0 ? `minus ${-v} °C` : `${v} °C`;
@@ -272,6 +293,7 @@ const SKIES: Record<string, SkyTheme> = {
   green: { name: 'green', ratio: [0.28, 1, 0.38], mie: [0.9, 1, 0.85], cloud: [0.92, 1, 0.9], aurora: [[0.4, 1.0, 0.3], [1.0, 0.9, 0.3]] },
   teal: { name: 'teal', ratio: [0.1, 0.85, 1], mie: [0.85, 1, 1], cloud: [0.9, 1, 1], aurora: [[0.2, 1.0, 0.8], [0.3, 0.5, 1.0]] },
   magenta: { name: 'magenta', ratio: [1, 0.16, 0.7], mie: [1, 0.85, 0.95], cloud: [1, 0.9, 0.95], aurora: [[1.0, 0.3, 0.7], [0.5, 0.3, 1.0]] },
+  smoke: { name: 'smoke', ratio: [0.75, 0.55, 0.42], mie: [0.8, 0.5, 0.35], cloud: [0.25, 0.2, 0.18], aurora: [[1.0, 0.5, 0.2]] },
   amber: { name: 'amber', ratio: [1, 0.55, 0.16], mie: [1, 0.78, 0.5], cloud: [1, 0.9, 0.75], aurora: [[1.0, 0.5, 0.2], [1.0, 0.9, 0.3]] },
 };
 
@@ -380,15 +402,16 @@ interface Flora {
   rock: RGB;
   trunk: RGB;
   words: string;
+  /** Alien extras: black sand, crystal and spire colours, optional strange desert. */
+  beach?: RGB;
+  crystal?: RGB;
+  spire?: RGB;
+  alienDesert?: RGB;
 }
 
 const FLORAS: Record<string, Flora> = {
   terran: { forest: [0.02, 0.14, 0.04], grass: [0.1, 0.35, 0.05], meadow: [0.28, 0.46, 0.07], desert: [0.66, 0.4, 0.15], tundra: [0.3, 0.32, 0.2], sand: [0.72, 0.62, 0.36], rock: [0.3, 0.26, 0.22], trunk: [0.14, 0.34, 0.15], words: 'forests' },
   autumn: { forest: [0.3, 0.07, 0.02], grass: [0.5, 0.25, 0.05], meadow: [0.7, 0.42, 0.1], desert: [0.62, 0.4, 0.2], tundra: [0.36, 0.28, 0.18], sand: [0.78, 0.66, 0.4], rock: [0.3, 0.24, 0.2], trunk: [0.65, 0.25, 0.05], words: 'copper forests' },
-  violet: { forest: [0.12, 0.03, 0.22], grass: [0.26, 0.09, 0.38], meadow: [0.45, 0.22, 0.52], desert: [0.55, 0.38, 0.45], tundra: [0.3, 0.25, 0.35], sand: [0.72, 0.62, 0.7], rock: [0.22, 0.18, 0.26], trunk: [0.5, 0.2, 0.7], words: 'violet forests' },
-  teal: { forest: [0.0, 0.16, 0.15], grass: [0.02, 0.38, 0.32], meadow: [0.2, 0.55, 0.42], desert: [0.5, 0.52, 0.3], tundra: [0.25, 0.35, 0.32], sand: [0.7, 0.72, 0.55], rock: [0.2, 0.24, 0.24], trunk: [0.1, 0.6, 0.55], words: 'teal grasslands' },
-  crimson: { forest: [0.26, 0.02, 0.05], grass: [0.46, 0.08, 0.1], meadow: [0.66, 0.2, 0.16], desert: [0.6, 0.34, 0.22], tundra: [0.35, 0.22, 0.22], sand: [0.78, 0.6, 0.45], rock: [0.26, 0.18, 0.18], trunk: [0.8, 0.12, 0.15], words: 'crimson forests' },
-  indigo: { forest: [0.02, 0.06, 0.24], grass: [0.05, 0.2, 0.5], meadow: [0.2, 0.4, 0.6], desert: [0.5, 0.5, 0.55], tundra: [0.25, 0.3, 0.4], sand: [0.7, 0.72, 0.8], rock: [0.18, 0.2, 0.28], trunk: [0.2, 0.4, 0.9], words: 'blue forests' },
 };
 
 interface Water {
@@ -402,45 +425,94 @@ const WATERS: Record<string, Water> = {
   violet: { color: [0.3, 0.12, 0.5], deepColor: [0.08, 0.02, 0.22] },
   green: { color: [0.12, 0.5, 0.25], deepColor: [0.02, 0.18, 0.1] },
   rose: { color: [0.6, 0.18, 0.36], deepColor: [0.22, 0.03, 0.14] },
+  orange: { color: [0.85, 0.38, 0.06], deepColor: [0.34, 0.1, 0.02] },
+  jade: { color: [0.1, 0.62, 0.34], deepColor: [0.02, 0.22, 0.14] },
 };
 
 interface Theme {
   sky: string;
-  flora: string;
+  /** Terran flora key, or an inline alien palette. */
+  flora: string | Flora;
   water: string;
   words: string;
 }
 
+/** Every alien variant has its own complete ground palette: no beige, black sand, white or pink rock. */
 const ALIEN_THEMES: Theme[] = [
-  { sky: 'violet', flora: 'violet', water: 'violet', words: 'violet' },
-  { sky: 'green', flora: 'teal', water: 'green', words: 'emerald' },
-  { sky: 'amber', flora: 'autumn', water: 'amber', words: 'amber' },
-  { sky: 'magenta', flora: 'crimson', water: 'rose', words: 'rose' },
-  { sky: 'teal', flora: 'indigo', water: 'turquoise', words: 'teal' },
-  { sky: 'violet', flora: 'teal', water: 'amber', words: 'twilight' },
+  {
+    sky: 'violet',
+    water: 'orange',
+    words: 'violet',
+    flora: { forest: [0.1, 0.03, 0.26], grass: [0.3, 0.1, 0.55], meadow: [0.6, 0.3, 0.8], desert: [0.8, 0.28, 0.55], tundra: [0.42, 0.32, 0.58], sand: [0.05, 0.045, 0.07], rock: [0.88, 0.8, 0.94], trunk: [0.6, 0.25, 0.95], words: 'violet forests', beach: [0.05, 0.045, 0.07], crystal: [0.55, 0.95, 1.0], spire: [0.95, 0.93, 1.0], alienDesert: [0.8, 0.28, 0.55] },
+  },
+  {
+    sky: 'green',
+    water: 'orange',
+    words: 'emerald',
+    flora: { forest: [0.0, 0.14, 0.17], grass: [0.02, 0.4, 0.36], meadow: [0.25, 0.62, 0.48], desert: [0.85, 0.35, 0.45], tundra: [0.3, 0.5, 0.46], sand: [0.04, 0.05, 0.05], rock: [0.96, 0.76, 0.84], trunk: [0.15, 0.45, 1.0], words: 'teal grasslands', beach: [0.04, 0.05, 0.05], crystal: [1.0, 0.5, 0.85], spire: [0.97, 0.97, 0.97], alienDesert: [0.85, 0.35, 0.45] },
+  },
+  {
+    sky: 'amber',
+    water: 'jade',
+    words: 'amber',
+    flora: { forest: [0.2, 0.01, 0.06], grass: [0.5, 0.03, 0.12], meadow: [0.8, 0.16, 0.2], desert: [0.95, 0.5, 0.12], tundra: [0.5, 0.3, 0.32], sand: [0.06, 0.05, 0.05], rock: [0.94, 0.92, 0.9], trunk: [0.9, 0.15, 0.22], words: 'crimson forests', beach: [0.06, 0.05, 0.05], crystal: [0.4, 1.0, 0.9], spire: [0.98, 0.96, 0.94], alienDesert: [0.95, 0.5, 0.12] },
+  },
+  {
+    sky: 'magenta',
+    water: 'orange',
+    words: 'rose',
+    flora: { forest: [0.01, 0.03, 0.22], grass: [0.03, 0.12, 0.5], meadow: [0.12, 0.28, 0.62], desert: [0.5, 0.22, 0.8], tundra: [0.35, 0.42, 0.62], sand: [0.04, 0.04, 0.06], rock: [0.97, 0.78, 0.88], trunk: [0.3, 0.5, 1.0], words: 'blue forests', beach: [0.04, 0.04, 0.06], crystal: [1.0, 0.6, 0.95], spire: [0.97, 0.95, 1.0], alienDesert: [0.5, 0.22, 0.8] },
+  },
+  {
+    sky: 'green',
+    water: 'rose',
+    words: 'emerald',
+    flora: { forest: [0.0, 0.18, 0.07], grass: [0.04, 0.46, 0.2], meadow: [0.3, 0.66, 0.3], desert: [0.95, 0.45, 0.6], tundra: [0.4, 0.55, 0.4], sand: [0.05, 0.06, 0.05], rock: [0.92, 0.95, 0.92], trunk: [0.2, 0.55, 1.0], words: 'emerald groves', beach: [0.05, 0.06, 0.05], crystal: [1.0, 0.4, 0.6], spire: [0.97, 1.0, 0.97], alienDesert: [0.95, 0.45, 0.6] },
+  },
+  {
+    sky: 'teal',
+    water: 'orange',
+    words: 'twilight',
+    flora: { forest: [0.14, 0.03, 0.3], grass: [0.4, 0.12, 0.62], meadow: [0.2, 0.7, 0.7], desert: [0.2, 0.62, 0.62], tundra: [0.4, 0.34, 0.6], sand: [0.05, 0.04, 0.07], rock: [0.9, 0.85, 0.96], trunk: [0.7, 0.3, 1.0], words: 'twilight forests', beach: [0.05, 0.04, 0.07], crystal: [0.3, 1.0, 0.9], spire: [0.97, 0.95, 1.0], alienDesert: [0.2, 0.62, 0.62] },
+  },
 ];
 
-function livingBiomes(rng: Rng, f: Flora, seaLevel: number, ocean: boolean): BiomeDef[] {
+function livingBiomes(rng: Rng, f: Flora, seaLevel: number, ocean: boolean, alien = false): BiomeDef[] {
   const j = (c: RGB): RGB => jit(c, rng, 0.08);
+  const beachColor = f.beach ?? f.sand;
   const biomes: BiomeDef[] = [
     { name: 'snow', color: [0.88, 0.92, 0.96], minHeight: 1.0 },
     { name: 'ice', color: [0.8, 0.87, 0.94], latitude: [1.2, 1.6] },
-    { name: 'rock', color: j(f.rock), minHeight: 0.75 },
-    { name: 'beach', color: j(f.sand), maxHeight: round(seaLevel + 0.01) },
+    { name: 'rock', color: j(f.rock), minHeight: alien ? 0.7 : 0.75 },
+    { name: 'beach', color: j(beachColor), maxHeight: round(seaLevel + 0.01) },
   ];
-  if (!ocean) biomes.push({ name: 'desert', color: j(f.desert), moisture: [0, 0.36], latitude: [0, 0.75] });
+  // Alien deserts are strange colours and only on some variants.
+  const desertColor = f.alienDesert ?? f.desert;
+  if (!ocean && (!alien || rng.chance(0.4))) biomes.push({ name: 'desert', color: j(desertColor), moisture: [0, alien ? 0.3 : 0.36], latitude: [0, 0.75] });
   biomes.push({ name: 'tundra', color: j(f.tundra), latitude: [0.98, 1.2] });
-  biomes.push({ name: 'forest', color: j(f.forest), moisture: [ocean ? 0.45 : 0.56, 1] });
-  biomes.push({ name: 'meadow', color: j(f.meadow), moisture: [0.2, 0.46] });
+  biomes.push({ name: 'forest', color: j(f.forest), moisture: [ocean ? 0.45 : alien ? 0.5 : 0.56, 1] });
+  if (alien && f.crystal) biomes.push({ name: 'crystal field', color: j(mul(f.crystal, 0.5)), moisture: [0.36, 0.45], maxSlope: 0.5 });
+  biomes.push({ name: 'meadow', color: j(alien ? mix(f.meadow, f.grass, 0.4) : f.meadow), moisture: [0.2, 0.46] });
   biomes.push({ name: 'grass', color: j(f.grass) });
   return biomes;
 }
 
-function livingProps(f: Flora, rng: Rng): PropDef[] {
+function livingProps(f: Flora, rng: Rng, alien: boolean): PropDef[] {
+  if (alien) {
+    const crystal = f.crystal ?? mix(f.trunk, [1, 1, 1], 0.4);
+    return [
+      { kind: 'tree', density: round(rng.range(420, 650), 0), color: f.trunk, minSize: 14, maxSize: round(rng.range(30, 44), 0), biomes: ['forest'], maxSlope: 0.7 },
+      { kind: 'tree', density: round(rng.range(70, 120), 0), color: mix(f.trunk, f.meadow, 0.35), minSize: 9, maxSize: 24, biomes: ['grass', 'meadow'], maxSlope: 0.6 },
+      { kind: 'crystal', density: round(rng.range(20, 40), 0), color: crystal, minSize: 8, maxSize: 42, biomes: ['crystal field', 'rock', 'beach'] },
+      { kind: 'spire', density: round(rng.range(2, 5), 1), color: f.spire ?? [0.95, 0.95, 0.95], minSize: 30, maxSize: 95, biomes: ['rock', 'tundra', 'beach'], maxSlope: 0.7 },
+      { kind: 'rock', density: 30, color: mix(f.rock, [0.4, 0.4, 0.45], 0.45), minSize: 3, maxSize: 18, biomes: ['rock', 'tundra', 'beach', 'desert'] },
+    ];
+  }
   return [
-    { kind: 'tree', density: round(rng.range(40, 80), 0), color: f.trunk, minSize: 12, maxSize: round(rng.range(26, 40), 0), biomes: ['forest', 'grass'], maxSlope: 0.5 },
-    { kind: 'rock', density: 8, color: mix(f.rock, [0.5, 0.5, 0.5], 0.4), minSize: 4, maxSize: 20, biomes: ['rock', 'tundra', 'desert'] },
-    ...(rng.chance(0.4) ? [{ kind: 'crystal' as const, density: 3, color: mix(f.trunk, [1, 1, 1], 0.4), minSize: 6, maxSize: 24, biomes: ['rock', 'meadow'] }] : []),
+    { kind: 'tree', density: round(rng.range(380, 620), 0), color: f.trunk, minSize: 12, maxSize: round(rng.range(26, 40), 0), biomes: ['forest'], maxSlope: 0.65 },
+    { kind: 'tree', density: round(rng.range(60, 110), 0), color: mix(f.trunk, f.meadow, 0.3), minSize: 8, maxSize: 22, biomes: ['grass', 'meadow'], maxSlope: 0.55 },
+    { kind: 'rock', density: 30, color: mix(f.rock, [0.5, 0.5, 0.5], 0.4), minSize: 4, maxSize: 20, biomes: ['rock', 'tundra', 'desert'] },
+    ...(rng.chance(0.3) ? [{ kind: 'crystal' as const, density: 4, color: mix(f.trunk, [1, 1, 1], 0.4), minSize: 6, maxSize: 24, biomes: ['rock', 'meadow'] }] : []),
   ];
 }
 
@@ -474,13 +546,13 @@ function buildLiving(rng: Rng, archetype: 'earthlike' | 'ocean' | 'alien'): Buil
   else {
     theme = {
       sky: 'blue',
-      flora: rng.chance(0.78) ? 'terran' : rng.pick(['autumn', 'teal']),
+      flora: rng.chance(0.8) ? 'terran' : 'autumn',
       water: rng.chance(0.7) ? 'blue' : 'turquoise',
       words: 'blue',
     };
   }
   const sky = SKIES[theme.sky]!;
-  const flora = FLORAS[theme.flora]!;
+  const flora = typeof theme.flora === 'string' ? FLORAS[theme.flora]! : theme.flora;
   const water = WATERS[theme.water]!;
   const seaLevel = round(ocean ? rng.range(0.52, 0.7) : rng.range(0.08, 0.3));
   const layers = jitterLayers(EARTH_LAYERS, rng).map((l, i) => (ocean && i < 3 ? { ...l, amplitude: round(l.amplitude * 0.8, 3) } : l));
@@ -503,10 +575,10 @@ function buildLiving(rng: Rng, archetype: 'earthlike' | 'ocean' | 'alien'): Buil
     amplitude: round(rng.range(0.01, 0.016), 4),
     seaLevel,
     layers,
-    biomes: livingBiomes(rng, flora, seaLevel, ocean),
+    biomes: livingBiomes(rng, flora, seaLevel, ocean, archetype === 'alien'),
     water: { color: jit(water.color, rng, 0.06), deepColor: jit(water.deepColor, rng, 0.08) },
     polarCaps: { latitude: round(rng.range(1.2, 1.4)), color: [0.88, 0.92, 0.96] },
-    props: livingProps(flora, rng),
+    props: livingProps(flora, rng, archetype === 'alien'),
   };
   const landColor = mix(flora.grass, flora.forest, 0.3);
   const color = mix(water.color, landColor, ocean ? 0.12 : 0.3);
@@ -611,8 +683,11 @@ function buildDesert(rng: Rng): Built {
 }
 
 function buildLava(rng: Rng): Built {
-  const glow = rng.pick<RGB>([[1.0, 0.22, 0.03], [0.95, 0.12, 0.02], [1.0, 0.42, 0.05], [1.0, 0.3, 0.12]]);
-  const ash = rng.pick<RGB>([[0.06, 0.045, 0.04], [0.07, 0.05, 0.05], [0.05, 0.045, 0.06]]);
+  const glow = rng.pick<RGB>([[1.0, 0.36, 0.04], [1.0, 0.24, 0.03], [1.0, 0.5, 0.06], [1.0, 0.3, 0.14]]);
+  const ash = rng.pick<RGB>([[0.03, 0.025, 0.024], [0.033, 0.026, 0.026], [0.026, 0.026, 0.032]]);
+  const crust = rng.pick<RGB>([[0.024, 0.024, 0.028], [0.03, 0.027, 0.025], [0.022, 0.024, 0.032]]);
+  const basalt = rng.pick<RGB>([[0.012, 0.012, 0.015], [0.015, 0.013, 0.013], [0.011, 0.012, 0.017]]);
+  const lavaLevel = round(rng.range(-0.24, -0.16));
   const feats = [...features(rng, 'volcano', rng.int(2, 4), [0.05, 0.1], [0.5, 0.9])];
   if (rng.chance(0.5)) feats.push(...features(rng, 'spires', rng.int(1, 3), [0.03, 0.06], [0.3, 0.6]));
   const terrain: TerrainDef = {
@@ -629,14 +704,18 @@ function buildLava(rng: Rng): Built {
     ),
     features: feats,
     biomes: [
-      { name: 'cooled crust', color: [0.035, 0.03, 0.03], minHeight: 0.5 },
-      { name: 'ash plains', color: jit(ash, rng, 0.1), minHeight: 0.15 },
-      { name: 'lava lowlands', color: glow, maxHeight: 0.15 },
+      // Glow only in the lowest channels, in thin cracks and on the volcano summits. Rank order matters.
+      { name: 'lava channel', color: glow, maxHeight: lavaLevel },
+      { name: 'caldera', color: mix(glow, [1, 0.75, 0.2], 0.3), minHeight: 0.72 },
+      { name: 'glowing cracks', color: mix(glow, [0.5, 0.1, 0.02], 0.25), moisture: [0.475, 0.525], maxHeight: 0.35 },
+      { name: 'cooled crust', color: jit(crust, rng, 0.08), minHeight: 0.45 },
+      { name: 'ash plains', color: jit(ash, rng, 0.1), minHeight: 0.0 },
+      { name: 'basalt', color: jit(basalt, rng, 0.1) },
     ],
     craters: craters(rng, [50, 250], [0.04, 0.08]),
     props: [
-      { kind: 'rock', density: 12, color: [0.1, 0.08, 0.08], minSize: 4, maxSize: 24 },
-      { kind: 'spire', density: 1.2, color: [0.08, 0.07, 0.07], minSize: 20, maxSize: 70, biomes: ['cooled crust', 'ash plains'] },
+      { kind: 'rock', density: 30, color: [0.1, 0.09, 0.09], minSize: 4, maxSize: 24 },
+      { kind: 'spire', density: 2.5, color: [0.07, 0.065, 0.065], minSize: 20, maxSize: 70, biomes: ['cooled crust', 'ash plains', 'basalt'] },
     ],
   };
   const haze = rng.chance(0.75);
@@ -644,11 +723,11 @@ function buildLava(rng: Rng): Built {
     ? {
         height: round(rng.range(0.08, 0.14), 3),
         scaleHeight: round(rng.range(0.15, 0.22), 3),
-        rayleighDepth: rayleigh(SKIES.amber!, rng.range(0.14, 0.22), rng),
-        mieDepth: round(rng.range(0.12, 0.25), 3),
+        rayleighDepth: rayleigh(SKIES.smoke!, rng.range(0.1, 0.16), rng),
+        mieDepth: round(rng.range(0.05, 0.1), 3),
         mieG: 0.72,
-        mieColor: [1.0, 0.45, 0.18],
-        sunIntensity: round(rng.range(16, 22), 1),
+        mieColor: [0.8, 0.5, 0.35],
+        sunIntensity: round(rng.range(10, 12.5), 1),
         stabilization: 1,
         clouds: { altitude: 0.3, thickness: 0.2, coverage: round(rng.range(0.35, 0.65), 2), color: [0.3, 0.22, 0.2], scale: 0.04, speed: round(rng.range(15, 35), 1) },
         weather: [{ kind: 'lightning', intensity: round(rng.range(0.4, 0.7), 2) }],
@@ -658,7 +737,7 @@ function buildLava(rng: Rng): Built {
     archetype: 'lava',
     kind: 'rocky',
     radiusEarth: rng.range(0.4, 1.3),
-    color: mix(glow, [0.12, 0.08, 0.07], 0.45),
+    color: mix(glow, [0.1, 0.09, 0.09], 0.72),
     terrain,
     atmosphere,
     greenhouse: 450,
@@ -1097,14 +1176,14 @@ function buildMoon(rng: Rng, kind: MoonKind, name: string, parent: BodyDef, rati
   };
 }
 
-function buildRings(rng: Rng, base: RGB, faint: boolean): RingDef {
-  const inner = round(rng.range(1.2, 1.8), 2);
+function buildRings(rng: Rng, base: RGB, faint: boolean, grand = false): RingDef {
+  const inner = round(grand ? rng.range(1.25, 1.45) : rng.range(1.2, 1.8), 2);
   return {
     innerRadius: inner,
-    outerRadius: round(inner + rng.range(0.4, 1.0), 2),
+    outerRadius: round(inner + (grand ? rng.range(1.2, 1.7) : rng.range(0.4, 1.0)), 2),
     color: jit(mix(base, [0.85, 0.8, 0.7], 0.5), rng, 0.08),
-    opacity: round(faint ? rng.range(0.15, 0.4) : rng.range(0.55, 0.9), 2),
-    bands: rng.int(14, 44),
+    opacity: round(faint ? rng.range(0.15, 0.4) : grand ? rng.range(0.75, 0.92) : rng.range(0.55, 0.9), 2),
+    bands: grand ? rng.int(40, 64) : rng.int(14, 44),
   };
 }
 
@@ -1148,11 +1227,18 @@ export function generateSystem(star: GalaxyStar): StarSystemDef {
   let prevA = 0;
   let prevSoi = 0;
   const planets: { def: BodyDef; built: Built }[] = [];
+  let hasLiving = false;
 
   for (let i = 0; i < planetCount; i++) {
     const t = targetA / AU / sqrtL;
-    const archetype = pickArchetype(rng, t);
+    let archetype = pickArchetype(rng, t);
+    // Make exploring rewarding: a system without a living world gets one in its warm zone, most of the time.
+    const rockyArch = archetype !== 'gas' && archetype !== 'iceGiant';
+    if (!hasLiving && rockyArch && t > 0.7 && t < 2.4 && rng.chance(0.6)) archetype = rng.weighted<'earthlike' | 'ocean' | 'alien'>({ earthlike: 0.4, ocean: 0.2, alien: 0.4 });
     const built = buildArchetype(rng, archetype);
+    // Rare beauty: a gigantic ice giant, usually ringed.
+    const colossus = built.archetype === 'iceGiant' && rng.chance(0.2);
+    if (colossus) built.radiusEarth = rng.range(6.5, 8.5);
     const radius = built.radiusEarth * R_EARTH;
     const gameRadius = radius * GAME_RADIUS_SCALE;
     const soiFactor = built.kind === 'gas' ? SOI_GAS : SOI_ROCKY;
@@ -1169,9 +1255,8 @@ export function generateSystem(star: GalaxyStar): StarSystemDef {
     const retro = rng.chance(0.05) ? -1 : 1;
     const gravity = built.kind === 'gas' ? round(rng.range(0.9, 2.6), 2) : round(Math.min(2.2, Math.max(0.2, Math.pow(built.radiusEarth, 0.9) * 0.95)), 2);
     const rotationPeriod = (built.kind === 'gas' ? rng.range(8, 18) : rng.range(10, 40)) * 3600 * retro;
-    const hasRings = rng.chance(built.kind === 'gas' ? 0.35 : 0.05);
+    const hasRings = colossus ? rng.chance(0.85) : rng.chance(built.kind === 'gas' ? (built.archetype === 'iceGiant' ? 0.5 : 0.35) : 0.05);
     const living = built.archetype === 'earthlike' || built.archetype === 'ocean' || built.archetype === 'alien';
-    const tempC = built.archetype === 'lava' ? Math.max(tEq, 350) : tEq;
     const def: BodyDef = {
       id,
       name,
@@ -1197,15 +1282,16 @@ export function generateSystem(star: GalaxyStar): StarSystemDef {
       ...(built.atmosphere ? { atmosphere: built.atmosphere } : {}),
       ...(built.terrain ? { terrain: built.terrain } : {}),
       ...(built.gas ? { gas: built.gas } : {}),
-      ...(hasRings ? { rings: buildRings(rng, built.color, built.kind !== 'gas') } : {}),
+      ...(hasRings ? { rings: buildRings(rng, built.color, built.kind !== 'gas', built.kind === 'gas' && rng.chance(colossus ? 0.8 : 0.25)) } : {}),
       info: {
         type: built.type,
         atmosphere: built.atmosphereText,
-        temperature: celsiusText(built.kind === 'gas' ? tEq - 20 : living ? 12 + 25 * Math.tanh((tempC - 12) / 70) : softFloor(tempC)),
+        temperature: celsiusText(built.kind === 'gas' ? Math.max(-215, tEq - 20) : surfaceTemp(built.archetype, tEq)),
         features: hasRings ? [...built.features, 'Rings'] : built.features,
         summary: built.summary,
       },
     };
+    if (living) hasLiving = true;
     planets.push({ def, built });
     bodies.push(def);
 
