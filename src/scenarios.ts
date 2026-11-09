@@ -4,7 +4,9 @@ import { cloudCoverage } from './render/clouds/coverage';
 import { biomeNameAt } from './terrain/biomes';
 import { makeSample, type TerrainSampler } from './terrain/heightfield';
 import type { World, ShipPlacement } from './sim/world';
-import { latLonToDir } from './terrain/api';
+import type { Body } from './sim/universe';
+import { dirToLatLon, latLonToDir } from './terrain/api';
+import { devilSites, geyserSites } from './render/weather/plumes';
 import { pickFocusBody } from './data/generate';
 import type { BodyDef } from './data/types';
 
@@ -25,7 +27,7 @@ const surface = (description: string, p: ShipPlacement): Scenario => ({
 
 /** Longitude (degrees) on the day side at `lat` where the weather `kind` is strongest right now. */
 /** Finds a daytime spot inside a storm cell: scans latitudes (within the band) and longitudes. */
-function stormSpot(w: World, bodyId: string, kind: 'rain' | 'lightning' | 'snow', lats: [number, number]): { lat: number; lon: number } {
+function stormSpot(w: World, bodyId: string, kind: 'rain' | 'lightning' | 'snow' | 'acidRain' | 'methaneRain', lats: [number, number]): { lat: number; lon: number } {
   w.universe.update(w.clock.time);
   const body = w.universe.get(bodyId);
   const def = body.def.atmosphere!.weather!.find((d) => d.kind === kind)!;
@@ -154,6 +156,43 @@ export const SCENARIOS: Record<string, Scenario> = {
       const sun = w.universe.root.position.clone().sub(earth.position).normalize();
       const night = sun.clone().negate().addScaledVector(pole, sun.dot(pole)).normalize();
       w.placeInSpace('earth', earth.radius + 1.5e6, pole.multiplyScalar(0.8).addScaledVector(night, 0.6));
+    },
+  },
+  'venus-acid-rain': {
+    description: 'Under the Venusian clouds in sulphur rain that dries up before the ground',
+    apply: (w) => {
+      const spot = stormSpot(w, 'venus', 'acidRain', [-30, 30]);
+      w.place({ body: 'venus', ...spot, altitude: 4200, heading: 20, pitch: 2, throttle: 0.1 });
+    },
+  },
+  'mercury-dayside': surface('Low over the baking grey surface of Mercury, the huge white sun ahead', {
+    body: 'mercury', lat: 5, localHour: 16.8, altitude: 450, heading: 270, pitch: 5, throttle: 0.15,
+  }),
+  'io-plumes-orbit': {
+    description: 'Low orbit over Io with a volcanic plume rising on the limb',
+    apply: (w) => limbView(w, 'io', 18.7, -105, 2.1, 62, 0.22),
+  },
+  'europa-geysers': {
+    description: 'Low over Europa as water vapour geysers jet from the ice',
+    apply: (w) => {
+      const body = w.universe.get('europa');
+      const site = geyserSites(body.def.seed, 6)[0]!;
+      const { lat, lon } = dirToLatLon(site.dir.x, site.dir.y, site.dir.z);
+      limbView(w, 'europa', (lat * 180) / Math.PI, (lon * 180) / Math.PI, 1.3, 32, 0.08);
+    },
+  },
+  'mars-dust-devils': {
+    description: 'Low over the Martian plains as dust devils twist across the ground',
+    apply: (w) => {
+      w.place({ body: 'mars', lat: -5, localHour: 13.5, altitude: 260, heading: 90, pitch: 1, throttle: 0.05 });
+      aimAt(w, (body, local, t) => devilSites(body.radius, local, t).find((c) => c.d > 900)?.dir ?? null, null);
+    },
+  },
+  'titan-rain': {
+    description: 'Fat slow drops of methane rain falling through the orange haze of Titan',
+    apply: (w) => {
+      const spot = stormSpot(w, 'titan', 'methaneRain', [-40, 40]);
+      w.place({ body: 'titan', ...spot, altitude: 700, heading: 60, pitch: 0, throttle: 0.05 });
     },
   },
   'earth-storm': {
@@ -495,6 +534,60 @@ function faceSpot(w: World, bodyId: string, radii: number): void {
   const sun = w.universe.root.position.clone().sub(body.position).normalize();
   const side = new Vector3().crossVectors(dir, sun);
   w.placeInSpace(bodyId, body.radius * radii, dir.addScaledVector(sun, 0.15).addScaledVector(side, 0.5));
+}
+
+/**
+ * Turns the ship toward a surface point of the body it is near (body fixed unit direction from
+ * `pick`), looking `lift` meters above the ground there. Does nothing if `pick` finds none.
+ */
+function aimAt(w: World, pick: (body: Body, local: Vector3, t: number) => Vector3 | null, lift: number | null): void {
+  const ship = w.ship;
+  const body = ship.frame.body;
+  const rot = ship.frame.rotating;
+  const here = ship.pos.clone().normalize();
+  const local = rot ? here : body.worldToLocalDir(here, new Vector3());
+  const dir = pick(body, local, w.clock.time);
+  if (!dir) return;
+  // `null`: look level, at the ship's own height (ground height varies a lot on rough worlds).
+  const target = dir.clone().multiplyScalar(lift === null ? ship.pos.length() - 120 : body.radius + lift);
+  if (!rot) target.applyQuaternion(body.rotation);
+  const fwd = target.sub(ship.pos).normalize();
+  const m = new Matrix4().lookAt(new Vector3(), fwd, ship.pos.clone().normalize());
+  ship.quat.setFromRotationMatrix(m);
+}
+
+/**
+ * Camera `radii` out, `offsetDeg` away from lat/lon toward the sun side, so the spot sits near the
+ * limb and tall things on it stand against the sky. Picks the time when the spot faces the sun.
+ */
+function limbView(w: World, bodyId: string, latDeg: number, lonDeg: number, radii: number, offsetDeg: number, lift = 0.1): void {
+  const body = w.universe.get(bodyId);
+  const local = new Vector3();
+  latLonToDir((latDeg * Math.PI) / 180, (lonDeg * Math.PI) / 180, local);
+  const locked = body.def.physical.tidallyLocked && body.orbit;
+  const period = Math.abs(locked ? body.orbit!.period : body.def.physical.rotationPeriod);
+  let best = 0;
+  let bestScore = -2;
+  for (let t = 0; t < period; t += period / 240) {
+    w.universe.update(t);
+    const score = local.clone().applyQuaternion(body.rotation).dot(w.universe.root.position.clone().sub(body.position).normalize());
+    if (score > bestScore) {
+      bestScore = score;
+      best = t;
+    }
+  }
+  w.clock.time = best;
+  w.universe.update(best);
+  const dir = local.clone().applyQuaternion(body.rotation);
+  const sun = w.universe.root.position.clone().sub(body.position).normalize();
+  // Sideways from the spot, perpendicular to it, leaning away from the sun's direction a little.
+  const side = new Vector3().crossVectors(dir, sun);
+  if (side.lengthSq() < 1e-6) side.set(0, 1, 0).cross(dir);
+  side.normalize();
+  const a = (offsetDeg * Math.PI) / 180;
+  const view = dir.clone().multiplyScalar(Math.cos(a)).addScaledVector(side, Math.sin(a)).addScaledVector(sun, 0.25).normalize();
+  w.placeInSpace(bodyId, body.radius * radii, view);
+  aimAt(w, () => local, body.radius * lift);
 }
 
 /** Camera `radii` out above lat/lon (degrees), at the time of day when that spot faces the sun. */

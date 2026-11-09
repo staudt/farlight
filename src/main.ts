@@ -11,7 +11,7 @@ import { createGasGiantView } from './render/bodies';
 import { GameRenderer } from './render/renderer';
 import { getShake, installShipFx } from './render/fx';
 import { createHeightSamplerForBody, createPlanetView, loadTerrainData, terrainPending } from './terrain';
-import { auroraSettings, installWeather, lightningSettings, rainSettings, snowSettings } from './render/weather';
+import { installWeather, weatherSettings } from './render/weather';
 import { DEFAULT_SCENARIO, SCENARIOS } from './scenarios';
 import { World } from './sim/world';
 import { DebugPanel } from './ui/debugPanel';
@@ -100,11 +100,16 @@ atmoFolder.add(post.clouds, 'sunIntensity', 0, 5).name('cloud light');
 const audioFolder = debug.folder('Audio');
 for (const k of Object.keys(audio.tuning) as (keyof typeof audio.tuning)[]) audioFolder.add(audio.tuning, k, 0, 2);
 const wxFolder = debug.folder('Weather');
-for (const [name, o] of Object.entries({ rain: rainSettings, snow: snowSettings, lightning: lightningSettings, aurora: auroraSettings })) {
+for (const [name, o] of Object.entries(weatherSettings)) {
   const f = wxFolder.addFolder(name);
   f.add(o, 'enabled');
   f.add(o, 'intensity', 0, 3);
   if ('force' in o) f.add(o, 'force');
+  for (const [k, v] of Object.entries(o)) {
+    if (k === 'enabled' || k === 'intensity' || k === 'force') continue;
+    if (typeof v === 'boolean') f.add(o, k as never);
+    else if (typeof v === 'number') f.add(o, k as never, 0, 3);
+  }
 }
 wxFolder.add({ strike: () => weather.lightning.strikeNow() }, 'strike');
 

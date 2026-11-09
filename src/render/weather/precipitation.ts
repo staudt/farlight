@@ -7,12 +7,12 @@ import {
   Vector3,
 } from 'three';
 import { mulberry32 } from '../../core/rng';
-import type { WeatherDef } from '../../data/types';
+import type { RGB, WeatherDef } from '../../data/types';
 import { frameToWorldDir } from '../../sim/frames';
 import type { Body } from '../../sim/universe';
 import type { FrameContext } from '../context';
 import type { PostStack } from '../post';
-import { rainSettings, snowSettings } from './settings';
+import { acidRainSettings, methaneRainSettings, rainSettings, snowSettings } from './settings';
 import { smooth, weatherAmount } from './weatherMap';
 
 const SIZE = 160;
@@ -20,6 +20,7 @@ const RAIN_COUNT = 16000;
 const SNOW_COUNT = 16000;
 const RAIN_FALL = 22;
 const SNOW_FALL = 2.6;
+const METHANE_FALL = 4.5;
 
 const COMMON_VERT_HEAD = /* glsl */ `
   #include <common>
@@ -28,8 +29,8 @@ const COMMON_VERT_HEAD = /* glsl */ `
   uniform float uSize;
 `;
 
-function makeRain(): { object: LineSegments; material: ShaderMaterial } {
-  const rnd = mulberry32(5);
+function makeRain(virga: boolean, seed = 5): { object: LineSegments; material: ShaderMaterial } {
+  const rnd = mulberry32(seed);
   const pos = new Float32Array(RAIN_COUNT * 2 * 3);
   const end = new Float32Array(RAIN_COUNT * 2);
   const rand = new Float32Array(RAIN_COUNT * 2);
@@ -58,12 +59,21 @@ function makeRain(): { object: LineSegments; material: ShaderMaterial } {
       uStreak: { value: new Vector3() },
       uAmount: { value: 0 },
       uColor: { value: new Vector3(0.3, 0.38, 0.52) },
+      uUp: { value: new Vector3(0, 1, 0) },
+      uAlt: { value: 0 },
+      uVirga: { value: virga ? 1 : 0 },
+      uBoost: { value: virga ? 2.2 : 1 },
+      // HDR gain: the atmosphere pass multiplies by transmittance, thick haze would bury plain colours.
+      uGain: { value: virga ? 3.2 : 1 },
+      uVirgaLo: { value: 0 },
+      uVirgaHi: { value: 1 },
     },
     vertexShader: /* glsl */ `${COMMON_VERT_HEAD}
       attribute float aEnd;
       attribute float aRand;
       uniform vec3 uStreak;
-      uniform float uAmount;
+      uniform vec3 uUp;
+      uniform float uAmount, uAlt, uVirga, uVirgaLo, uVirgaHi, uBoost;
       varying float vAlpha;
       void main() {
         vec3 p = mod(position - uAnchor, uSize) - 0.5 * uSize;
@@ -73,7 +83,10 @@ function makeRain(): { object: LineSegments; material: ShaderMaterial } {
         float vis = (1.0 - smoothstep(0.6, 1.0, edge)) * smoothstep(0.5, 3.0, dist);
         // Only some drops are drawn at low intensity.
         vis *= step(aRand, pow(uAmount, 0.45));
-        vAlpha = vis * (0.9 - 0.8 * aEnd) * (0.6 + 0.4 * aRand);
+        // Virga: the drops evaporate on the way down, so the ground stays dry.
+        float h = uAlt + dot(p, uUp);
+        vis *= mix(1.0, smoothstep(uVirgaLo, uVirgaHi, h), uVirga);
+        vAlpha = min(1.0, vis * (0.9 - 0.8 * aEnd) * (0.6 + 0.4 * aRand) * uBoost);
         vec4 mv = modelViewMatrix * vec4(p + aEnd * uStreak * (0.7 + 0.6 * aRand), 1.0);
         gl_Position = projectionMatrix * mv;
         #include <logdepthbuf_vertex>
@@ -82,11 +95,12 @@ function makeRain(): { object: LineSegments; material: ShaderMaterial } {
       #include <common>
       #include <logdepthbuf_pars_fragment>
       uniform vec3 uColor;
+      uniform float uGain;
       varying float vAlpha;
       void main() {
         #include <logdepthbuf_fragment>
         if (vAlpha <= 0.002) discard;
-        gl_FragColor = vec4(uColor, vAlpha);
+        gl_FragColor = vec4(uColor * uGain, vAlpha);
       }`,
     transparent: true,
     depthWrite: false,
@@ -97,8 +111,8 @@ function makeRain(): { object: LineSegments; material: ShaderMaterial } {
   return { object, material };
 }
 
-function makeSnow(): { object: Points; material: ShaderMaterial } {
-  const rnd = mulberry32(9);
+function makeSnow(round: boolean, seed = 9): { object: Points; material: ShaderMaterial } {
+  const rnd = mulberry32(seed);
   const pos = new Float32Array(SNOW_COUNT * 3);
   const rand = new Float32Array(SNOW_COUNT);
   for (let i = 0; i < SNOW_COUNT; i++) {
@@ -119,17 +133,20 @@ function makeSnow(): { object: Points; material: ShaderMaterial } {
       uPx: { value: 600 },
       uFlake: { value: 0.2 },
       uColor: { value: new Vector3(1, 1, 1) },
+      uSwirl: { value: round ? 0.12 : 1 },
+      uRound: { value: round ? 1 : 0 },
+      uGain: { value: round ? 1.3 : 1 },
     },
     vertexShader: /* glsl */ `${COMMON_VERT_HEAD}
       attribute float aRand;
-      uniform float uAmount, uTime, uPx, uFlake;
+      uniform float uAmount, uTime, uPx, uFlake, uSwirl;
       varying float vAlpha;
       void main() {
         vec3 p = mod(position - uAnchor, uSize) - 0.5 * uSize;
         float edge = max(max(abs(p.x), abs(p.y)), abs(p.z)) / (0.5 * uSize);
         float t = uTime * (0.5 + 0.5 * aRand);
         // Gentle swirl: each flake wanders on its own small loop.
-        p += vec3(sin(t + aRand * 40.0) * 1.6, cos(t * 0.8 + aRand * 17.0) * 0.6, cos(t * 0.9 + aRand * 29.0) * 1.6);
+        p += uSwirl * vec3(sin(t + aRand * 40.0) * 1.6, cos(t * 0.8 + aRand * 17.0) * 0.6, cos(t * 0.9 + aRand * 29.0) * 1.6);
         float dist = length(p);
         float vis = (1.0 - smoothstep(0.6, 1.0, edge)) * smoothstep(1.0, 4.0, dist) * step(aRand, pow(uAmount, 0.45));
         vAlpha = vis * (0.7 + 0.3 * fract(aRand * 7.31));
@@ -143,13 +160,25 @@ function makeSnow(): { object: Points; material: ShaderMaterial } {
       #include <common>
       #include <logdepthbuf_pars_fragment>
       uniform vec3 uColor;
+      uniform float uRound, uGain;
       varying float vAlpha;
       void main() {
         #include <logdepthbuf_fragment>
         if (vAlpha <= 0.002) discard;
-        float d = length(gl_PointCoord - 0.5) * 2.0;
+        vec2 q = (gl_PointCoord - 0.5) * 2.0;
+        float d = length(q);
         float soft = 1.0 - smoothstep(0.2, 1.0, d);
-        gl_FragColor = vec4(uColor, vAlpha * soft);
+        vec3 col = uColor;
+        if (uRound > 0.5) {
+          // Fat liquid drop: crisp edge, darker rim, bright glint up and to the left.
+          soft = 1.0 - smoothstep(0.78, 1.0, d);
+          float glint = smoothstep(0.55, 0.0, length(q - vec2(-0.3, 0.3)));
+          float rim = smoothstep(0.55, 0.95, d);
+          col = mix(uColor * 1.25, uColor * 0.3, rim) + vec3(1.0, 0.92, 0.75) * glint;
+          if (soft < 0.4) discard;
+          soft = 0.95;
+        }
+        gl_FragColor = vec4(col * uGain, vAlpha * soft);
       }`,
     transparent: true,
     depthWrite: false,
@@ -160,27 +189,42 @@ function makeSnow(): { object: Points; material: ShaderMaterial } {
   return { object, material };
 }
 
-/** Rain and snow in a 300 m cube wrapping around the camera. */
+interface Layer {
+  object: LineSegments | Points;
+  material: ShaderMaterial;
+  anchor: Vector3;
+  amount: number;
+  fall: number;
+}
+
+/** Rain, acid rain, methane rain and snow in a cube wrapping around the camera. */
 export class Precipitation {
-  readonly rain = makeRain();
-  readonly snow = makeSnow();
-  private rainAmount = 0;
-  private snowAmount = 0;
+  readonly rain = makeRain(false);
+  readonly snow = makeSnow(false);
+  readonly acid = makeRain(true, 6);
+  readonly methane = makeSnow(true, 10);
+  /** Strength of acid rain at the camera, 0..1 (for the lens droplets). */
+  acidAmount = 0;
+  private layers: Layer[];
   private primed = false;
-  private rainAnchor = new Vector3();
-  private snowAnchor = new Vector3();
   private vel = new Vector3();
   private up = new Vector3();
   private down = new Vector3();
   private dirLocal = new Vector3();
   private sunDir = new Vector3();
   private rel = new Vector3();
+  private target = [0, 0, 0, 0];
+  private acidColor = new Vector3(0.72, 0.82, 0.2);
+  private methaneColor = new Vector3(1, 0.62, 0.22);
 
   constructor(private post: PostStack) {
-    this.rain.material.uniforms.uAnchor!.value = this.rainAnchor;
-    this.snow.material.uniforms.uAnchor!.value = this.snowAnchor;
-    this.rain.object.visible = false;
-    this.snow.object.visible = false;
+    const mk = (l: { object: LineSegments | Points; material: ShaderMaterial }, fall: number): Layer => {
+      const anchor = new Vector3();
+      l.material.uniforms.uAnchor!.value = anchor;
+      l.object.visible = false;
+      return { ...l, anchor, amount: 0, fall };
+    };
+    this.layers = [mk(this.rain, RAIN_FALL), mk(this.snow, SNOW_FALL), mk(this.acid, RAIN_FALL * 0.8), mk(this.methane, METHANE_FALL)];
   }
 
   update(ctx: FrameContext): void {
@@ -196,31 +240,35 @@ export class Precipitation {
       }
     }
 
-    let rainT = 0;
-    let snowT = 0;
+    const t = this.target;
+    t.fill(0);
     let light = 1;
+    let alt = 0;
+    let base = 1;
     if (body) {
       const atm = body.def.atmosphere!;
       this.up.copy(cam).sub(body.position);
-      const alt = this.up.length() - body.radius;
+      alt = this.up.length() - body.radius;
       this.up.normalize();
       body.worldToLocalDir(this.up, this.dirLocal);
-      const base = (atm.clouds?.altitude ?? 0.3) * body.atmosphereHeight;
+      base = (atm.clouds?.altitude ?? 0.3) * body.atmosphereHeight;
       const altFade = 1 - smooth(base * 0.75, base, alt);
       const time = ctx.simTime;
-      const find = (kind: WeatherDef['kind']): WeatherDef | undefined => atm.weather!.find((d) => d.kind === kind);
-      const rd = find('rain');
-      const sd = find('snow');
-      if (rd && rainSettings.enabled) {
-        const a = rainSettings.force ? 1 : weatherAmount(rd, this.dirLocal, time, body);
-        rainT = Math.min(1, a * rainSettings.intensity) * altFade;
-        const c = rd.color;
-        if (c) (this.rain.material.uniforms.uColor!.value as Vector3).set(c[0], c[1], c[2]);
-      }
-      if (sd && snowSettings.enabled) {
-        const a = snowSettings.force ? 1 : weatherAmount(sd, this.dirLocal, time, body);
-        snowT = Math.min(1, a * snowSettings.intensity) * altFade;
-      }
+      const amount = (kind: WeatherDef['kind'], s: { enabled: boolean; intensity: number; force?: boolean }): number => {
+        const d = atm.weather!.find((x) => x.kind === kind);
+        if (!d || !s.enabled) return 0;
+        const a = s.force ? 1 : weatherAmount(d, this.dirLocal, time, body!);
+        return Math.min(1, a * s.intensity) * altFade;
+      };
+      t[0] = amount('rain', rainSettings);
+      t[1] = amount('snow', snowSettings);
+      t[2] = amount('acidRain', acidRainSettings);
+      t[3] = amount('methaneRain', methaneRainSettings);
+      const col = (kind: WeatherDef['kind']): RGB | undefined => atm.weather!.find((x) => x.kind === kind)?.color;
+      const ac = col('acidRain');
+      if (ac) this.acidColor.set(ac[0], ac[1], ac[2]);
+      const mc = col('methaneRain');
+      if (mc) this.methaneColor.set(mc[0], mc[1], mc[2]);
       // Daylight brightness: dim at night, dimmer under overcast.
       this.sunDir.copy(w.universe.root.position).sub(body.position).normalize();
       light = 0.1 + 0.9 * smooth(-0.15, 0.35, this.up.dot(this.sunDir));
@@ -228,54 +276,65 @@ export class Precipitation {
     }
 
     // Weather comes and goes smoothly.
-    if (!this.primed) {
-      this.rainAmount = rainT;
-      this.snowAmount = snowT;
-      this.primed = true;
-    } else {
-      const k = 1 - Math.exp(-ctx.realDt * 0.7);
-      this.rainAmount += (rainT - this.rainAmount) * k;
-      this.snowAmount += (snowT - this.snowAmount) * k;
+    const k = this.primed ? 1 - Math.exp(-ctx.realDt * 0.7) : 1;
+    this.primed = true;
+    let any = false;
+    for (let i = 0; i < this.layers.length; i++) {
+      const l = this.layers[i]!;
+      l.amount += (t[i]! - l.amount) * k;
+      l.object.visible = l.amount > 0.01;
+      any ||= l.object.visible;
     }
-
-    const showRain = this.rainAmount > 0.01;
-    const showSnow = this.snowAmount > 0.01;
-    this.rain.object.visible = showRain;
-    this.snow.object.visible = showSnow;
-    if (!showRain && !showSnow) return;
+    this.acidAmount = this.layers[2]!.amount;
+    if (!any) return;
 
     // Ship velocity over the ground in world axes. Particles are fixed in the air.
     frameToWorldDir(w.ship.frame, w.ship.vel, this.vel);
     this.down.copy(this.up).negate();
     const flash = 1 + this.post.clouds.flash * 3;
     const dt = ctx.realDt;
+    const px = (ctx.viewportHeight * ctx.renderer.getPixelRatio()) / (2 * Math.tan((ctx.camera.fov * Math.PI) / 360));
 
-    if (showRain) {
-      const u = this.rain.material.uniforms;
-      this.rainAnchor.addScaledVector(this.vel, dt).addScaledVector(this.down, -RAIN_FALL * dt);
-      wrap(this.rainAnchor);
-      // Drops move through the view at (fall - ship velocity); streaks trail behind that.
-      this.rel.copy(this.down).multiplyScalar(RAIN_FALL).sub(this.vel);
-      const sp = this.rel.length();
-      const len = Math.min(40, Math.max(1.5, sp * 0.06 * rainSettings.streakLength));
-      (u.uStreak!.value as Vector3).copy(this.rel).multiplyScalar(-len / Math.max(sp, 1e-3));
-      u.uAmount!.value = this.rainAmount;
-      const c = u.uColor!.value as Vector3;
-      const s = light * flash;
-      // Colour carries the lighting; alpha stays put.
-      c.set(0.3 * s, 0.38 * s, 0.52 * s);
-      c.multiplyScalar(1 / Math.max(1, Math.max(c.x, c.y, c.z)));
-    }
-    if (showSnow) {
-      const u = this.snow.material.uniforms;
-      this.snowAnchor.addScaledVector(this.vel, dt).addScaledVector(this.down, -SNOW_FALL * dt);
-      wrap(this.snowAnchor);
-      u.uAmount!.value = this.snowAmount;
-      u.uTime!.value = ctx.realTime;
-      u.uPx!.value = (ctx.viewportHeight * ctx.renderer.getPixelRatio()) / (2 * Math.tan((ctx.camera.fov * Math.PI) / 360));
-      u.uFlake!.value = 0.16 * snowSettings.flakeSize;
-      const s = Math.min(1.4, light * flash);
-      (u.uColor!.value as Vector3).set(s, s * 1.0, s * 1.03);
+    for (let i = 0; i < this.layers.length; i++) {
+      const l = this.layers[i]!;
+      if (!l.object.visible) continue;
+      const u = l.material.uniforms;
+      l.anchor.addScaledVector(this.vel, dt).addScaledVector(this.down, -l.fall * dt);
+      wrap(l.anchor);
+      u.uAmount!.value = i === 2 ? l.amount * 0.6 : i === 3 ? l.amount * 0.2 : l.amount;
+      if (i === 0 || i === 2) {
+        // Drops move through the view at (fall - ship velocity); streaks trail behind that.
+        this.rel.copy(this.down).multiplyScalar(l.fall).sub(this.vel);
+        const sp = this.rel.length();
+        const len = Math.min(40, Math.max(1.5, sp * 0.06 * rainSettings.streakLength));
+        (u.uStreak!.value as Vector3).copy(this.rel).multiplyScalar(-len / Math.max(sp, 1e-3));
+        const c = u.uColor!.value as Vector3;
+        const s = light * flash;
+        if (i === 0) {
+          // Colour carries the lighting; alpha stays put.
+          c.set(0.3 * s, 0.38 * s, 0.52 * s);
+        } else {
+          // Sickly sulphur drops, lit by the orange gloom.
+          c.copy(this.acidColor).multiplyScalar(Math.max(0.35, s) * 1.15);
+          (u.uUp!.value as Vector3).copy(this.up);
+          u.uAlt!.value = alt;
+          u.uVirgaLo!.value = base * 0.02;
+          u.uVirgaHi!.value = base * 0.2;
+        }
+        c.multiplyScalar(1 / Math.max(1, Math.max(c.x, c.y, c.z)));
+      } else {
+        u.uTime!.value = ctx.realTime;
+        u.uPx!.value = px;
+        if (i === 1) {
+          u.uFlake!.value = 0.16 * snowSettings.flakeSize;
+          const s = Math.min(1.4, light * flash);
+          (u.uColor!.value as Vector3).set(s, s * 1.0, s * 1.03);
+        } else {
+          u.uFlake!.value = 0.55 * methaneRainSettings.dropSize;
+          const s = Math.min(1.2, Math.max(0.3, light * flash) * 1.1);
+          (u.uColor!.value as Vector3).copy(this.methaneColor).multiplyScalar(s);
+        }
+      }
     }
   }
 }

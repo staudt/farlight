@@ -33,6 +33,12 @@ export interface BodyDef {
   orbit?: OrbitDef;
   visual: VisualDef;
   atmosphere?: AtmosphereDef;
+  /**
+   * Surface and sky effects that do not need an atmosphere (heat shimmer, scorching sun,
+   * plumes, geysers). Effects of an atmosphere live in `atmosphere.weather`; both are read
+   * through `effectsOf`.
+   */
+  effects?: WeatherDef[];
   terrain?: TerrainDef;
   gas?: GasDef;
   rings?: RingDef;
@@ -118,7 +124,18 @@ export interface CloudDef {
   speed: number;
 }
 
-export type WeatherKind = 'rain' | 'snow' | 'dust' | 'lightning';
+export type WeatherKind =
+  | 'rain'
+  | 'snow'
+  | 'dust'
+  | 'lightning'
+  | 'acidRain'
+  | 'methaneRain'
+  | 'heatShimmer'
+  | 'scorching'
+  | 'volcanicPlume'
+  | 'geyser'
+  | 'dustDevil';
 
 export interface WeatherDef {
   kind: WeatherKind;
@@ -127,6 +144,10 @@ export interface WeatherDef {
   color?: RGB;
   /** Absolute latitude band in radians where this weather happens. */
   latitudeBand?: readonly [number, number];
+  /** Plumes, geysers and devils: height as a fraction of the body radius. */
+  size?: number;
+  /** Geysers: how many seeded vents. */
+  count?: number;
 }
 
 export interface AuroraDef {
@@ -273,5 +294,18 @@ export interface BodyInfo {
   atmosphere: string;
   temperature: string;
   features: string[];
+  /** Short danger labels, no dashes: 'Acid rain', 'Searing heat'. */
+  hazards?: string[];
   summary: string;
+}
+
+/** Every weather and surface effect a body has, atmosphere weather first. */
+export function effectsOf(def: BodyDef): readonly WeatherDef[] {
+  const w = def.atmosphere?.weather;
+  if (!w) return def.effects ?? [];
+  return def.effects ? [...w, ...def.effects] : w;
+}
+
+export function findEffect(def: BodyDef, kind: WeatherKind): WeatherDef | undefined {
+  return def.atmosphere?.weather?.find((d) => d.kind === kind) ?? def.effects?.find((d) => d.kind === kind);
 }

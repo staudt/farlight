@@ -31,3 +31,66 @@ export const auroraSettings = {
   /** Curtain height as a fraction of the body radius. */
   height: 0.16,
 };
+
+export const acidRainSettings = {
+  enabled: true,
+  intensity: 1,
+  force: false,
+  /** Droplets beading on the camera while inside the rain. */
+  lensDrops: true,
+};
+
+export const methaneRainSettings = {
+  enabled: true,
+  intensity: 1,
+  force: false,
+  dropSize: 1,
+};
+
+export const heatShimmerSettings = {
+  enabled: true,
+  intensity: 1,
+  /** Heat haze strength at the horizon over hot ground. */
+  haze: 1,
+  /** Draw the effect even on a cold, shaded or distant body (debug). */
+  force: false,
+};
+
+export const scorchSettings = {
+  enabled: true,
+  intensity: 1,
+};
+
+export const plumeSettings = {
+  enabled: true,
+  intensity: 1,
+  /** Scales the plume height. */
+  height: 1,
+};
+
+export const geyserSettings = {
+  enabled: true,
+  intensity: 1,
+  height: 1,
+};
+
+export const dustDevilSettings = {
+  enabled: true,
+  intensity: 1,
+  height: 1,
+};
+
+/** Everything the F3 panel lists under Weather. */
+export const weatherSettings = {
+  rain: rainSettings,
+  snow: snowSettings,
+  lightning: lightningSettings,
+  aurora: auroraSettings,
+  acidRain: acidRainSettings,
+  methaneRain: methaneRainSettings,
+  heatShimmer: heatShimmerSettings,
+  scorching: scorchSettings,
+  volcanicPlume: plumeSettings,
+  geyser: geyserSettings,
+  dustDevil: dustDevilSettings,
+};
