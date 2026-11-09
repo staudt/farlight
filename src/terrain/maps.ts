@@ -38,6 +38,22 @@ export interface MapUrls {
 }
 
 /** Loads all maps of a terrain def. `base` resolves relative urls (the document base). */
+/** Fetch with a few retries and backoff: phones on flaky networks, servers mid deploy. */
+async function fetchWithRetry(url: URL, key: string, attempts = 4): Promise<ArrayBuffer> {
+  let last: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await fetch(url);
+      if (r.ok) return await r.arrayBuffer();
+      last = new Error(`terrain map ${key}: HTTP ${r.status}`);
+    } catch (e) {
+      last = e;
+    }
+    await new Promise((res) => setTimeout(res, 400 * 2 ** i));
+  }
+  throw last;
+}
+
 export async function loadTerrainMaps(maps: MapUrls | undefined, base: string): Promise<void> {
   if (!maps) return;
   const keys = [maps.land, maps.mountains, maps.deserts, maps.ice].filter((k): k is string => !!k);
@@ -46,12 +62,9 @@ export async function loadTerrainMaps(maps: MapUrls | undefined, base: string): 
       if (cache.has(key)) return Promise.resolve();
       let p = pending.get(key);
       if (!p) {
-        p = fetch(new URL(key, base))
-          .then((r) => {
-            if (!r.ok) throw new Error(`terrain map ${key}: HTTP ${r.status}`);
-            return r.arrayBuffer();
-          })
-          .then((buf) => registerMap(key, buf));
+        p = fetchWithRetry(new URL(key, base), key).then((buf) => registerMap(key, buf));
+        // A failed load must not poison the cache: the next call retries from scratch.
+        p.catch(() => pending.delete(key));
         pending.set(key, p);
       }
       return p.then(() => undefined);
