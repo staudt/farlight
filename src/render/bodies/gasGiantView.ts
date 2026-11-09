@@ -16,6 +16,7 @@ import {
 import { mulberry32 } from '../../core/rng';
 import type { Body } from '../../sim/universe';
 import { type BodyView, type FrameContext, apparentSizeBoost, placeRelative } from '../context';
+import { quality } from '../quality';
 import { RING_GLSL, RingMesh, makeRingUniforms } from './ringView';
 
 const MAX_BANDS = 8;
@@ -32,6 +33,7 @@ const PUFF_RANGE = 22000;
 const GAS_GLSL = /* glsl */ `
 uniform vec3 uBands[${MAX_BANDS}];
 uniform float uBandCount, uBandFreq, uTurb, uSeed, uPhase, uStormN, uHasRing;
+uniform int uGasOct; // quality: noise octaves, <= 4
 uniform vec4 uStorm[${MAX_STORMS}];
 uniform vec3 uStormCol[${MAX_STORMS}];
 ${RING_GLSL}
@@ -51,8 +53,8 @@ float gNoise(vec3 x) {
 }
 float gFbm(vec3 p) {
   float a = 0.5, s = 0.0;
-  for (int i = 0; i < 4; i++) { s += a * gNoise(p); p = p * 2.03 + 11.7; a *= 0.5; }
-  return s / 0.9375;
+  for (int i = 0; i < 4; i++) { if (i >= uGasOct) break; s += a * gNoise(p); p = p * 2.03 + 11.7; a *= 0.5; }
+  return s / (1.0 - a * 2.0); // a has halved once per octave: normalizes any octave count
 }
 vec3 palette(float i) {
   int n = int(uBandCount);
@@ -295,6 +297,7 @@ type SharedUniforms = {
   uBandFreq: U<number>;
   uTurb: U<number>;
   uSeed: U<number>;
+  uGasOct: U<number>;
   uStormN: U<number>;
   uStorm: U<Vector4[]>;
   uStormCol: U<Vector3[]>;
@@ -377,6 +380,7 @@ export class GasGiantView implements BodyView {
       uBandFreq: { value: gas.bandFrequency },
       uTurb: { value: gas.turbulence },
       uSeed: { value: (body.def.seed % 53) * 1.37 },
+      uGasOct: { value: 4 },
       uStormN: { value: storms.length },
       uStorm: { value: stormVec },
       uStormCol: { value: stormCol },
@@ -485,6 +489,7 @@ export class GasGiantView implements BodyView {
     const fov = (cam.fov * Math.PI) / 180;
     sh.uPixAng.value = (2 * Math.tan(fov / 2)) / (ctx.viewportHeight * ctx.renderer.getPixelRatio());
     sh.uPhase.value = (ctx.simTime / FLOW_PERIOD) % 1;
+    sh.uGasOct.value = quality.settings.gasOctaves;
 
     const sun = ctx.world.universe.root;
     _sunW.copy(sun.position).sub(b.position).normalize();

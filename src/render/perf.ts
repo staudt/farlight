@@ -11,7 +11,11 @@ export class PerfStats {
   cpuMs = 0;
   /** 0 when timer queries are unavailable. */
   gpuMs = 0;
+  /** Lowest GPU time over the last 90 samples: less sensitive to other processes on the GPU. */
+  gpuBest = 0;
   readonly gpuSupported: boolean;
+  private readonly ring = new Float32Array(90);
+  private ringN = 0;
   private readonly gl: WebGL2RenderingContext;
   private readonly ext: { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null;
   private pending: WebGLQuery | null = null;
@@ -37,6 +41,10 @@ export class PerfStats {
         if (!disjoint) {
           const ms = (gl.getQueryParameter(this.pending, gl.QUERY_RESULT) as number) / 1e6;
           this.gpuMs = this.gpuMs === 0 ? ms : this.gpuMs * 0.9 + ms * 0.1;
+          this.ring[this.ringN++ % this.ring.length] = ms;
+          let best = Infinity;
+          for (let i = 0, n = Math.min(this.ringN, this.ring.length); i < n; i++) best = Math.min(best, this.ring[i]!);
+          this.gpuBest = best;
         }
         gl.deleteQuery(this.pending);
         this.pending = null;

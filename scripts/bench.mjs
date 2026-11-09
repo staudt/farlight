@@ -65,17 +65,16 @@ for (const name of list) {
       await page.waitForTimeout(secs * 1000);
       const f1 = await page.evaluate(() => window.__game.getState().frames);
       const fps = (f1 - f0) / ((Date.now() - t0) / 1000);
+      const gb = await page.evaluate(() => window.__game.post?.perf?.gpuBest ?? 0);
       if (fps > best[vi].fps) {
-        best[vi] = await page.evaluate((f) => {
-          const p = window.__game.post?.perf;
-          return { fps: f, gpu: p?.gpuMs ?? 0, calls: p?.calls ?? 0 };
-        }, fps);
+        best[vi].fps = fps;
         await page.screenshot({ path: `artifacts/bench/${v.name}-${name}.png` });
       }
+      if (gb > 0 && (best[vi].gpu === 0 || gb < best[vi].gpu)) best[vi].gpu = gb;
       await page.close();
     }
   }
-  console.log([name, ...best.map((b) => `${b.fps.toFixed(1)}${b.gpu ? ` (gpu ${b.gpu.toFixed(1)}ms)` : ''}`)].join('\t'));
+  console.log([name, ...best.map((b) => `${b.fps.toFixed(1)}${b.gpu ? ` (gpu ${b.gpu.toFixed(1)})` : ''}`)].join('\t'));
 }
 await browser.close();
 for (const s of servers.values()) s.proc.kill('SIGTERM');

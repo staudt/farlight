@@ -91,6 +91,7 @@ export class DebugPanel {
       p.add(s, 'bloom').onChange(apply);
       p.add(s, 'bloomLevels', 1, 8, 1).onChange(apply);
       p.add(s, 'splitFactor', 0.4, 1.5).onChange(apply);
+      p.add(s, 'gasOctaves', 1, 4, 1).onChange(apply);
     }
     const perf = this.gui.addFolder('Perf').close();
     for (const k of Object.keys(this.perfReadout) as (keyof typeof this.perfReadout)[]) perf.add(this.perfReadout, k).listen().disable();
