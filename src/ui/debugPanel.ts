@@ -61,6 +61,7 @@ export class DebugPanel {
     touch.add(config.touch, 'deadzone', 0, 0.4);
     touch.add(config.touch, 'spaceRoll', 0, 1);
     touch.add(config.touch, 'invertPitch');
+    touch.add(config.touch, 'cardSeconds', 2, 30);
     touch.add(config.touch, 'lookScale', 0.2, 4);
     touch.add(config.touch, 'tiltRange', 8, 45);
     touch.add(config.touch, 'tiltDeadzone', 0, 0.4);

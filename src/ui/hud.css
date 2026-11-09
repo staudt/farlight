@@ -19,6 +19,14 @@
   box-sizing: border-box;
 }
 
+/* Above the touch layer so the time buttons stay tappable; everything else ignores pointers. */
+#hud {
+  z-index: 1;
+}
+.tbtn {
+  display: none;
+}
+
 #hud.hidden .hud-layer {
   opacity: 0;
 }
@@ -565,6 +573,47 @@ body.touch .gauges {
     left: 30%;
     top: 70px;
   }
+}
+
+/* Touch: ALT and SPD only, time buttons beside the readout */
+body.touch .speedbar,
+body.touch .lever {
+  display: none;
+}
+body.touch .timerow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+body.touch .timetext {
+  min-width: 96px;
+  text-align: center;
+  white-space: nowrap;
+}
+body.touch .tbtn {
+  display: block;
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--hud-faint);
+  background: var(--hud-panel);
+  color: var(--hud-line);
+  pointer-events: auto;
+  touch-action: none;
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+body.touch .tbtn svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+body.touch .tbtn:active {
+  background: rgba(95, 242, 255, 0.25);
 }
 
 /* Throttle lever: stays where you leave it */

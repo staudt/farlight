@@ -1,6 +1,7 @@
 import '@fontsource/rajdhani/400.css';
 import '@fontsource/rajdhani/600.css';
 import { Vector3 } from 'three';
+import { config } from '../core/config';
 import type { Input } from '../input/input';
 import type { GameRenderer } from '../render/renderer';
 import type { Body } from '../sim/universe';
@@ -62,6 +63,8 @@ export class Hud {
   private lastPhase: FlightPhase;
   private lastBody: Body;
   private cardBody: Body | null = null;
+  /** Seconds the body card still stays up. */
+  private cardTimer = 0;
   private heading = 0;
   private headingValid = false;
   private hudVisible = true;
@@ -85,7 +88,7 @@ export class Hud {
           <div class="lever"><div class="lever-pct" data-k="lpct"></div><div class="lever-track">${Array.from({ length: 11 }, (_, i) => `<i class="${i % 5 === 0 ? 'big' : ''}" style="bottom:${i * 10}%"></i>`).join('')}<div class="lever-fill" data-k="lfill"></div><div class="lever-knob" data-k="lknob"></div></div></div>
         </div>
         <div class="lookflag" data-k="look">LOOK</div>
-        <div class="timebox" data-k="time"><div class="note">WARP LIMITED</div><div><span class="hud-label">TIME </span><span class="hud-value" data-k="timev"></span></div></div>
+        <div class="timebox" data-k="time"><div class="note">WARP LIMITED</div><div class="timerow"><button type="button" class="tbtn" data-k="tdown" aria-label="Time slower"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 6l-6 6 6 6M19 6l-6 6 6 6"/></svg></button><span class="timetext"><span class="hud-label">TIME </span><span class="hud-value" data-k="timev"></span></span><button type="button" class="tbtn" data-k="tup" aria-label="Time faster"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 6l6 6-6 6M5 6l6 6-6 6"/></svg></button></div></div>
         <div class="bodycard hud-panel" data-k="card"><div class="card-name"><span class="glyph"></span><span data-k="cname"></span></div><div data-k="crows"></div></div>
         <div class="crosshair"><i class="h" style="left:-14px"></i><i class="h" style="left:6px"></i><i class="v" style="top:-14px"></i><i class="v" style="top:6px"></i><i class="ring"></i><div class="stickdot" data-k="stick"></div></div>
         <div class="target" data-k="target"><div class="box" data-k="tbox"><i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i><div class="info" data-k="tinfo"></div></div></div>
@@ -93,7 +96,7 @@ export class Hud {
         <div class="alignhint" data-k="align">HOLD F TO ALIGN</div>
         <div class="toast" data-k="toast"><div class="big" data-k="tbig"></div><div class="small" data-k="tsmall"></div></div>
         <div class="hints hud-panel" data-k="hints">
-          <b>CLICK</b> TO FLY · <b>MOUSE</b> STEER · <b>W S</b> THROTTLE · <b>A D</b> ROLL · <b>Q E</b> YAW · <b>SHIFT</b> BOOST · <b>, .</b> TIME · <b>C</b> CAMERA · <b>V</b> LOOK · <b>K</b> SNAP · <b>M</b> MAP · <b>T</b> TARGET · <b>F</b> ALIGN · <b>H</b> HIDE
+          <b>CLICK</b> TO FLY · <b>MOUSE</b> STEER · <b>W S</b> THROTTLE · <b>A D</b> ROLL · <b>Q E</b> YAW · <b>SHIFT</b> BOOST · <b>, .</b> TIME · <b>C</b> CAMERA · <b>V</b> LOOK · <b>K</b> SNAP · <b>I</b> INFO · <b>M</b> MAP · <b>T</b> TARGET · <b>F</b> ALIGN · <b>H</b> HIDE
         </div>
         <div class="clickprompt" data-k="prompt">CLICK TO FLY</div>
       </div>`;
@@ -149,17 +152,27 @@ export class Hud {
       root.classList.toggle('hidden', !this.hudVisible);
     });
     input.on('target', () => this.cycleTarget());
+    input.on('info', () => this.showCard());
+    this.showCard();
+    for (const [k, a] of [['tdown', 'warpDown'], ['tup', 'warpUp']] as const) {
+      q(k).addEventListener('click', () => input.emit(a));
+    }
     window.addEventListener('keydown', () => this.dismissHints(), { once: true });
     window.addEventListener('click', () => this.dismissHints(), { once: true });
     if (input.touchMode) {
       window.addEventListener('pointerdown', () => this.dismissHints(), { once: true });
       this.hints.innerHTML = 'LEFT THUMB STEER · RIGHT SLIDER THROTTLE · HOLD BOOST';
       this.hints.classList.add('touch');
-      this.alignHint.textContent = 'HOLD ALIGN';
+      this.alignHint.textContent = 'ALIGN IN MENU';
     }
   }
 
   private hintsDismissed = false;
+
+  /** Shows the body card for a few seconds, then it fades. */
+  showCard(): void {
+    this.cardTimer = config.touch.cardSeconds;
+  }
 
   private dismissHints(): void {
     // Keep the hint visible a little after the first input, then let it fade.
@@ -193,6 +206,7 @@ export class Hud {
     this.textTimer -= realDt;
     this.toastTimer -= realDt;
     this.limitedTimer -= realDt;
+    this.cardTimer -= realDt;
     if (this.world.warpDropped) this.limitedTimer = 2.5;
     if (this.textTimer <= 0) {
       this.textTimer = TEXT_INTERVAL;
@@ -227,6 +241,7 @@ export class Hud {
     if (body !== this.lastBody) {
       this.showToast(body.name, 'SPHERE OF INFLUENCE');
       this.lastBody = body;
+      if (body.kind !== 'star') this.showCard();
     } else if (phase !== this.lastPhase) {
       const was = this.lastPhase;
       if (phase === 'landed') this.showToast('LANDED', body.name);
@@ -386,7 +401,7 @@ export class Hud {
     // Body card
     const fb = ship.frame.body;
     const showCard = fb.kind !== 'star';
-    this.card.classList.toggle('on', showCard);
+    this.card.classList.toggle('on', showCard && this.cardTimer > 0);
     if (showCard && this.cardBody !== fb) {
       this.cardBody = fb;
       const info = fb.def.info;

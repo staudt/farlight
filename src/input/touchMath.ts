@@ -20,7 +20,7 @@ export function shapeAxis(v: number, deadzone: number): number {
 
 /**
  * Floating stick: pixel offset from the touch origin to flight axes.
- * Screen down is positive dy; dragging down pulls the nose up (flight stick), so pitch = +y.
+ * Screen down is positive dy. Default: push up = nose up (pitch = -y); invert flips it.
  * Roll follows x by `rollFactor` (use 0 in atmosphere, where the assist banks the turn).
  */
 export function stickToAxes(
@@ -37,7 +37,7 @@ export function stickToAxes(
   const y = (dy * k) / radius;
   const sx = shapeAxis(x, deadzone);
   const sy = shapeAxis(y, deadzone);
-  return { pitch: invert ? -sy : sy, yaw: sx, roll: sx * rollFactor };
+  return { pitch: invert ? sy : -sy, yaw: sx, roll: sx * rollFactor };
 }
 
 /** Knob position in px, clamped to the stick radius. */

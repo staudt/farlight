@@ -26,9 +26,9 @@ describe('touch stick math', () => {
     expect(clampKnob(10, 5, 60)).toEqual({ x: 10, y: 5 });
   });
 
-  test('drag up pitches the nose down, invert flips it', () => {
-    expect(stickToAxes(0, -60, 60, 0.08, false, 0).pitch).toBeLessThan(0);
-    expect(stickToAxes(0, -60, 60, 0.08, true, 0).pitch).toBeGreaterThan(0);
+  test('push up pitches the nose up, invert flips it', () => {
+    expect(stickToAxes(0, -60, 60, 0.08, false, 0).pitch).toBeGreaterThan(0);
+    expect(stickToAxes(0, -60, 60, 0.08, true, 0).pitch).toBeLessThan(0);
     expect(stickToAxes(60, 0, 60, 0.08, false, 0).yaw).toBeGreaterThan(0);
   });
 

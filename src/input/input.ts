@@ -15,6 +15,7 @@ export type Action =
   | 'capture'
   | 'look'
   | 'snapshot'
+  | 'info'
   | 'back';
 
 /** Seconds a throttle key must be held before it sweeps instead of stepping one notch. */
@@ -271,6 +272,7 @@ const KEY_ACTIONS: Record<string, Action> = {
   KeyP: 'photo',
   KeyV: 'look',
   KeyK: 'snapshot',
+  KeyI: 'info',
   F3: 'debug',
   KeyX: 'stop',
 };

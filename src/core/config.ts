@@ -105,7 +105,10 @@ export const config = {
     deadzone: 0.08,
     /** Roll fed from stick x in space, for coordinated turns. */
     spaceRoll: 0.4,
+    /** False: push the stick up for nose up. True: push down for nose up. */
     invertPitch: false,
+    /** Seconds the planet info card stays up after it is summoned or a body is entered. */
+    cardSeconds: 8,
     /** Free look drag, mouse pixel equivalents per touch pixel. */
     lookScale: 1.6,
     /** Tilt for full deflection, degrees. */
