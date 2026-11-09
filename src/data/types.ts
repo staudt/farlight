@@ -149,6 +149,25 @@ export interface TerrainDef {
   water?: { color: RGB; deepColor: RGB };
   polarCaps?: { latitude: number; color: RGB };
   props?: PropDef[];
+  /** Optional equirectangular data maps (see terrain/maps.ts). Any body may use them. */
+  maps?: TerrainMapsDef;
+}
+
+export interface TerrainMapsDef {
+  /** Signed distance to coast (positive inland), Uint8 with a tiny header; decoded to base height. */
+  land?: string;
+  /** Mountain range mask 0..1: raises the base and strengthens ridged layers. */
+  mountains?: string;
+  /** Desert mask 0..1: pushes biome moisture low. */
+  deserts?: string;
+  /** Ice mask 0..1 (glaciers, ice sheets): white biome. */
+  ice?: string;
+  /** Distance covered by the full Uint8 range of the land map, in km (default 600). */
+  landRangeKm?: number;
+  /** Body radius used to convert km to angles, km (default 6371). */
+  radiusKm?: number;
+  /** Overall strength of the maps over the procedural layers, 0..1 (default 1). */
+  influence?: number;
 }
 
 export type NoiseType = 'fbm' | 'ridged' | 'billow';

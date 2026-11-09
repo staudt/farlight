@@ -8,7 +8,7 @@ import { PostStack } from './render/post';
 import { createGasGiantView } from './render/bodies';
 import { GameRenderer } from './render/renderer';
 import { getShake, installShipFx } from './render/fx';
-import { createHeightSamplerForBody, createPlanetView, terrainPending } from './terrain';
+import { createHeightSamplerForBody, createPlanetView, loadTerrainData, terrainPending } from './terrain';
 import { auroraSettings, installWeather, lightningSettings, rainSettings, snowSettings } from './render/weather';
 import { DEFAULT_SCENARIO, SCENARIOS } from './scenarios';
 import { World } from './sim/world';
@@ -31,6 +31,7 @@ const world = new World(SOLAR_SYSTEM, 0);
 const scenarioName = params.get('scenario') ?? DEFAULT_SCENARIO;
 const scenario = SCENARIOS[scenarioName] ?? SCENARIOS[DEFAULT_SCENARIO]!;
 world.setHeightProvider((b) => createHeightSamplerForBody(b)); // terrain: before placement queries ground height
+await loadTerrainData(world.universe.bodies); // terrain data maps before ground height queries
 scenario.apply(world);
 
 const audio = new AudioEngine(world);

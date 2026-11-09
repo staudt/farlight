@@ -1,6 +1,7 @@
 import { Simplex3, billow, fbm, ridged, warp3 } from '../core/noise';
 import type { BodyDef, CraterDef, FeatureDef, NoiseLayer } from '../data/types';
-import type { HeightSampler } from './api';
+import { type HeightSampler, dirToLatLon } from './api';
+import { getMap, sampleMap } from './maps';
 
 /** Everything a consumer may want to know about one surface point. */
 export interface TerrainSample {
@@ -19,12 +20,14 @@ export interface TerrainSample {
   depthN: number;
   /** 0..1 low frequency moisture. */
   moisture: number;
+  /** 0..1 ice mask from the terrain maps (0 without maps). */
+  ice: number;
   /** Signed latitude, radians. */
   lat: number;
 }
 
 export function makeSample(): TerrainSample {
-  return { x: 0, y: 1, z: 0, n: 0, height: 0, water: false, depth: 0, depthN: 0, moisture: 0.5, lat: 0 };
+  return { x: 0, y: 1, z: 0, n: 0, height: 0, water: false, depth: 0, depthN: 0, moisture: 0.5, ice: 0, lat: 0 };
 }
 
 export interface TerrainSampler extends HeightSampler {
@@ -171,6 +174,50 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
   // islands; they come back on and near land. Only worlds with water do this.
   const hfFrom = 7;
 
+  // Data maps (already loaded when the sampler is created). Missing maps fall back to pure noise.
+  const mapDef = t?.maps;
+  const landMap = getMap(mapDef?.land);
+  const mtnMap = getMap(mapDef?.mountains);
+  const desertMap = getMap(mapDef?.deserts);
+  const iceMap = getMap(mapDef?.ice);
+  const rangeKm = mapDef?.landRangeKm ?? 600;
+  const influence = mapDef?.influence ?? 1;
+
+  /** Continent shape from the signed coast distance (km, positive inland). Normalized height. */
+  function coastBase(sd: number): number {
+    if (sd >= 0) {
+      return seaLevel + 0.2 * (1 - Math.exp(-sd / 70)) + 0.12 * smoothstep(0, 900, sd);
+    }
+    const d = -sd;
+    const depth = 0.045 * (1 - Math.exp(-d / 30)) + 0.55 * smoothstep(25, 170, d);
+    return seaLevel - depth;
+  }
+
+  /** Heightfield when a land map is present: the map gives continents, noise gives local relief. */
+  function mapsHeight(x: number, y: number, z: number): number {
+    const ll = dirToLatLon(x, y, z);
+    let sd = (sampleMap(landMap!, ll.lat, ll.lon) * 2 - 1) * rangeKm;
+    // A small wiggle so coasts are not pixelated close up, a few km only.
+    if (sd > -90 && sd < 90) {
+      sd += detail.noise(x * 60 + 5, y * 60, z * 60 + 9) * 12 + detail.noise(x * 230, y * 230 + 3, z * 230) * 4;
+    }
+    const base = coastBase(sd);
+    // Local relief only inland; it fades out to the coast so the SDF decides where the shore is.
+    const lf = smoothstep(-20, 70, sd);
+    const mtn = mtnMap ? sampleMap(mtnMap, ll.lat, ll.lon) : 0;
+    let sum = 0;
+    if (lf > 0) {
+      for (let i = 0; i < layers.length; i++) {
+        const L = layers[i]!;
+        let v = layerValue(L, x, y, z);
+        if (mtnMap && L.def.type === 'ridged') v *= 0.12 + 1.0 * mtn;
+        sum += v;
+      }
+      sum *= lf;
+    }
+    return base + sum + mtn * lf * 0.34;
+  }
+
   function layerValue(L: CompiledLayer, x: number, y: number, z: number): number {
     const d = L.def;
     let px = x * d.frequency + L.ox;
@@ -313,7 +360,12 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
     return sum;
   }
 
-  const rawN = (x: number, y: number, z: number): number => layersHeight(x, y, z) + cratersHeight(x, y, z) + featuresHeight(x, y, z);
+  const rawN = (x: number, y: number, z: number): number => {
+    const extra = cratersHeight(x, y, z) + featuresHeight(x, y, z);
+    if (!landMap) return layersHeight(x, y, z) + extra;
+    const m = mapsHeight(x, y, z);
+    return (influence < 1 ? layersHeight(x, y, z) * (1 - influence) + m * influence : m) + extra;
+  };
 
   return {
     radius,
@@ -335,6 +387,7 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
         out.n = out.height = out.depth = out.depthN = 0;
         out.water = false;
         out.moisture = 0.5;
+        out.ice = 0;
         return out;
       }
       const n = rawN(x, y, z);
@@ -350,7 +403,17 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
         out.depthN = 0;
         out.depth = 0;
       }
-      out.moisture = 0.5 + 0.5 * fbm(detail, x * 2.6 + 40, y * 2.6 + 40, z * 2.6 + 40, 3);
+      let moist = 0.5 + 0.5 * fbm(detail, x * 2.6 + 40, y * 2.6 + 40, z * 2.6 + 40, 3);
+      out.ice = 0;
+      if (desertMap || iceMap) {
+        const ll = dirToLatLon(x, y, z);
+        if (desertMap) {
+          const d = Math.min(1, sampleMap(desertMap, ll.lat, ll.lon) * 1.3);
+          moist = moist * (1 - d) + 0.04 * d;
+        }
+        if (iceMap) out.ice = sampleMap(iceMap, ll.lat, ll.lon);
+      }
+      out.moisture = moist;
       return out;
     },
   };

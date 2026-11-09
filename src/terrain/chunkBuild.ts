@@ -14,6 +14,8 @@ export interface ChunkRequest {
   x: number;
   y: number;
   grid: number;
+  /** Absolute base url that terrain map urls resolve against (workers have no document). */
+  mapBase?: string;
 }
 
 export interface ChunkResult {

@@ -76,6 +76,14 @@ export function biomeColor(def: TerrainDef, s: TerrainSample, slope: number, det
     }
   }
 
+  if (s.ice > 0.02 && !s.water) {
+    const e = smoothstep(0.25 - soft * 0.15, 0.75 + soft * 0.15, s.ice + jn * 0.08);
+    const c = def.polarCaps?.color ?? [0.88, 0.92, 0.96];
+    r += (c[0] - r) * e;
+    g += (c[1] - g) * e;
+    b += (c[2] - b) * e;
+  }
+
   const caps = def.polarCaps;
   if (caps) {
     const edge = smoothstep(caps.latitude - 0.02 - soft * 0.04, caps.latitude + 0.04 + soft * 0.04, absLat + jn * 0.03);
