@@ -67,6 +67,17 @@ export const SCENARIOS: Record<string, Scenario> = {
       w.placeInSpace('earth', earth.radius * 2.6);
     },
   },
+  'earth-orbit-africa': {
+    description: 'Orbit over Africa in full daylight, Europe and Arabia in view',
+    apply: (w) => faceLatLon(w, 'earth', 5, 20, 2.4),
+  },
+  'earth-himalaya': surface('Above the foothills, looking north at the Himalaya', {
+    body: 'earth', lat: 24, lon: 87, localHour: 10, altitude: 11000, heading: 0, pitch: -12, throttle: 0.4,
+  }),
+  'earth-orbit-italy': {
+    description: 'High over Italy and the Mediterranean',
+    apply: (w) => faceLatLon(w, 'earth', 42, 12.5, 1.25),
+  },
   'mars-canyon': surface('Over the rim of Valles Marineris in the Martian morning', {
     body: 'mars', lat: -8, localHour: 9, altitude: 2500, heading: 270, pitch: -4, throttle: 0.4,
   }),
@@ -226,6 +237,29 @@ function faceSpot(w: World, bodyId: string, radii: number): void {
   const sun = w.universe.root.position.clone().sub(body.position).normalize();
   const side = new Vector3().crossVectors(dir, sun);
   w.placeInSpace(bodyId, body.radius * radii, dir.addScaledVector(sun, 0.15).addScaledVector(side, 0.5));
+}
+
+/** Camera `radii` out above lat/lon (degrees), at the time of day when that spot faces the sun. */
+function faceLatLon(w: World, bodyId: string, latDeg: number, lonDeg: number, radii: number): void {
+  const body = w.universe.get(bodyId);
+  const local = new Vector3();
+  latLonToDir((latDeg * Math.PI) / 180, (lonDeg * Math.PI) / 180, local);
+  const period = body.def.physical.rotationPeriod;
+  let best = 0;
+  let bestScore = -2;
+  for (let t = 0; t < period; t += period / 240) {
+    w.universe.update(t);
+    const score = local.clone().applyQuaternion(body.rotation).dot(w.universe.root.position.clone().sub(body.position).normalize());
+    if (score > bestScore) {
+      bestScore = score;
+      best = t;
+    }
+  }
+  w.clock.time = best;
+  w.universe.update(best);
+  const dir = local.clone().applyQuaternion(body.rotation);
+  const sun = w.universe.root.position.clone().sub(body.position).normalize();
+  w.placeInSpace(bodyId, body.radius * radii, dir.addScaledVector(sun, 0.25));
 }
 
 /** Sim time when a tidally locked moon's longitude has the given local solar hour. */

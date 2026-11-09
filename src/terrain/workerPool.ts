@@ -28,6 +28,7 @@ export class ChunkWorkerPool {
   }
 
   request(req: ChunkRequest, cb: (r: ChunkResult) => void): void {
+    req.mapBase ??= typeof document !== 'undefined' ? document.baseURI : undefined;
     this.queue.push({ req, cb });
     this.pump();
   }
