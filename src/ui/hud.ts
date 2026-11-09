@@ -397,6 +397,7 @@ export class Hud {
         ['GRAVITY', `${fb.def.physical.surfaceGravity.toFixed(2)} g`],
         ['TEMP', info.temperature],
         ['FEATURES', info.features.join(', ')],
+        ...(info.hazards?.length ? [['HAZARDS', info.hazards.join(', ')] as [string, string]] : []),
       ];
       this.cardRows.innerHTML = rows
         .map(([k, v]) => `<div class="card-row"><span class="k">${k}</span><span class="v">${escapeHtml(noDashes(v))}</span></div>`)
