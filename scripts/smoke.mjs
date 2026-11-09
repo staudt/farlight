@@ -33,9 +33,14 @@ const BROWSER = process.env.CHROMIUM_PATH ?? ['/usr/bin/chromium', '/usr/bin/chr
 mkdirSync(OUT, { recursive: true });
 if (!flags.has('--no-build')) execSync('npx vite build --logLevel error', { stdio: 'inherit' });
 
-const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'pipe' });
+let server;
 let serverExited = false;
-server.on('exit', () => (serverExited = true));
+function startServer() {
+  serverExited = false;
+  server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'pipe' });
+  server.on('exit', () => (serverExited = true));
+}
+startServer();
 const stop = () => server.kill('SIGTERM');
 process.on('exit', stop);
 
@@ -133,10 +138,17 @@ try {
       res.problems.push(String(e));
     }
     const crashed = !browser.isConnected() || res.problems.some((p) => /has been closed|crash/i.test(p));
-    if (crashed && attempt === 0) {
-      console.log(`RETRY ${name}: browser crashed, relaunching`);
-      await browser.close().catch(() => {});
-      browser = await launch();
+    const serverDown = serverExited || res.problems.some((p) => /ERR_CONNECTION_REFUSED/.test(p));
+    if ((crashed || serverDown) && attempt === 0) {
+      // Under memory pressure (parallel agents) the OOM killer may take the browser or the server.
+      console.log(`RETRY ${name}: ${serverDown ? 'preview server died, restarting' : 'browser crashed, relaunching'}`);
+      await page.close().catch(() => {});
+      if (serverDown) {
+        server.kill('SIGTERM');
+        startServer();
+        await waitForServer();
+      }
+      if (!browser.isConnected()) browser = await launch();
       continue;
     }
     res.ok = res.problems.length === 0;
