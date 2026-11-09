@@ -17,13 +17,15 @@ Io beneath a looming Jupiter, Saturn's rings, and a dive into Jupiter's cloud se
 | --- | --- |
 | Click | Capture the mouse and fly |
 | Mouse | Steer (virtual stick) |
-| W / S, wheel, 1 to 0 | Throttle |
+| W / S, wheel, 1 to 0 | Throttle lever (tap for a notch, hold to sweep; it stays where you leave it) |
 | A / D | Roll |
 | Q / E | Yaw |
 | Shift | Boost (4x, climb high to go fast) |
 | X | Brake |
 | , / . | Slow down / speed up time |
 | C | Chase or cockpit camera |
+| V | Look mode: the ship keeps flying while you look around |
+| K | Snapshot (saves a PNG) |
 | M | System map, click a body to target it |
 | G | Galaxy map: pick a star and Begin Travel to jump there |
 | J | Journal: visited systems and survey progress |
