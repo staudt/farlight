@@ -1,7 +1,6 @@
-import { Effect, EffectAttribute } from 'postprocessing';
 import { Matrix4, type PerspectiveCamera, Uniform, Vector3 } from 'three';
 import type { Body } from '../../sim/universe';
-import { MAX_ATMOS, atmosphereFragment } from './atmosphere.glsl';
+import { MAX_ATMOS } from './atmosphere.glsl';
 
 /** Mie haze hugs the ground: its scale height is this fraction of the Rayleigh one. */
 const MIE_SCALE = 0.22;
@@ -10,7 +9,8 @@ const MIE_SCALE = 0.22;
  * Post effect that renders every nearby atmosphere: sky color, aerial perspective on terrain,
  * distant bodies tinted through the sky, sunsets and the rim seen from orbit.
  */
-export class AtmosphereEffect extends Effect {
+export class AtmosphereEffect {
+  readonly uniforms: Map<string, Uniform>;
   private centers = Array.from({ length: MAX_ATMOS }, () => new Vector3());
   private betaR = Array.from({ length: MAX_ATMOS }, () => new Vector3());
   private betaM = Array.from({ length: MAX_ATMOS }, () => new Vector3());
@@ -24,20 +24,21 @@ export class AtmosphereEffect extends Effect {
     g: new Array<number>(MAX_ATMOS).fill(0.76),
     sunI: new Array<number>(MAX_ATMOS).fill(20),
   };
+  private cand: Body[] = [];
+  private shells: number[] = [];
   /** Global multiplier for tuning. */
   intensity = 1;
 
   constructor() {
-    super('AtmosphereEffect', atmosphereFragment, {
-      attributes: EffectAttribute.DEPTH,
-      uniforms: new Map<string, Uniform>([
-        ['uInvProj', new Uniform(new Matrix4())],
-        ['uCamToWorld', new Uniform(new Matrix4())],
-        ['uLogFar', new Uniform(1)],
-        ['uSunDir', new Uniform(new Vector3(1, 0, 0))],
-        ['uCount', new Uniform(0)],
-      ]),
-    });
+    this.uniforms = new Map<string, Uniform>([
+      ['uInvProj', new Uniform(new Matrix4())],
+      ['uCamToWorld', new Uniform(new Matrix4())],
+      ['uLogFar', new Uniform(1)],
+      ['uSunDir', new Uniform(new Vector3(1, 0, 0))],
+      ['uCount', new Uniform(0)],
+      ['uAtmoSteps', new Uniform(14)],
+      ['uAtmoLight', new Uniform(5)],
+    ]);
     const u = this.uniforms;
     u.set('uCenter', new Uniform(this.centers));
     u.set('uBetaR', new Uniform(this.betaR));
@@ -62,19 +63,39 @@ export class AtmosphereEffect extends Effect {
     (u.get('uCamToWorld')!.value as Matrix4).copy(camera.matrixWorld);
     u.get('uLogFar')!.value = Math.log2(camera.far + 1);
 
-    const candidates = bodies
-      .filter((b) => b.def.atmosphere && b.atmosphereHeight > 0)
-      .map((b) => ({ b, shell: b.position.distanceTo(cameraWorld) - b.atmosphereTop }))
-      .filter((c) => c.shell < c.b.radius * 60)
-      .sort((x, y) => x.shell - y.shell)
-      .slice(0, MAX_ATMOS)
-      .reverse();
+    // The MAX_ATMOS nearest shells, kept sorted far to near, without allocating.
+    const cand = this.cand;
+    const shells = this.shells;
+    let n = 0;
+    for (const b of bodies) {
+      if (!b.def.atmosphere || b.atmosphereHeight <= 0) continue;
+      const shell = b.position.distanceTo(cameraWorld) - b.atmosphereTop;
+      if (shell >= b.radius * 60) continue;
+      // Insert keeping ascending shell distance, dropping the farthest beyond MAX_ATMOS.
+      let k = n < MAX_ATMOS ? n : MAX_ATMOS - 1;
+      if (n >= MAX_ATMOS && shell >= shells[k]!) continue;
+      while (k > 0 && shells[k - 1]! > shell) {
+        cand[k] = cand[k - 1]!;
+        shells[k] = shells[k - 1]!;
+        k--;
+      }
+      cand[k] = b;
+      shells[k] = shell;
+      if (n < MAX_ATMOS) n++;
+    }
+    // Composited far to near: slot 0 is the farthest.
+    for (let i = 0; i < n >> 1; i++) {
+      const t = cand[i]!;
+      cand[i] = cand[n - 1 - i]!;
+      cand[n - 1 - i] = t;
+    }
 
     // Sun direction from the nearest atmospheric body (or the camera) toward the sun.
-    const ref = candidates.length ? candidates[candidates.length - 1]!.b.position : cameraWorld;
+    const ref = n ? cand[n - 1]!.position : cameraWorld;
     (u.get('uSunDir')!.value as Vector3).copy(sun.position).sub(ref).normalize();
 
-    candidates.forEach(({ b }, i) => {
+    for (let i = 0; i < n; i++) {
+      const b = cand[i]!;
       const a = b.def.atmosphere!;
       const H = b.atmosphereHeight;
       const hr = a.scaleHeight * H;
@@ -95,7 +116,7 @@ export class AtmosphereEffect extends Effect {
       this.betaM[i]!.set(bm * mc[0], bm * mc[1], bm * mc[2]);
       const ab = a.absorptionDepth ?? [0, 0, 0];
       this.betaA[i]!.set(ab[0] / hr, ab[1] / hr, ab[2] / hr);
-    });
-    u.get('uCount')!.value = candidates.length;
+    }
+    u.get('uCount')!.value = n;
   }
 }

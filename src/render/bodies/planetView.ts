@@ -12,9 +12,11 @@ import {
   maxLevelFor,
   shouldMerge,
   shouldSplit,
+  SPLIT_FACTOR,
 } from '../../terrain/quadtree';
 import { type ChunkWorkerPool, getWorkerPool } from '../../terrain/workerPool';
 import { type BodyView, type FrameContext, apparentSizeBoost, placeRelative } from '../context';
+import { quality } from '../quality';
 import { createTerrainMaterial } from './terrainMaterial';
 
 const enum State {
@@ -223,13 +225,13 @@ export class PlanetView implements BodyView {
     if (n.state !== State.Ready) return;
     const dist = distanceToSphere(cam.x, cam.y, cam.z, n.center.x, n.center.y, n.center.z, n.boundR);
     if (n.children) {
-      if (shouldMerge(dist, n.edge)) {
+      if (shouldMerge(dist, n.edge, SPLIT_FACTOR * quality.settings.splitFactor)) {
         this.disposeChildren(n);
       } else if (n.children.every((c) => c.state === State.Ready)) {
         for (const c of n.children) this.traverse(c, cam, camLen, cull);
         return;
       }
-    } else if (shouldSplit(dist, n.edge, n.level, this.maxLevel)) {
+    } else if (shouldSplit(dist, n.edge, n.level, this.maxLevel, SPLIT_FACTOR * quality.settings.splitFactor)) {
       this.split(n);
     }
     // Show this node (children, if any, are still building).

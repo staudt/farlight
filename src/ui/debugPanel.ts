@@ -3,6 +3,8 @@ import { config } from '../core/config';
 import type { GameRenderer } from '../render/renderer';
 import type { World } from '../sim/world';
 import { SCENARIOS } from '../scenarios';
+import type { PerfStats } from '../render/perf';
+import { quality, QUALITY_LEVELS, type QualityPreset } from '../render/quality';
 
 /** F3 tuning panel: live edits to `config`, scenario jumps and state readouts. */
 export class DebugPanel {
@@ -17,6 +19,8 @@ export class DebugPanel {
     density: 0,
     warp: 1,
   };
+  private perf: PerfStats | null = null;
+  private perfReadout = { drawCalls: 0, triangles: 0, cpuMs: 0, gpuMs: 0, level: '' };
 
   constructor(private world: World, gfx: GameRenderer, jump: (name: string) => void) {
     this.gui = new GUI({ title: 'Farlight debug' });
@@ -61,8 +65,40 @@ export class DebugPanel {
     cam.add(config.camera, 'rotationLag', 0.01, 1);
     cam.add(config.camera, 'horizonUpBlend', 0, 1);
 
+    this.addQualityFolder();
     const render = this.gui.addFolder('Render').close();
     render.add(gfx.renderer, 'toneMappingExposure', 0.1, 4).name('exposure');
+  }
+
+  private addQualityFolder(): void {
+    const f = this.gui.addFolder('Quality').close();
+    const state = { preset: quality.preset as QualityPreset };
+    f.add(state, 'preset', ['auto', ...QUALITY_LEVELS]).onChange((v: QualityPreset) => quality.setPreset(v, document.body.classList.contains('touch')));
+    f.add(config.quality, 'downFps', 20, 60).name('auto down fps');
+    f.add(config.quality, 'upFps', 40, 120).name('auto up fps');
+    for (const name of QUALITY_LEVELS) {
+      const p = f.addFolder(name).close();
+      const s = config.quality.presets[name];
+      const apply = (): void => quality.notify();
+      p.add(s, 'pixelRatioMax', 0.5, 2).onChange(apply);
+      p.add(s, 'msaa', [0, 2, 4]).onChange(apply);
+      p.add(s, 'volScale', 0.25, 1).onChange(apply);
+      p.add(s, 'cloudSteps', 8, 30, 1).onChange(apply);
+      p.add(s, 'cloudLight', 1, 3, 1).onChange(apply);
+      p.add(s, 'atmoSteps', 4, 14, 1).onChange(apply);
+      p.add(s, 'atmoLight', 1, 5, 1).onChange(apply);
+      p.add(s, 'cloudShadows').onChange(apply);
+      p.add(s, 'bloom').onChange(apply);
+      p.add(s, 'bloomLevels', 1, 8, 1).onChange(apply);
+      p.add(s, 'splitFactor', 0.4, 1.5).onChange(apply);
+    }
+    const perf = this.gui.addFolder('Perf').close();
+    for (const k of Object.keys(this.perfReadout) as (keyof typeof this.perfReadout)[]) perf.add(this.perfReadout, k).listen().disable();
+  }
+
+  /** Hooks up the render stats readout (frame time split uses GPU timer queries when available). */
+  addPerf(perf: PerfStats): void {
+    this.perf = perf;
   }
 
   /** Lets other modules add their own tuning folders. */
@@ -77,6 +113,14 @@ export class DebugPanel {
 
   update(): void {
     if (this.gui._hidden) return;
+    if (this.perf) {
+      const pr = this.perfReadout;
+      pr.drawCalls = this.perf.calls;
+      pr.triangles = this.perf.triangles;
+      pr.cpuMs = Number(this.perf.cpuMs.toFixed(2));
+      pr.gpuMs = this.perf.gpuSupported ? Number(this.perf.gpuMs.toFixed(2)) : -1;
+      pr.level = quality.label;
+    }
     const w = this.world;
     const r = this.readout;
     r.body = w.ship.frame.body.name;

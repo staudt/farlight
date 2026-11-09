@@ -5,6 +5,7 @@ import { AudioEngine } from './audio/audio';
 import { Input } from './input/input';
 import { detectTouch, TouchControls } from './input/touch';
 import { PostStack } from './render/post';
+import { quality } from './render/quality';
 import { createGasGiantView } from './render/bodies';
 import { GameRenderer } from './render/renderer';
 import { getShake, installShipFx } from './render/fx';
@@ -26,6 +27,8 @@ if (touchOn) {
   document.body.classList.add('touch');
   config.render.pixelRatioMax = Math.min(config.render.pixelRatioMax, config.touch.pixelRatioMax); // before GameRenderer
 }
+
+quality.init(params.get('quality'), touchOn); // before GameRenderer and PostStack
 
 const world = new World(SOLAR_SYSTEM, 0);
 const scenarioName = params.get('scenario') ?? DEFAULT_SCENARIO;
@@ -50,6 +53,7 @@ canvas.addEventListener('click', hideTitle, { once: true });
 if (touchOn) window.addEventListener('pointerdown', hideTitle, { once: true });
 setTimeout(hideTitle, 15000);
 const debug = new DebugPanel(world, gfx, (name) => SCENARIOS[name]?.apply(world));
+debug.addPerf(post.perf);
 if (params.has('debug')) debug.toggle();
 const atmoFolder = debug.folder('Atmosphere and post');
 atmoFolder.add(post.atmosphere, 'intensity', 0, 3).name('scatter intensity');
@@ -137,6 +141,7 @@ window.__game = {
   touch,
   input,
   post,
+  quality,
   config,
   scenarios: Object.keys(SCENARIOS),
   getState: () => ({

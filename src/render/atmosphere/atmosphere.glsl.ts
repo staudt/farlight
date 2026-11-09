@@ -9,14 +9,13 @@
  */
 export const MAX_ATMOS = 2;
 
-export const atmosphereFragment = /* glsl */ `
+export const atmosphereLib = /* glsl */ `
 #define MAX_ATMOS ${MAX_ATMOS}
 #define ATMO_STEPS 14
 #define ATMO_LIGHT_STEPS 5
+uniform int uAtmoSteps;         // quality: <= ATMO_STEPS
+uniform int uAtmoLight;         // quality: <= ATMO_LIGHT_STEPS
 
-uniform mat4 uInvProj;
-uniform mat4 uCamToWorld;
-uniform float uLogFar;          // log2(far + 1)
 uniform vec3 uSunDir;           // unit, scene space (sun is far: same for every pixel)
 uniform int uCount;
 
@@ -60,8 +59,10 @@ float phaseM(float mu, float g) {
   return 3.0 / (8.0 * PI_) * ((1.0 - g2) * (1.0 + mu * mu)) / ((2.0 + g2) * pow(1.0 + g2 - 2.0 * g * mu, 1.5));
 }
 
-// Applies atmosphere i to the color seen along direction d up to distance tScene.
-vec3 applyAtmosphere(int i, vec3 color, vec3 d, float tScene) {
+// Atmosphere i along direction d up to distance tScene, as out = scene * trans + inscatter.
+void applyAtmosphere(int i, vec3 d, float tScene, out vec3 outTrans, out vec3 outInscatter) {
+  outTrans = vec3(1.0);
+  outInscatter = vec3(0.0);
   vec3 c = uCenter[i];
   float R = uRadius[i];
   float H = uTop[i];
@@ -69,16 +70,16 @@ vec3 applyAtmosphere(int i, vec3 color, vec3 d, float tScene) {
   float h = uCamAlt[i];
 
   vec2 ta = hitSphere(d, c, (h - H) * (2.0 * RA + (h - H)));
-  if (ta.x > ta.y || ta.y < 0.0) return color;
+  if (ta.x > ta.y || ta.y < 0.0) return;
   float t0 = max(ta.x, 0.0);
   float t1 = ta.y;
   // Ground: the depth buffer when present, otherwise the sea level sphere.
   vec2 tg = hitSphere(d, c, h * (2.0 * R + h));
   if (tg.x < tg.y && tg.x > 0.0) t1 = min(t1, tg.x);
   t1 = min(t1, tScene);
-  if (t1 <= t0) return color;
+  if (t1 <= t0) return;
 
-  float seg = (t1 - t0) / float(ATMO_STEPS);
+  float seg = (t1 - t0) / float(uAtmoSteps);
   vec3 sumR = vec3(0.0);
   vec3 sumM = vec3(0.0);
   float odR = 0.0;
@@ -86,6 +87,7 @@ vec3 applyAtmosphere(int i, vec3 color, vec3 d, float tScene) {
   float mu = dot(d, uSunDir);
 
   for (int s = 0; s < ATMO_STEPS; s++) {
+    if (s >= uAtmoSteps) break;
     float t = t0 + (float(s) + 0.5) * seg;
     vec3 p = d * t - c;                 // relative to the planet center
     float r = length(p);
@@ -99,10 +101,11 @@ vec3 applyAtmosphere(int i, vec3 color, vec3 d, float tScene) {
     vec3 up = p / r;
     float cosSun = dot(up, uSunDir);
     vec2 tl = hitSphereFrom(p, uSunDir, RA);
-    float lseg = max(tl.y, 0.0) / float(ATMO_LIGHT_STEPS);
+    float lseg = max(tl.y, 0.0) / float(uAtmoLight);
     float lR = 0.0;
     float lM = 0.0;
     for (int j = 0; j < ATMO_LIGHT_STEPS; j++) {
+      if (j >= uAtmoLight) break;
       vec3 q = p + uSunDir * ((float(j) + 0.5) * lseg);
       float la = max(length(q) - R, 0.0);
       lR += exp(-la / uHr[i]) * lseg;
@@ -118,32 +121,18 @@ vec3 applyAtmosphere(int i, vec3 color, vec3 d, float tScene) {
   }
 
   vec3 inscatter = uSunI[i] * (sumR * uBetaR[i] * phaseR(mu) + sumM * uBetaM[i] * phaseM(mu, uMieG[i]));
-  vec3 trans = exp(-(uBetaR[i] * odR + uBetaM[i] * 1.1 * odM + uBetaA[i] * odR));
-  return color * trans + inscatter;
+  outTrans = exp(-(uBetaR[i] * odR + uBetaM[i] * 1.1 * odM + uBetaA[i] * odR));
+  outInscatter = inscatter;
 }
 
-void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth, out vec4 outputColor) {
-  vec3 color = inputColor.rgb;
-  if (uCount == 0) { outputColor = inputColor; return; }
-
-  // View ray.
-  vec4 clip = vec4(uv * 2.0 - 1.0, -1.0, 1.0); // near plane: far = 1e11 overflows float32
-  vec4 view = uInvProj * clip;
-  vec3 dView = normalize(view.xyz / view.w);
-  vec3 d = normalize(mat3(uCamToWorld) * dView);
-
-  // Raw logarithmic depth -> distance along the ray.
-  float raw = texture2D(depthBuffer, uv).r;
-  float tScene = 1e30;
-  if (raw < 0.99999) {
-    float w = exp2(raw * uLogFar) - 1.0;   // view space distance along -Z
-    tScene = w / max(-dView.z, 1e-4);
-  }
-
+// Composes every atmosphere far to near onto the running affine transform: out = scene * T + L.
+void atmoCompute(vec3 d, float tScene, inout vec3 T, inout vec3 L) {
   for (int i = 0; i < MAX_ATMOS; i++) {
     if (i >= uCount) break;
-    color = applyAtmosphere(i, color, d, tScene);
+    vec3 tr, ins;
+    applyAtmosphere(i, d, tScene, tr, ins);
+    L = L * tr + ins;
+    T *= tr;
   }
-  outputColor = vec4(color, inputColor.a);
 }
 `;

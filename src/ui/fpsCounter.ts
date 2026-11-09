@@ -1,3 +1,5 @@
+import { quality } from '../render/quality';
+
 /** Small frame rate readout in the top left corner. Lives in the HUD root, so H hides it too. */
 export class FpsCounter {
   private readonly el: HTMLElement;
@@ -29,7 +31,7 @@ export class FpsCounter {
     if (this.acc < 0.5) return;
     const fps = this.frames / this.acc;
     const low = 1 / this.worst;
-    this.el.textContent = `${Math.round(fps)} FPS  ·  LOW ${Math.round(low)}`;
+    this.el.textContent = `${Math.round(fps)} FPS  ·  LOW ${Math.round(low)}  ·  ${quality.label}`;
     this.el.style.color = fps >= 50 ? 'rgba(150, 230, 255, 0.7)' : fps >= 30 ? 'rgba(255, 220, 140, 0.8)' : 'rgba(255, 140, 120, 0.85)';
     this.acc = 0;
     this.frames = 0;
