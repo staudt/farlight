@@ -29,6 +29,7 @@ uniform float uCSunI;
 uniform float uFlash;        // lightning flash 0..1
 uniform vec3 uFlashPos;      // body fixed flash position (m)
 uniform float uFrame;
+uniform int uCloudBayer;      // 1 at low volumetric scales: fixed 2x2 ordered jitter, cancelled by the composite blur
 
 vec2 hitShell(vec3 d, vec3 c, float k) {
   float b = -dot(c, d);
@@ -114,7 +115,7 @@ vec4 farClouds(vec3 d, float tScene, float rIn, float thickness) {
   vec3 sunCol = mix(vec3(1.0, 0.45, 0.2), vec3(1.0, 0.97, 0.92), smoothstep(0.0, 0.35, cosSun)) * day;
   // Thicker cloud reads brighter; a soft self shadow keeps some relief.
   float lambert = 0.35 + 0.65 * max(cosSun, 0.0);
-  vec3 col = uCloudColor * (sunCol * uCSunI * 0.62 * lambert * (0.7 + 0.3 * dens) + vec3(0.03, 0.04, 0.06) * day);
+  vec3 col = uCloudColor * (sunCol * uStarColor * uCSunI * 0.62 * lambert * (0.7 + 0.3 * dens) + vec3(0.03, 0.04, 0.06) * day * mix(vec3(1.0), uStarColor, 0.6));
   // Grazing angles near the limb thicken the layer visually.
   float graze = 1.0 - abs(dot(d, up));
   float a = clamp(dens * (0.85 + 0.6 * graze), 0.0, 0.97);
@@ -180,7 +181,15 @@ void cloudCompute(vec3 d, vec3 dView, float tScene, out float T, out vec3 L) {
   float thicknessM = uCTop - uBase;
   int steps = int(clamp(len / (thicknessM * 0.12), min(10.0, float(uCloudSteps)), float(uCloudSteps)));
   float stepLen = len / float(steps);
-  float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy + mod(uFrame, 64.0) * 5.588238, vec2(0.06711056, 0.00583715))));
+  float jitter;
+  if (uCloudBayer != 0) {
+    // The 3x3 blur in the composite always spans all four phases, so the offsets average out.
+    ivec2 q = ivec2(gl_FragCoord.xy) & 1;
+    float v = q.x == 0 ? (q.y == 0 ? 0.0 : 3.0) : (q.y == 0 ? 2.0 : 1.0);
+    jitter = (v + 0.5) * 0.25;
+  } else {
+    jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy + mod(uFrame, 64.0) * 5.588238, vec2(0.06711056, 0.00583715))));
+  }
   float sigma = 1.0 / 180.0;               // extinction per meter at density 1
   float thickness = uCTop - uBase;
 
@@ -218,7 +227,7 @@ void cloudCompute(vec3 d, vec3 dView, float tScene, out float T, out vec3 L) {
       // Sunlight gets warm when the sun is low.
       vec3 sunCol = mix(vec3(1.0, 0.42, 0.18), vec3(1.0, 0.97, 0.92), smoothstep(0.0, 0.35, cosSun)) * day;
       vec3 ambient = mix(vec3(0.015, 0.02, 0.035), vec3(0.42, 0.55, 0.78), day) * (0.45 + 0.55 * h01);
-      vec3 col = uCloudColor * (sunCol * uCSunI * lightT * phase * mix(1.0, powder, 0.5) + ambient);
+      vec3 col = uCloudColor * (sunCol * uStarColor * uCSunI * lightT * phase * mix(1.0, powder, 0.5) + ambient * mix(vec3(1.0), uStarColor, 0.6));
       // Lightning lights the cloud from inside.
       if (uFlash > 0.0) {
         float fd = length(pl - uFlashPos);

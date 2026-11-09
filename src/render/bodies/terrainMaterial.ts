@@ -1,4 +1,5 @@
 import { Color, ShaderMaterial, Vector3 } from 'three';
+import { starLight } from '../starLight';
 
 /** Flat shaded, vertex colored terrain material with sun lighting and glinting water. */
 export function createTerrainMaterial(): ShaderMaterial {
@@ -10,6 +11,7 @@ export function createTerrainMaterial(): ShaderMaterial {
       uSkyAmbient: { value: new Color(0.55, 0.7, 1.0).multiplyScalar(0.08) },
       uTime: { value: 0 },
       uSunIntensity: { value: 1.25 },
+      uStarColor: starLight.uniform,
     },
     vertexShader: /* glsl */ `
       #include <common>
@@ -35,6 +37,7 @@ export function createTerrainMaterial(): ShaderMaterial {
       uniform vec3 uSkyAmbient;
       uniform float uTime;
       uniform float uSunIntensity;
+      uniform vec3 uStarColor;
       varying vec3 vColor;
       varying vec2 vWater;
       varying vec3 vViewPos;
@@ -62,15 +65,15 @@ export function createTerrainMaterial(): ShaderMaterial {
         float diffuse = lam * term;
         vec3 sunCol = mix(vec3(1.0, 0.5, 0.25), vec3(1.0, 0.96, 0.88), smoothstep(0.0, 0.45, sunR));
         float skyTerm = 0.35 + 0.65 * clamp(dot(N, R), 0.0, 1.0);
-        vec3 amb = vec3(0.025) + uSkyAmbient * skyTerm * (0.25 + 0.75 * term);
-        vec3 col = vColor * (sunCol * uSunIntensity * diffuse + amb);
+        vec3 amb = (vec3(0.025) + uSkyAmbient * skyTerm * (0.25 + 0.75 * term)) * mix(vec3(1.0), uStarColor, 0.6);
+        vec3 col = vColor * (sunCol * uStarColor * uSunIntensity * diffuse + amb);
         if (isWater > 0.5) {
           vec3 H = normalize(L + V);
           float nh = max(dot(N, H), 0.0);
           float sparkle = 0.55 + 0.45 * sin(uTime * 2.3 + vWater.y * 300.0);
           float spec = (pow(nh, 140.0) * 1.6 * sparkle + pow(nh, 14.0) * 0.08) * term;
           float fres = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 4.0);
-          col += sunCol * spec * uSunIntensity * 0.6;
+          col += sunCol * uStarColor * spec * uSunIntensity * 0.6;
           col += vec3(0.30, 0.45, 0.70) * fres * 0.35 * (0.15 + 0.85 * term);
         }
         gl_FragColor = vec4(col, 1.0);

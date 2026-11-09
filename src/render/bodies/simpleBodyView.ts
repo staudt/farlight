@@ -1,5 +1,6 @@
 import { Color, IcosahedronGeometry, Mesh, ShaderMaterial, Vector3 } from 'three';
 import type { Body } from '../../sim/universe';
+import { starLight } from '../starLight';
 import { type BodyView, type FrameContext, apparentSizeBoost, placeRelative } from '../context';
 
 /**
@@ -18,6 +19,7 @@ export class SimpleBodyView implements BodyView {
       uniforms: {
         uColor: { value: new Color(c[0], c[1], c[2]) },
         uSunDir: { value: new Vector3(1, 0, 0) },
+        uStarColor: starLight.uniform,
       },
       vertexShader: /* glsl */ `
         #include <common>
@@ -33,12 +35,13 @@ export class SimpleBodyView implements BodyView {
         #include <logdepthbuf_pars_fragment>
         uniform vec3 uColor;
         uniform vec3 uSunDir;
+        uniform vec3 uStarColor;
         varying vec3 vNormalW;
         void main() {
           #include <logdepthbuf_fragment>
           float d = dot(normalize(vNormalW), uSunDir);
           float light = smoothstep(-0.08, 0.25, d) * (0.35 + 0.65 * max(d, 0.0)) + 0.015;
-          gl_FragColor = vec4(uColor * light, 1.0);
+          gl_FragColor = vec4(uColor * uStarColor * light, 1.0);
         }`,
     });
     this.object = new Mesh(new IcosahedronGeometry(1, 5), this.material);

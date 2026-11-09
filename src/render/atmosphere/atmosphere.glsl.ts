@@ -120,7 +120,7 @@ void applyAtmosphere(int i, vec3 d, float tScene, out vec3 outTrans, out vec3 ou
     sumM += att * dM;
   }
 
-  vec3 inscatter = uSunI[i] * (sumR * uBetaR[i] * phaseR(mu) + sumM * uBetaM[i] * phaseM(mu, uMieG[i]));
+  vec3 inscatter = uSunI[i] * uStarColor * (sumR * uBetaR[i] * phaseR(mu) + sumM * uBetaM[i] * phaseM(mu, uMieG[i]));
   outTrans = exp(-(uBetaR[i] * odR + uBetaM[i] * 1.1 * odM + uBetaA[i] * odR));
   outInscatter = inscatter;
 }

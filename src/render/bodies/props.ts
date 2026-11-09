@@ -10,6 +10,7 @@ import {
 } from 'three';
 import type { PropKind } from '../../data/types';
 import type { PropBatch } from '../../terrain/props';
+import { starLight } from '../starLight';
 
 type V3 = [number, number, number];
 
@@ -224,6 +225,7 @@ export function createPropMaterial(shared: Record<string, IUniform>): ShaderMate
       uBodyCenterView: shared.uBodyCenterView!,
       uSkyAmbient: shared.uSkyAmbient!,
       uSunIntensity: shared.uSunIntensity!,
+      uStarColor: starLight.uniform,
       uFadeNear: { value: 900 },
       uFadeFar: { value: 1900 },
       uEmissive: { value: 2.2 },
@@ -264,6 +266,7 @@ export function createPropMaterial(shared: Record<string, IUniform>): ShaderMate
       uniform vec3 uBodyCenterView;
       uniform vec3 uSkyAmbient;
       uniform float uSunIntensity;
+      uniform vec3 uStarColor;
       uniform float uEmissive;
       varying vec3 vColor;
       varying vec3 vViewPos;
@@ -281,8 +284,8 @@ export function createPropMaterial(shared: Record<string, IUniform>): ShaderMate
         float diffuse = lam * term;
         vec3 sunCol = mix(vec3(1.0, 0.5, 0.25), vec3(1.0, 0.96, 0.88), smoothstep(0.0, 0.45, sunR));
         float skyTerm = 0.35 + 0.65 * clamp(dot(N, R), 0.0, 1.0);
-        vec3 amb = vec3(0.05) + uSkyAmbient * skyTerm * (0.25 + 0.75 * term);
-        vec3 col = vColor * (sunCol * uSunIntensity * diffuse + amb);
+        vec3 amb = (vec3(0.05) + uSkyAmbient * skyTerm * (0.25 + 0.75 * term)) * mix(vec3(1.0), uStarColor, 0.6);
+        vec3 col = vColor * (sunCol * uStarColor * uSunIntensity * diffuse + amb);
         // Crystal glow: brighter at night, still readable by day.
         col += vInst * vEmit * uEmissive * (0.35 + 0.65 * (1.0 - term));
         gl_FragColor = vec4(col, 1.0);

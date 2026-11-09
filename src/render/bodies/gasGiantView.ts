@@ -17,6 +17,7 @@ import { mulberry32 } from '../../core/rng';
 import type { Body } from '../../sim/universe';
 import { type BodyView, type FrameContext, apparentSizeBoost, placeRelative } from '../context';
 import { quality } from '../quality';
+import { starLight } from '../starLight';
 import { RING_GLSL, RingMesh, makeRingUniforms } from './ringView';
 
 const MAX_BANDS = 8;
@@ -159,7 +160,7 @@ uniform float logDepthBufFC;
 #endif
 uniform mat4 uProjInv;
 uniform mat3 uViewToLocal;
-uniform vec3 uCamLocal, uSunLocal, uFogColor;
+uniform vec3 uCamLocal, uSunLocal, uFogColor, uStarColor;
 uniform float uScale, uShellR, uDepth, uAlpha, uPixAng, uInside, uFogLen, uSunI, uCamDepth, uCeil;
 varying vec2 vNdc;
 ${GAS_GLSL}
@@ -200,7 +201,7 @@ void main() {
   float mu = abs(dot(N, rd));
   float limb = mix(0.55, 1.0, pow(mu, 0.3));
   vec3 night = vec3(0.012, 0.014, 0.022) + vec3(0.02, 0.016, 0.014) * smoothstep(-0.5, 0.0, lam);
-  vec3 col = alb * (sunCol * uSunI * diff * limb + night);
+  vec3 col = alb * (sunCol * uStarColor * uSunI * diff * limb + night);
 
   float dist = t * uScale;
   float fog = uInside * (1.0 - exp(-dist / uFogLen));
@@ -255,7 +256,7 @@ void main() {
 const PUFF_FRAG = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_fragment>
-uniform vec3 uSunView, uPuffColor, uFogColor;
+uniform vec3 uSunView, uPuffColor, uFogColor, uStarColor;
 uniform float uSunTerm, uSunI, uFogLen;
 varying vec3 vViewPos;
 varying vec3 vN;
@@ -267,7 +268,7 @@ void main() {
   float lam = max(dot(N, uSunView) * 0.8 + 0.2, 0.0);
   float facing = abs(dot(N, normalize(vViewPos)));
   vec3 base = uPuffColor * vShade * mix(vec3(1.0), vec3(1.05, 0.62, 0.4) * 0.5, vDepth);
-  vec3 col = base * (uSunI * uSunTerm * (0.1 + 0.9 * lam * lam) * 0.8 + 0.03 + 0.05 * uSunTerm);
+  vec3 col = base * (uStarColor * uSunI * uSunTerm * (0.1 + 0.9 * lam * lam) * 0.8 + 0.03 + 0.05 * uSunTerm);
   col *= mix(vec3(0.8, 0.62, 0.55), vec3(1.0), N.y * 0.5 + 0.5);
   float fog = 1.0 - exp(-length(vViewPos) / (uFogLen * 0.12));
   col = mix(col, uFogColor, fog * 0.85);
@@ -291,6 +292,7 @@ type SharedUniforms = {
   uFogLen: U<number>;
   uCamDepth: U<number>;
   uSunI: U<number>;
+  uStarColor: U<Vector3>;
   uPhase: U<number>;
   uBands: U<Vector3[]>;
   uBandCount: U<number>;
@@ -374,6 +376,7 @@ export class GasGiantView implements BodyView {
       uFogLen: { value: body.radius * 0.03 },
       uCamDepth: { value: 0 },
       uSunI: { value: 1.25 },
+      uStarColor: starLight.uniform,
       uPhase: { value: 0 },
       uBands: { value: bands },
       uBandCount: { value: Math.min(gas.bands.length, MAX_BANDS) },
@@ -447,6 +450,7 @@ export class GasGiantView implements BodyView {
         uFogColor: this.shared.uFogColor,
         uSunTerm: { value: 1 },
         uSunI: this.shared.uSunI,
+        uStarColor: starLight.uniform,
         uFogLen: this.shared.uFogLen,
       },
       vertexShader: PUFF_VERT,
