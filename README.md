@@ -25,6 +25,8 @@ Io beneath a looming Jupiter, Saturn's rings, and a dive into Jupiter's cloud se
 | , / . | Slow down / speed up time |
 | C | Chase or cockpit camera |
 | M | System map, click a body to target it |
+| G | Galaxy map: pick a star and Begin Travel to jump there |
+| J | Journal: visited systems and survey progress |
 | T | Cycle targets |
 | F (hold) | Align the nose with the target |
 | H | Hide the HUD |
