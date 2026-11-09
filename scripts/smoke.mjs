@@ -57,11 +57,13 @@ let failed = false;
 
 try {
   await waitForServer();
-  const browser = await chromium.launch({
-    executablePath: BROWSER,
-    headless: true,
-    args: ['--use-angle=vulkan', '--enable-features=Vulkan', '--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--enable-unsafe-swiftshader'],
-  });
+  const launch = () =>
+    chromium.launch({
+      executablePath: BROWSER,
+      headless: true,
+      args: ['--use-angle=vulkan', '--enable-features=Vulkan', '--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--enable-unsafe-swiftshader'],
+    });
+  let browser = await launch();
   const page0 = await browser.newPage();
   await page0.goto(`http://localhost:${PORT}/`);
   await page0.waitForFunction(() => window.__game?.getState?.().ready, null, { timeout: 30000 });
@@ -75,6 +77,9 @@ try {
   console.log(`GPU: ${renderer}`);
 
   for (const name of only.length ? only : all) {
+   // A browser that dies under memory pressure (parallel agents) gets one relaunch and retry.
+   for (let attempt = 0; attempt < 2; attempt++) {
+    if (!browser.isConnected()) browser = await launch();
     const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     const errors = [];
     page.on('console', (m) => {
@@ -126,6 +131,13 @@ try {
     } catch (e) {
       res.problems.push(String(e));
     }
+    const crashed = !browser.isConnected() || res.problems.some((p) => /has been closed|crash/i.test(p));
+    if (crashed && attempt === 0) {
+      console.log(`RETRY ${name}: browser crashed, relaunching`);
+      await browser.close().catch(() => {});
+      browser = await launch();
+      continue;
+    }
     res.ok = res.problems.length === 0;
     failed ||= !res.ok;
     results.push(res);
@@ -136,7 +148,9 @@ try {
         (res.problems.length ? `\n     ${res.problems.join('\n     ')}` : '') +
         (res.warnings?.length ? `\n     warning: ${res.warnings.join('\n     warning: ')}` : ''),
     );
-    await page.close();
+    await page.close().catch(() => {});
+    break;
+   }
   }
   await browser.close();
 } catch (e) {
