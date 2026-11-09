@@ -60,11 +60,12 @@ export class Starfield {
         attribute vec3 color;
         varying vec3 vColor;
         uniform float uPixelRatio;
+        uniform float uStretch;
         void main() {
           vColor = color;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           gl_Position = projectionMatrix * mv;
-          gl_PointSize = size * uPixelRatio;
+          gl_PointSize = size * uPixelRatio * (1.0 + uStretch * 0.8);
           #include <logdepthbuf_vertex>
         }`,
       fragmentShader: /* glsl */ `
@@ -72,11 +73,12 @@ export class Starfield {
         #include <logdepthbuf_pars_fragment>
         varying vec3 vColor;
         uniform float uBrightness;
+        uniform float uStretch;
         void main() {
           #include <logdepthbuf_fragment>
           vec2 d = gl_PointCoord - 0.5;
           float a = smoothstep(0.5, 0.0, length(d));
-          gl_FragColor = vec4(vColor * a * uBrightness, 1.0);
+          gl_FragColor = vec4(vColor * a * (uBrightness + uStretch * 0.5), 1.0);
         }`,
       blending: AdditiveBlending,
       depthWrite: false,
@@ -89,6 +91,11 @@ export class Starfield {
 
   set brightness(v: number) {
     this.material.uniforms.uBrightness!.value = v;
+  }
+
+  /** Hyperspace stretch 0..1: stars swell and brighten (the streaks are drawn by the DOM overlay). */
+  set stretch(v: number) {
+    this.material.uniforms.uStretch!.value = v;
   }
 
   set pixelRatio(v: number) {
