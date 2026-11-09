@@ -695,3 +695,11 @@ body.touch .lever-track {
 body.touch .lookflag {
   top: 64px;
 }
+
+/* Phones: the compass sits top left of center, keep the frame counter out of its way. */
+body.touch .fps-counter {
+  top: auto !important;
+  bottom: calc(6px + env(safe-area-inset-bottom)) !important;
+  left: calc(14px + env(safe-area-inset-left)) !important;
+  font-size: 9px !important;
+}

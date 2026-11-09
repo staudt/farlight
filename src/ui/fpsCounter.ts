@@ -9,6 +9,7 @@ export class FpsCounter {
 
   constructor(root: HTMLElement) {
     this.el = document.createElement('div');
+    this.el.className = 'fps-counter';
     Object.assign(this.el.style, {
       position: 'absolute',
       top: '10px',
