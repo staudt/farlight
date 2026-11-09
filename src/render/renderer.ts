@@ -58,6 +58,7 @@ export class GameRenderer {
       powerPreference: 'high-performance',
       preserveDrawingBuffer: true, // smoke test screenshots
     });
+    this.watchContextLoss(canvas);
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.toneMapping = ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
@@ -105,6 +106,42 @@ export class GameRenderer {
   }
 
   onResize?: (w: number, h: number) => void;
+
+  /** True while the WebGL context is lost (GPU memory pressure, phone app switch). */
+  contextLost = false;
+
+  /**
+   * A lost context leaves a black canvas while the loop keeps running. Show a short note and,
+   * when the browser restores the context, reload in place (custom shaders and render targets
+   * are simpler to rebuild than to restore piecemeal).
+   */
+  private watchContextLoss(canvas: HTMLCanvasElement): void {
+    canvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      this.contextLost = true;
+      let note = document.getElementById('context-lost');
+      if (!note) {
+        note = document.createElement('div');
+        note.id = 'context-lost';
+        note.textContent = 'GRAPHICS RESET · RELOADING';
+        Object.assign(note.style, {
+          position: 'fixed',
+          inset: '0',
+          display: 'grid',
+          placeItems: 'center',
+          font: '500 14px Rajdhani, sans-serif',
+          letterSpacing: '0.4em',
+          color: 'rgba(150, 230, 255, 0.8)',
+          background: '#05070d',
+          zIndex: '50',
+        });
+        document.body.appendChild(note);
+      }
+      // If the browser never restores it, reload anyway after a moment.
+      window.setTimeout(() => location.reload(), 4000);
+    });
+    canvas.addEventListener('webglcontextrestored', () => location.reload());
+  }
 
   /** Quality hook: new pixel ratio cap, then resize everything. */
   applyPixelRatio(cap: number): void {

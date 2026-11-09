@@ -137,6 +137,7 @@ try {
       await page.screenshot({ path: `${OUT}/${name.replace(/[^a-zA-Z0-9]+/g, '_')}.png` });
       Object.assign(res, { state, stats, errors });
       if (errors.length) res.problems.push(`console errors: ${errors.slice(0, 3).join(' | ')}`);
+      if (state.contextLost) res.problems.push('WebGL context lost (GPU memory pressure?)');
       if (stats.mean < 2) res.problems.push(`frame is black (mean ${stats.mean.toFixed(1)})`);
       if (stats.std < 1.5) res.problems.push(`frame is uniform (std ${stats.std.toFixed(2)})`);
       if (!(state.frames > 20)) res.problems.push(`game loop not running (frames ${state.frames})`);

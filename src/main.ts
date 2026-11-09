@@ -226,6 +226,7 @@ window.__game = {
   hyper,
   scenarios: Object.keys(SCENARIOS),
   getState: () => ({
+    contextLost: gfx.contextLost,
     scenario: scenarioName,
     frames: frameCount,
     fps,

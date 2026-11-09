@@ -100,6 +100,6 @@ Farlight is a relaxed solar system glider (working title was Space Glider 3D). L
 ## Atmosphere pass notes
 - `src/render/atmosphere/` is a post effect reading the RAW log depth (`texture2D(depthBuffer, uv).r`, decoded with `uLogFar`), not postprocessing's converted depth (which loses precision at far = 1e11).
 - Unproject view rays at the NEAR plane; the far plane overflows float32.
-- One NaN pixel turns the whole frame black through bloom. If the smoke test reports a black frame with no console errors, suspect NaN in a post shader.
+- One NaN pixel turns the whole frame black through bloom. If the smoke test reports a black frame with no console errors, suspect NaN in a post shader, or a lost WebGL context under GPU memory pressure (the smoke state reports `contextLost`; the game reloads itself on restore).
 - Smoke tests pick a free port; never hardcode preview ports (parallel agents collide).
 - Effects merged into one EffectPass share a shader: prefix every #define (ATMO_, CLOUD_).
