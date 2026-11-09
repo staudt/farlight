@@ -85,6 +85,18 @@ export const SCENARIOS: Record<string, Scenario> = {
     description: 'High over Italy and the Mediterranean',
     apply: (w) => faceLatLon(w, 'earth', 42, 12.5, 1.25),
   },
+  'earth-forest-low': {
+    description: 'Gliding 300 metres over the boreal forests of Sweden in the morning',
+    apply: (w) => w.place({ body: 'earth', lat: 58, lon: 15.5, altitude: 300, heading: 200, pitch: -2, throttle: 0.3, time: findLocalHourTime(w, 'earth', 15.5, 8) }),
+  },
+  'mars-mesas-low': {
+    description: 'Skimming red mesas and boulders over the Martian plains in the morning',
+    apply: (w) => w.place({ body: 'mars', lat: -5, lon: 100, altitude: 250, heading: 90, pitch: -1, throttle: 0.3, time: findLocalHourTime(w, 'mars', 100, 9) }),
+  },
+  'io-crystals-low': {
+    description: 'Low over Io among sulfur crystals, Jupiter on the horizon',
+    apply: (w) => w.place({ body: 'io', lat: 5, lon: 68, altitude: 200, heading: 270, pitch: 0, throttle: 0.25, time: findLockedMorning(w, 'io', 68, 9) }),
+  },
   'mars-canyon': surface('Over the rim of Valles Marineris in the Martian morning', {
     body: 'mars', lat: -8, localHour: 9, altitude: 2500, heading: 270, pitch: -4, throttle: 0.4,
   }),

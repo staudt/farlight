@@ -44,6 +44,12 @@ export class DebugPanel {
     flight.add(config.flight, 'levelPitchRate', 0, 1);
     flight.add(config.flight, 'bankAngle', 0, 1.2);
     flight.add(config.flight, 'cushionHeight', 20, 1000);
+    const props = this.gui.addFolder('Props').close();
+    props.add(config.props, 'enabled');
+    props.add(config.props, 'fadeNear', 100, 5000);
+    props.add(config.props, 'fadeFar', 200, 8000);
+    props.add(config.props, 'emissive', 0, 8);
+
     const touch = this.gui.addFolder('Touch').close();
     touch.add(config.touch, 'stickRadius', 30, 120);
     touch.add(config.touch, 'deadzone', 0, 0.4);

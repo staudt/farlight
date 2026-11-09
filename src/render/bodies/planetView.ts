@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Group, Mesh, Quaternion, Sphere, Vector3, type ShaderMaterial } from 'three';
+import { BufferAttribute, BufferGeometry, Group, type InstancedMesh, Mesh, Quaternion, Sphere, Vector3, type ShaderMaterial } from 'three';
 import type { Body } from '../../sim/universe';
 import type { ChunkRequest, ChunkResult } from '../../terrain/chunkBuild';
 import {
@@ -15,6 +15,9 @@ import {
 } from '../../terrain/quadtree';
 import { type ChunkWorkerPool, getWorkerPool } from '../../terrain/workerPool';
 import { type BodyView, type FrameContext, apparentSizeBoost, placeRelative } from '../context';
+import { PROP_GRID_EXTRA } from '../../terrain/props';
+import { config } from '../../core/config';
+import { createPropMaterial, createPropMeshes, disposePropMeshes } from './props';
 import { createTerrainMaterial } from './terrainMaterial';
 
 const enum State {
@@ -29,6 +32,7 @@ class ChunkNode {
   disposed = false;
   children: ChunkNode[] | null = null;
   mesh: Mesh | null = null;
+  props: InstancedMesh[] = [];
   readonly center = new Vector3();
   readonly estCenter = new Vector3();
   readonly dir = new Vector3();
@@ -64,6 +68,8 @@ export class PlanetView implements BodyView {
   readonly body: Body;
   readonly object = new Group();
   private readonly material: ShaderMaterial;
+  private readonly propMaterial: ShaderMaterial;
+  private readonly hasProps: boolean;
   private readonly pool: ChunkWorkerPool;
   private readonly roots: ChunkNode[] = [];
   private readonly maxLevel: number;
@@ -80,6 +86,8 @@ export class PlanetView implements BodyView {
     this.body = body;
     this.object.name = `planet:${body.id}`;
     this.material = createTerrainMaterial();
+    this.propMaterial = createPropMaterial(this.material.uniforms);
+    this.hasProps = (body.def.terrain?.props?.length ?? 0) > 0;
     this.pool = getWorkerPool();
     this.maxInFlight = Math.max(6, this.pool.size * 4);
     this.maxLevel = maxLevelFor(body.radius, 400);
@@ -124,6 +132,8 @@ export class PlanetView implements BodyView {
         x: n.x,
         y: n.y,
         grid: CHUNK_GRID,
+        // Props only on the two finest levels: they matter within a few km.
+        props: this.hasProps ? { minLevel: Math.max(0, this.maxLevel - 1), gridLevel: this.maxLevel + PROP_GRID_EXTRA } : undefined,
       };
       this.pool.request(req, (r) => this.onResult(r));
     }
@@ -150,6 +160,10 @@ export class PlanetView implements BodyView {
     n.maxR = r.maxR;
     n.mesh = mesh;
     n.state = State.Ready;
+    if (r.props.length > 0) {
+      n.props = createPropMeshes(r.props, this.propMaterial);
+      for (const p of n.props) mesh.add(p);
+    }
     this.object.add(mesh);
   }
 
@@ -157,6 +171,8 @@ export class PlanetView implements BodyView {
     n.disposed = true;
     this.queued.delete(n);
     if (n.mesh) {
+      disposePropMeshes(n.props);
+      n.props = [];
       this.object.remove(n.mesh);
       n.mesh.geometry.dispose();
       n.mesh = null;
@@ -206,6 +222,11 @@ export class PlanetView implements BodyView {
     sunView.copy(ctx.world.universe.root.position).sub(b.position).normalize().transformDirection(ctx.camera.matrixWorldInverse);
     (u.uBodyCenterView!.value as Vector3).copy(b.position).sub(ctx.cameraWorld).applyMatrix4(ctx.camera.matrixWorldInverse);
     u.uTime!.value = ctx.realTime;
+    const pu = this.propMaterial.uniforms;
+    const pc = config.props;
+    pu.uFadeNear!.value = pc.enabled ? pc.fadeNear : 0;
+    pu.uFadeFar!.value = pc.enabled ? Math.max(pc.fadeFar, pc.fadeNear + 1) : 1e-3;
+    pu.uEmissive!.value = pc.emissive;
 
     this.visibleNow.clear();
     for (const root of this.roots) this.traverse(root, _cam, camLen, cull);
@@ -244,6 +265,7 @@ export class PlanetView implements BodyView {
   dispose(): void {
     for (const r of this.roots) this.disposeNode(r);
     this.material.dispose();
+    this.propMaterial.dispose();
   }
 }
 
