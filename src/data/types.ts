@@ -249,6 +249,13 @@ export interface TerrainDef {
   maps?: TerrainMapsDef;
   /** Settlement style lights on the night side, from `maps.lights` (or a flat `density`). */
   nightLights?: NightLightsDef;
+  /**
+   * What the latitude-like coordinate of biome rules and polar caps measures from. 'pole' (default)
+   * is the spin axis. 'substellar' uses the body-fixed +X axis, which faces the parent star of a
+   * tidally locked world: latitude 0 is the sub-stellar point, about 0.78 the terminator and
+   * 1.57 the anti-stellar point (eyeball worlds).
+   */
+  biomeAxis?: 'pole' | 'substellar';
 }
 
 export interface NightLightsDef {
@@ -294,6 +301,8 @@ export interface NoiseLayer {
   warp?: number;
   /** Optional low frequency mask: the layer only shows where the mask noise > threshold. */
   mask?: { frequency: number; threshold: number };
+  /** Quantise the layer value into this many flat steps with steep risers (mesas, stepped canyon walls). */
+  terraces?: number;
 }
 
 export interface CraterDef {

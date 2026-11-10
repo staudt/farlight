@@ -150,6 +150,7 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
   const detail = new Simplex3(def.seed * 104729 + 3);
   const amplitude = t?.amplitude ?? 0;
   const ampM = amplitude * radius;
+  const substellar = t?.biomeAxis === 'substellar';
   const hasWater = !!t && t.seaLevel !== undefined && !!t.water;
   const seaLevel = hasWater ? (t?.seaLevel ?? 0) : -Infinity;
   const seaMeters = hasWater ? seaLevel * ampM : 0;
@@ -239,12 +240,18 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
       py = w.y;
       pz = w.z;
     }
-    const v =
+    let v =
       d.type === 'fbm'
         ? fbm(noise, px, py, pz, d.octaves, L.lac, L.gain)
         : d.type === 'ridged'
           ? ridged(noise, px, py, pz, d.octaves, L.lac, L.gain)
           : billow(noise, px, py, pz, d.octaves, L.lac, L.gain);
+    if (d.terraces) {
+      // Flat treads with steep risers: the layer value is quantised, each step eased near its top.
+      const sv = v * d.terraces;
+      const fl = Math.floor(sv);
+      v = (fl + smoothstep(0.8, 1, sv - fl)) / d.terraces;
+    }
     return v * d.amplitude * m;
   }
 
@@ -405,7 +412,9 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
       out.x = x;
       out.y = y;
       out.z = z;
-      out.lat = Math.asin(Math.max(-1, Math.min(1, y)));
+      // Eyeball worlds measure "latitude" from the sub-stellar point (+X): 0 there, pi/4 at the
+      // terminator, pi/2 on the anti-stellar side. Linear in x, so the bands stay evenly wide.
+      out.lat = substellar ? (Math.PI / 4) * (1 - Math.max(-1, Math.min(1, x))) : Math.asin(Math.max(-1, Math.min(1, y)));
       if (!t) {
         out.n = out.height = out.depth = out.depthN = 0;
         out.water = false;
