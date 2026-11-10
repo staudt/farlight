@@ -1,4 +1,4 @@
-import { Color, ShaderMaterial, Vector3 } from 'three';
+import { Color, ShaderMaterial, Texture, Vector3 } from 'three';
 import { starLight } from '../starLight';
 
 /** Flat shaded, vertex colored terrain material with sun lighting and glinting water. */
@@ -12,12 +12,20 @@ export function createTerrainMaterial(): ShaderMaterial {
       uTime: { value: 0 },
       uSunIntensity: { value: 1.25 },
       uStarColor: starLight.uniform,
+      uGlow: { value: 1 },
+      // Settlement lights map (night side), used by coarse chunks; uLampColor is zero without one.
+      uLights: { value: null as Texture | null },
+      uLampColor: { value: new Vector3(0, 0, 0) },
     },
     vertexShader: /* glsl */ `
       #include <common>
       #include <logdepthbuf_pars_vertex>
       attribute vec3 aColor;
       attribute vec2 aWater;
+      attribute vec4 aEmit;
+      attribute vec4 aDir;
+      varying vec4 vEmit;
+      varying vec4 vDir;
       varying vec3 vColor;
       varying vec2 vWater;
       varying vec3 vViewPos;
@@ -26,6 +34,8 @@ export function createTerrainMaterial(): ShaderMaterial {
         vViewPos = mv.xyz;
         vColor = aColor;
         vWater = aWater;
+        vEmit = aEmit;
+        vDir = aDir;
         gl_Position = projectionMatrix * mv;
         #include <logdepthbuf_vertex>
       }`,
@@ -38,6 +48,11 @@ export function createTerrainMaterial(): ShaderMaterial {
       uniform float uTime;
       uniform float uSunIntensity;
       uniform vec3 uStarColor;
+      uniform float uGlow;
+      uniform sampler2D uLights;
+      uniform vec3 uLampColor;
+      varying vec4 vDir;
+      varying vec4 vEmit;
       varying vec3 vColor;
       varying vec2 vWater;
       varying vec3 vViewPos;
@@ -75,6 +90,17 @@ export function createTerrainMaterial(): ShaderMaterial {
           float fres = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 4.0);
           col += sunCol * uStarColor * spec * uSunIntensity * 0.6;
           col += vec3(0.30, 0.45, 0.70) * fres * 0.35 * (0.15 + 0.85 * term);
+        }
+        // Self light (settlements, lava): fades in through twilight by the local sun elevation.
+        // The atmosphere pass multiplies scene colour by transmittance and adds no night inscatter.
+        float night = 1.0 - smoothstep(-0.14, 0.04, sunR);
+        col += vEmit.rgb * (vEmit.a + (1.0 - vEmit.a) * night) * uGlow;
+        if (vDir.w > 0.0 && dot(vDir.xyz, vDir.xyz) > 0.25 && isWater < 0.5 && dot(uLampColor, uLampColor) > 0.0) {
+          // Coarse chunks: the settlement map straight from the body fixed direction.
+          vec3 bd = normalize(vDir.xyz);
+          vec2 luv = vec2(atan(-bd.z, bd.x) * 0.15915494 + 0.5, 0.5 - asin(clamp(bd.y, -1.0, 1.0)) * 0.31830989);
+          float ld = smoothstep(0.08, 0.85, texture2D(uLights, luv).r);
+          col += uLampColor * ld * vDir.w * night * uGlow;
         }
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>

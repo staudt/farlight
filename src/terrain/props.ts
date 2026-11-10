@@ -15,6 +15,8 @@ export interface PropBatch {
   /** Mesh variant of the kind (tree: 0 conifer, 1 broadleaf). */
   variant: number;
   count: number;
+  /** Night glow weight of the instance colour (0 for none), from the prop def. */
+  glow: number;
   /** 16 floats per instance (column major), chunk local. */
   matrices: Float32Array;
   /** 3 floats per instance, linear RGB. */
@@ -92,6 +94,7 @@ function treeVariant(biome: string): number {
 interface Accum {
   kind: PropKind;
   variant: number;
+  glow: number;
   m: number[];
   c: number[];
 }
@@ -236,10 +239,11 @@ export function scatterProps(def: BodyDef, sampler: TerrainSampler, p: PropScatt
         const cb = pd.color[2] * br * (0.94 + 0.12 * r1);
 
         const variant = pd.kind === 'tree' ? treeVariant(biome) : 0;
-        const key = `${pd.kind}:${variant}`;
+        const glow = pd.glow ?? 0;
+        const key = `${pd.kind}:${variant}:${glow}`;
         let acc = batches.get(key);
         if (!acc) {
-          acc = { kind: pd.kind, variant, m: [], c: [] };
+          acc = { kind: pd.kind, variant, glow, m: [], c: [] };
           batches.set(key, acc);
         }
         acc.m.push(xx * sxz, xy * sxz, xz * sxz, 0, ux * sh, uy * sh, uz * sh, 0, zx * sxz, zy * sxz, zz * sxz, 0, px, py, pz, 1);
@@ -251,7 +255,7 @@ export function scatterProps(def: BodyDef, sampler: TerrainSampler, p: PropScatt
 
   const out: PropBatch[] = [];
   for (const a of batches.values()) {
-    out.push({ kind: a.kind, variant: a.variant, count: a.c.length / 3, matrices: new Float32Array(a.m), colors: new Float32Array(a.c) });
+    out.push({ kind: a.kind, variant: a.variant, glow: a.glow, count: a.c.length / 3, matrices: new Float32Array(a.m), colors: new Float32Array(a.c) });
   }
   return out;
 }

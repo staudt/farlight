@@ -1,5 +1,8 @@
 // Builds Earth's terrain maps from Natural Earth GeoJSON (public domain).
-// Usage: node scripts/build-earth-maps.mjs [downloadDir]
+// Usage: node scripts/build-earth-maps.mjs [downloadDir] [--lights]
+// `--lights` builds only earth-lights.bin from the populated places database (.dbf, plain table
+// data with latitude, longitude and pop_max columns) at artifacts/naturalearth/pp (unzip
+// ne_10m_populated_places_simple.zip there; it is only read as bytes, never executed).
 // The downloads live in artifacts/naturalearth/dl (gitignored); only the outputs in public/maps are committed.
 // The inputs are treated as plain data: they are only parsed as JSON.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -7,7 +10,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const dl = process.argv[2] ?? join(root, 'artifacts/naturalearth/dl');
+const args = process.argv.slice(2);
+const dl = args.find((a) => !a.startsWith('--')) ?? join(root, 'artifacts/naturalearth/dl');
+const ppDir = join(root, 'artifacts/naturalearth/pp');
 const outDir = join(root, 'public/maps');
 mkdirSync(outDir, { recursive: true });
 
@@ -84,6 +89,78 @@ function write(name, W, H, data) {
   Buffer.from(data.buffer, data.byteOffset, data.byteLength).copy(buf, 4);
   writeFileSync(join(outDir, name), buf);
   console.log(name, buf.length, 'bytes');
+}
+
+// ---- Night lights ------------------------------------------------------------------------------
+/** Reads columns of a dBase table as plain data. Returns rows as objects of the wanted fields. */
+function readDbf(path, wanted) {
+  const b = readFileSync(path);
+  const n = b.readUInt32LE(4);
+  const headerLen = b.readUInt16LE(8);
+  const recLen = b.readUInt16LE(10);
+  const fields = [];
+  let off = 1;
+  for (let o = 32; b[o] !== 0x0d; o += 32) {
+    const name = b.toString('latin1', o, o + 11).replace(/\0.*/, '');
+    const len = b[o + 16];
+    if (wanted.includes(name)) fields.push({ name, off, len });
+    off += len;
+  }
+  const rows = [];
+  for (let i = 0; i < n; i++) {
+    const base = headerLen + i * recLen;
+    if (b[base] === 0x2a) continue; // deleted
+    const row = {};
+    for (const f of fields) row[f.name] = parseFloat(b.toString('latin1', base + f.off, base + f.off + f.len));
+    rows.push(row);
+  }
+  return rows;
+}
+
+/**
+ * Settlement density: every populated place splats a small core plus a wider halo (sigma follows
+ * log population, horizontally stretched by 1/cos(lat) so sizes are round on the ground). The sum
+ * goes through a soft clip and a power curve, so towns stand out and rural land stays dark.
+ */
+function buildLights() {
+  const W = 2048;
+  const H = 1024;
+  const places = readDbf(join(ppDir, 'ne_10m_populated_places_simple.dbf'), ['latitude', 'longitude', 'pop_max']);
+  const acc = new Float32Array(W * H);
+  const splat = (lat, lon, amp, sigma) => {
+    const cy = (0.5 - lat / 180) * H - 0.5;
+    const cx = ((lon + 180) / 360) * W - 0.5;
+    const sx = sigma / Math.min(4, Math.max(0.25, Math.cos((lat * Math.PI) / 180)));
+    const rx = Math.ceil(sx * 3);
+    const ry = Math.ceil(sigma * 3);
+    for (let y = Math.round(cy) - ry; y <= Math.round(cy) + ry; y++) {
+      if (y < 0 || y >= H) continue;
+      for (let x = Math.round(cx) - rx; x <= Math.round(cx) + rx; x++) {
+        const dx = (x - cx) / sx;
+        const dy = (y - cy) / sigma;
+        acc[y * W + ((x + W) % W)] += amp * Math.exp(-(dx * dx + dy * dy) / 2);
+      }
+    }
+  };
+  let used = 0;
+  for (const p of places) {
+    if (!(p.pop_max > 1000) || !Number.isFinite(p.latitude) || !Number.isFinite(p.longitude)) continue;
+    used++;
+    const lp = Math.log10(p.pop_max);
+    const amp = Math.min(1.6, 0.18 + 0.16 * Math.max(0, lp - 3.7) ** 1.6);
+    const core = 0.4 + 0.2 * Math.max(0, lp - 4);
+    splat(p.latitude, p.longitude, amp, core);
+    splat(p.latitude, p.longitude, amp * 0.22, core * 2.6);
+  }
+  const out = new Uint8Array(W * H);
+  for (let i = 0; i < out.length; i++) out[i] = Math.round(255 * Math.pow(1 - Math.exp(-acc[i] * 1.0), 1.15));
+  write('earth-lights.bin', W, H, out);
+  console.log('lights from', used, 'places');
+}
+
+if (args.includes('--lights')) {
+  buildLights();
+  process.exit(0);
 }
 
 // ---- Land signed distance field -------------------------------------------------------------
@@ -186,3 +263,6 @@ const ice = readJson('ne_50m_glaciated_areas.geojson');
 const iceMask = new Uint8Array(MW * MH);
 for (const f of ice.features) fillRings(iceMask, MW, MH, ringsOf(f.geometry), 255);
 write('earth-ice.bin', MW, MH, softMask(iceMask, MW, MH, 1, 1.1));
+
+// ---- Night lights (needs the populated places database, see the usage note) -----------------
+if (existsSync(join(ppDir, 'ne_10m_populated_places_simple.dbf'))) buildLights();

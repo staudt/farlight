@@ -98,6 +98,24 @@ export const SCENARIOS: Record<string, Scenario> = {
     description: 'High over Italy and the Mediterranean',
     apply: (w) => faceLatLon(w, 'earth', 42, 12.5, 1.25),
   },
+  'earth-night-orbit': {
+    description: 'Europe at night from orbit: city lights along the coasts, the dusk line to the west',
+    apply: (w) => nightView(w, 'earth', 47, 12, 1.75, 23.2),
+  },
+  'earth-night-low': {
+    description: 'Low over the lit coast of the US northeast at night, towns and cities spread below',
+    apply: (w) => w.place({ body: 'earth', lat: 40.3, lon: -74.6, altitude: 1800, heading: 38, pitch: -6, throttle: 0.3, time: findLocalHourTime(w, 'earth', -74.6, 23) }),
+  },
+  'lava-night': {
+    description: 'Gliding over a lava world on its night side, rivers and cracks glowing',
+    generic: true,
+    apply: (w) => glowNight(w, (d) => d.terrain?.biomes.some((b) => b.emissive) === true, 2200),
+  },
+  'alien-night': {
+    description: 'Gliding over a bioluminescent alien world at night, glowing forests, crystals or seas',
+    generic: true,
+    apply: (w) => glowNight(w, (d) => d.terrain?.props?.some((p) => (p.glow ?? 0) > 0) === true || !!d.terrain?.water?.emissive, 220),
+  },
   'earth-forest-low': {
     description: 'Gliding 300 metres over the boreal forests of Sweden in the morning',
     apply: (w) => w.place({ body: 'earth', lat: 58, lon: 15.5, altitude: 300, heading: 200, pitch: -2, throttle: 0.3, time: findLocalHourTime(w, 'earth', 15.5, 8) }),
@@ -276,6 +294,70 @@ export const SCENARIOS: Record<string, Scenario> = {
     },
   },
 };
+
+/** Camera `radii` out above lat/lon (degrees) with the spot at the given local solar hour (night). */
+function nightView(w: World, bodyId: string, latDeg: number, lonDeg: number, radii: number, hour: number): void {
+  const body = w.universe.get(bodyId);
+  const local = new Vector3();
+  latLonToDir((latDeg * Math.PI) / 180, (lonDeg * Math.PI) / 180, local);
+  w.clock.time = findLocalHourTime(w, bodyId, lonDeg, hour);
+  w.universe.update(w.clock.time);
+  const dir = local.clone().applyQuaternion(body.rotation);
+  const side = new Vector3().crossVectors(dir, new Vector3(0, 1, 0)).normalize();
+  w.placeInSpace(bodyId, body.radius * radii, dir.addScaledVector(side, 0.12));
+}
+
+/**
+ * Glides low over the night side of the first body whose def passes `glows` (the focus body when
+ * it does), over the ground with the most glowing neighbours. Data only: it reads emissive fields.
+ */
+function glowNight(w: World, glows: (d: BodyDef) => boolean, altitude: number): void {
+  const system = w.universe.system;
+  const focus = focusBody(w);
+  const def = glows(focus) ? focus : system.bodies.find((b) => b.kind !== 'star' && glows(b)) ?? focus;
+  w.clock.time = 0;
+  w.universe.update(0);
+  const body = w.universe.get(def.id);
+  const terrain = def.terrain;
+  const sampler = w.sampler(body) as Partial<TerrainSampler>;
+  const sun = body.worldToLocalDir(w.universe.root.position.clone().sub(body.position).normalize(), new Vector3());
+  const dir = new Vector3();
+  const nb = new Vector3();
+  const tan = new Vector3();
+  const smp = makeSample();
+  const glowAt = (d: Vector3): number => {
+    if (!terrain || typeof sampler.sample !== 'function') return 0;
+    sampler.sample(d.x, d.y, d.z, smp);
+    if (smp.water) return terrain.water?.emissive ? 1 : 0;
+    const name = biomeNameAt(terrain, smp, 0);
+    if (terrain.biomes.some((b) => b.name === name && b.emissive)) return 1;
+    // Glowing trees make the best show, glowing crystals and rocks count for less.
+    const hit = terrain.props?.filter((p) => (p.glow ?? 0) > 0 && (!p.biomes || p.biomes.includes(name)));
+    return hit?.some((p) => p.kind === 'tree') ? 1 : hit?.length ? 0.25 : 0;
+  };
+  let best = { lat: 10, lon: 0, score: -1 };
+  for (let lat = -45; lat <= 45; lat += 5) {
+    for (let lon = -180; lon < 180; lon += 5) {
+      latLonToDir(lat * DEG2RAD, lon * DEG2RAD, dir);
+      const elev = Math.asin(Math.min(1, Math.max(-1, dir.dot(sun)))) / DEG2RAD;
+      if (elev > -25 || elev < -60) continue;
+      let score = 0;
+      for (const km of [1500, 4000, 9000]) {
+        for (let k = 0; k < 8; k++) {
+          const az = (k / 8) * Math.PI * 2;
+          const t = km / body.radius;
+          tan.set(0, 1, 0).addScaledVector(dir, -dir.y).normalize();
+          nb.copy(dir).addScaledVector(tan, Math.cos(az) * t).addScaledVector(new Vector3().crossVectors(tan, dir), Math.sin(az) * t).normalize();
+          score += glowAt(nb);
+        }
+      }
+      // Stand beside the glow, not inside a flat sea of it.
+      score -= glowAt(dir) * 6;
+      if (score > best.score) best = { lat, lon, score };
+    }
+  }
+  w.place({ body: def.id, lat: best.lat, lon: best.lon, altitude, heading: 70, pitch: -2, throttle: 0.15, time: 0 });
+}
 
 /** The most interesting body, or the one named by `?focus=<bodyId>` (handy for looking at a specific world). */
 function focusBody(w: World): BodyDef {

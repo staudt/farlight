@@ -167,11 +167,22 @@ export interface TerrainDef {
   features?: FeatureDef[];
   /** Ordered rules. The first matching biome colors the vertex; blending happens at edges. */
   biomes: BiomeDef[];
-  water?: { color: RGB; deepColor: RGB };
+  water?: { color: RGB; deepColor: RGB; /** Glowing seas (bioluminescence). */ emissive?: BiomeEmissiveDef };
   polarCaps?: { latitude: number; color: RGB };
   props?: PropDef[];
   /** Optional equirectangular data maps (see terrain/maps.ts). Any body may use them. */
   maps?: TerrainMapsDef;
+  /** Settlement style lights on the night side, from `maps.lights` (or a flat `density`). */
+  nightLights?: NightLightsDef;
+}
+
+export interface NightLightsDef {
+  /** Warm lamp colour, linear RGB (sodium orange); a share of the lights is whitened. */
+  color: RGB;
+  /** HDR strength of a fully lit facet (about 2 to 4 blooms softly). */
+  intensity: number;
+  /** Multiplier on the map density, or the flat density (0..1) when there is no lights map. */
+  density?: number;
 }
 
 export interface TerrainMapsDef {
@@ -189,6 +200,8 @@ export interface TerrainMapsDef {
   radiusKm?: number;
   /** Overall strength of the maps over the procedural layers, 0..1 (default 1). */
   influence?: number;
+  /** Settlement density 0..1 for `terrain.nightLights` (Uint8, same layout as the other maps). */
+  lights?: string;
 }
 
 export type NoiseType = 'fbm' | 'ridged' | 'billow';
@@ -245,6 +258,17 @@ export interface BiomeDef {
   latitude?: readonly [number, number];
   /** Moisture noise range 0..1. */
   moisture?: readonly [number, number];
+  /** Self lit surface (lava, glowing growth): fades in with night, `day` keeps a share by day. */
+  emissive?: BiomeEmissiveDef;
+}
+
+export interface BiomeEmissiveDef {
+  /** Glow colour, linear RGB (defaults to the biome colour). */
+  color?: RGB;
+  /** HDR strength at night. */
+  intensity: number;
+  /** Share of the glow that stays on in daylight, 0..1 (default 0). */
+  day?: number;
 }
 
 export type PropKind = 'tree' | 'rock' | 'spire' | 'crystal' | 'mesa';
@@ -261,6 +285,8 @@ export interface PropDef {
   maxHeight?: number;
   maxSlope?: number;
   biomes?: string[];
+  /** Bioluminescence: night glow of the instance colour, HDR weight (about 0.5 to 2). Crystals always glow. */
+  glow?: number;
 }
 
 export interface GasDef {

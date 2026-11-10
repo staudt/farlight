@@ -23,8 +23,9 @@ function window(x: number, lo: number | undefined, hi: number | undefined, w: nu
  * widens the biome transitions so far views read as smooth regions instead of per-facet patchwork.
  * Biome rules are composited in order with soft (smoothstep) membership, so there are no hard
  * threshold flips between neighbouring vertices.
+ * `emit`, when given, is a zeroed [r, g, b, dayWeighted, weight] filled with the weighted biome glow.
  */
-export function biomeColor(def: TerrainDef, s: TerrainSample, slope: number, detail = 1): RGB {
+export function biomeColor(def: TerrainDef, s: TerrainSample, slope: number, detail = 1, emit?: number[]): RGB {
   jitterNoise ??= new Simplex3(4242);
   const j = jitterNoise;
   const jn = detail > 0.01 ? j.noise(s.x * 55, s.y * 55, s.z * 55) * detail : 0;
@@ -43,6 +44,17 @@ export function biomeColor(def: TerrainDef, s: TerrainSample, slope: number, det
     r = c0[0] + (c1[0] - c0[0]) * t;
     g = c0[1] + (c1[1] - c0[1]) * t;
     b = c0[2] + (c1[2] - c0[2]) * t;
+    const we = w?.emissive;
+    if (emit && we) {
+      // Glow follows the shallows, a bit stronger over deeper colour.
+      const c = we.color ?? c0;
+      const k = we.intensity * (0.6 + 0.4 * t);
+      emit[0]! += c[0] * k;
+      emit[1]! += c[1] * k;
+      emit[2]! += c[2] * k;
+      emit[3]! += (we.day ?? 0) * k;
+      emit[4]! += k;
+    }
   } else {
     const n = s.n + jn * 0.03;
     const moist = s.moisture + patch * 0.22;
@@ -62,6 +74,17 @@ export function biomeColor(def: TerrainDef, s: TerrainSample, slope: number, det
       r += rule.color[0] * wgt;
       g += rule.color[1] * wgt;
       b += rule.color[2] * wgt;
+      if (emit && rule.emissive) {
+        const e = rule.emissive;
+        const c = e.color ?? rule.color;
+        const k = e.intensity * wgt;
+        emit[0]! += c[0] * k;
+        emit[1]! += c[1] * k;
+        emit[2]! += c[2] * k;
+        // Day share, weighted by how much light this rule adds.
+        emit[3]! += (e.day ?? 0) * k;
+        emit[4]! += k;
+      }
       rem -= wgt;
       if (rem <= 0.001) break;
     }

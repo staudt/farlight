@@ -3,7 +3,7 @@ import { beforeAll, expect, test } from 'vitest';
 import { SOLAR_SYSTEM } from '../src/data/solarSystem';
 import { latLonToDir } from '../src/terrain/api';
 import { createHeightSampler, makeSample } from '../src/terrain/heightfield';
-import { registerMap } from '../src/terrain/maps';
+import { getMap, registerMap, sampleMap } from '../src/terrain/maps';
 
 const earth = SOLAR_SYSTEM.bodies.find((b) => b.id === 'earth')!;
 const ER = 637100;
@@ -48,4 +48,16 @@ test('two samplers give identical heights (worker equals main)', () => {
     latLonToDir(((i * 7.3) % 150) * D - 75 * D, i * 0.37, d);
     expect(a.heightAt(d.x, d.y, d.z)).toBe(b.heightAt(d.x, d.y, d.z));
   }
+});
+
+test('night lights: big cities are bright, empty places are dark', () => {
+  const lights = getMap(earth.terrain!.maps!.lights)!;
+  const lit = (lat: number, lon: number) => sampleMap(lights, lat * D, lon * D);
+  expect(lit(51.5, -0.12)).toBeGreaterThan(0.6); // London
+  expect(lit(35.7, 139.7)).toBeGreaterThan(0.6); // Tokyo
+  expect(lit(40.7, -74)).toBeGreaterThan(0.6); // New York
+  expect(lit(28.6, 77.2)).toBeGreaterThan(0.6); // Delhi
+  expect(lit(23, 13)).toBeLessThan(0.05); // Sahara
+  expect(lit(0, -150)).toBeLessThan(0.02); // mid Pacific
+  expect(lit(-80, 0)).toBeLessThan(0.02); // Antarctica
 });

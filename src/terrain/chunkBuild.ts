@@ -1,6 +1,8 @@
+import { Simplex3 } from '../core/noise';
 import { hashInts } from '../core/rng';
 import type { BodyDef } from '../data/types';
 import { biomeColor } from './biomes';
+import { getMap, sampleMap } from './maps';
 import { type TerrainSample, type TerrainSampler, createHeightSampler, makeSample } from './heightfield';
 import { chunkEdgeLength, chunkRect, faceToDir } from './quadtree';
 import { type PropBatch, scatterProps } from './props';
@@ -28,6 +30,10 @@ export interface ChunkResult {
   colors: Float32Array;
   /** Per vertex (isWater, facetRandom). */
   water: Float32Array;
+  /** Per vertex (r, g, b, dayShare) HDR self light. Absent when the body has none. */
+  emit?: Float32Array;
+  /** Per vertex (body fixed unit direction, share of the shader lights map) for bodies with a lights map. */
+  dir?: Float32Array;
   /** Chunk center in body fixed meters (float64 values). */
   center: [number, number, number];
   minR: number;
@@ -50,6 +56,11 @@ function samplerFor(req: ChunkRequest): TerrainSampler {
 }
 
 const SKIRT = 0.06;
+
+/** Share of lamps that are whitened (the rest keep the warm lamp colour). */
+const WHITE_LAMP_SHARE = 0.3;
+const WHITE_LAMP: readonly [number, number, number] = [1.0, 0.82, 0.55];
+let lampNoise: Simplex3 | null = null;
 
 function smoothstep(a: number, b: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -115,6 +126,15 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
 
   // Per vertex colors from the analytic sample (continuous across triangles and chunks).
   const vcol = new Float32Array(V * V * 3);
+  const nl = terrain.nightLights;
+  const lightMap = nl ? getMap(terrain.maps?.lights) : undefined;
+  const hasBiomeGlow = terrain.biomes.some((b) => b.emissive) || !!terrain.water?.emissive;
+  const hasEmit = hasBiomeGlow || !!nl;
+  // Per vertex biome glow (r, g, b, dayWeighted, weight) and shaped settlement density, clump noise.
+  const vglow = hasBiomeGlow ? new Float32Array(V * V * 5) : null;
+  const vlamp = nl ? new Float32Array(V * V) : null;
+  const vclump = nl ? new Float32Array(V * V) : null;
+  const emitTmp = [0, 0, 0, 0, 0];
   const rad = new Float64Array(V * V);
   for (let k = 0; k < V * V; k++) rad[k] = Math.hypot(px[k]!, py[k]!, pz[k]!);
   for (let j = 0; j < V; j++) {
@@ -134,7 +154,19 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
       const gy = (rad[kd]! - rad[kc]!) / d2;
       const sample = samples[k]!;
       const slope = sample.water ? 0 : Math.min(1, Math.hypot(gx, gy) * slopeScale);
-      const col = biomeColor(terrain, sample, slope, detail);
+      if (vglow) emitTmp.fill(0);
+      const col = biomeColor(terrain, sample, slope, detail, vglow ? emitTmp : undefined);
+      if (vglow) for (let q = 0; q < 5; q++) vglow[k * 5 + q] = emitTmp[q]!;
+      if (vlamp && vclump && !sample.water) {
+        const raw = lightMap ? sampleMap(lightMap, sample.lat, Math.atan2(-sample.z, sample.x)) * (nl!.density ?? 1) : (nl!.density ?? 0);
+        const d = smoothstep(0.08, 0.85, raw);
+        vlamp[k] = d;
+        if (d > 0.01) {
+          lampNoise ??= new Simplex3(9137);
+          const n = 0.6 * lampNoise.noise(sample.x * (R / 700), sample.y * (R / 700), sample.z * (R / 700)) + 0.4 * lampNoise.noise(sample.x * (R / 3000) + 5, sample.y * (R / 3000), sample.z * (R / 3000));
+          vclump[k] = smoothstep(-0.35, 0.35, n);
+        }
+      }
       vcol[k * 3] = col[0];
       vcol[k * 3 + 1] = col[1];
       vcol[k * 3 + 2] = col[2];
@@ -149,6 +181,11 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
   const triColor = new Float32Array(cells * 18); // two triangles per cell, 3 vertices, rgb
   const triWater = new Float32Array(cells * 2);
   const triRnd = new Float32Array(cells * 2);
+  const triEmit = hasEmit ? new Float32Array(cells * 2 * 12) : null; // per triangle vertex rgb + dayShare
+  const emit = hasEmit ? new Float32Array(tris * 12) : undefined;
+  const dirAttr = lightMap ? new Float32Array(tris * 12) : undefined;
+  // Facet sparkle fades into the smooth density as facets outgrow a single lamp post.
+  const sparkle = 1 - smoothstep(500, 2500, cell);
 
   let maxDist2 = 0;
   const baseSeed = hashInts(req.face, req.level, req.x, req.y);
@@ -172,6 +209,16 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
       colors[o + q * 3 + 2] = triColor[co + 2]!;
       water[t * 6 + q * 2] = triWater[cell * 2 + which]!;
       water[t * 6 + q * 2 + 1] = triRnd[cell * 2 + which]!;
+      if (dirAttr) {
+        dirAttr[t * 12 + q * 4] = dx[k]!;
+        dirAttr[t * 12 + q * 4 + 1] = dy[k]!;
+        dirAttr[t * 12 + q * 4 + 2] = dz[k]!;
+        dirAttr[t * 12 + q * 4 + 3] = 1 - sparkle;
+      }
+      if (emit && triEmit) {
+        const eo = (cell * 2 + which) * 12 + q * 4;
+        for (let c = 0; c < 4; c++) emit[t * 12 + q * 4 + c] = triEmit[eo + c]!;
+      }
     }
   };
 
@@ -218,6 +265,82 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
     }
     triWater[cell * 2 + which] = isWater ? 1 : 0;
     triRnd[cell * 2 + which] = rnd;
+    if (triEmit) {
+      // Biome glow: flat mean over the triangle blended to per vertex on coarse chunks, like colour.
+      let fe0 = 0;
+      let fe1 = 0;
+      let fe2 = 0;
+      let fd = 0;
+      let fw = 0;
+      let lampSum = 0;
+      let clumpSum = 0;
+      for (let q = 0; q < 3; q++) {
+        const k = vs[q]!;
+        if (vglow && samples[k]!.water === isWater) {
+          fe0 += vglow[k * 5]! / cnt;
+          fe1 += vglow[k * 5 + 1]! / cnt;
+          fe2 += vglow[k * 5 + 2]! / cnt;
+          fd += vglow[k * 5 + 3]! / cnt;
+          fw += vglow[k * 5 + 4]! / cnt;
+        }
+        if (vlamp && vclump) {
+          lampSum += vlamp[k]!;
+          clumpSum += vclump[k]!;
+        }
+      }
+      // Lamps: a facet is lit with probability equal to the settlement density (and its clump).
+      let lit = 0;
+      let lampR = 0;
+      let lampG = 0;
+      let lampB = 0;
+      let lampK = 0;
+      if (nl && !isWater && lampSum > 0.001) {
+        const dTri = lampSum / 3;
+        const clumpF = 1 - sparkle + sparkle * (0.03 + 1.7 * (clumpSum / 3));
+        const rnd2 = (hashInts(baseSeed, cell, which + 31) & 0xffff) / 65535;
+        const white = ((hashInts(baseSeed, cell, which + 53) & 0xff) / 255) < WHITE_LAMP_SHARE;
+        const warm = white ? WHITE_LAMP : nl.color;
+        const bright = 0.55 + 0.45 * (((hashInts(baseSeed, cell, which + 71) & 0xff) / 255));
+        lit = rnd2 < dTri * clumpF * 0.26 ? bright : 0;
+        lampR = warm[0];
+        lampG = warm[1];
+        lampB = warm[2];
+        lampK = nl.intensity * 0.55;
+      }
+      for (let q = 0; q < 3; q++) {
+        const k = vs[q]!;
+        const m = smooth;
+        // Biome glow breaks up per facet on fine chunks (veins and patches, not a flat fill).
+        const gm = 1 + sparkle * (0.25 + 1.5 * rnd * rnd - 1);
+        let e0 = fe0 * gm;
+        let e1 = fe1 * gm;
+        let e2 = fe2 * gm;
+        let ed = fd;
+        let ew = fw;
+        if (vglow) {
+          e0 += (vglow[k * 5]! - fe0) * m * gm;
+          e1 += (vglow[k * 5 + 1]! - fe1) * m * gm;
+          e2 += (vglow[k * 5 + 2]! - fe2) * m * gm;
+          ed += (vglow[k * 5 + 3]! - fd) * m;
+          ew += (vglow[k * 5 + 4]! - fw) * m;
+        }
+        let cityK = 0;
+        if (lampK > 0) {
+          // Coarse chunks use the smooth density at half brightness (the average of lit and dark facets).
+          // Coarse chunks show the lights map in the shader instead (see `dir`).
+          cityK = lit * sparkle * lampK;
+          e0 += lampR * cityK;
+          e1 += lampG * cityK;
+          e2 += lampB * cityK;
+        }
+        const eo = (cell * 2 + which) * 12 + q * 4;
+        triEmit[eo] = e0;
+        triEmit[eo + 1] = e1;
+        triEmit[eo + 2] = e2;
+        // Day share of the total glow: lamps contribute none, biome glow its own share.
+        triEmit[eo + 3] = ew + cityK > 1e-6 ? ed / (ew + cityK) : 0;
+      }
+    }
   };
 
   let t = 0;
@@ -235,6 +358,13 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
     }
   }
 
+  const setDir = (tri: number, slot: number, k: number): void => {
+    dirAttr![tri * 12 + slot * 4] = dx[k]!;
+    dirAttr![tri * 12 + slot * 4 + 1] = dy[k]!;
+    dirAttr![tri * 12 + slot * 4 + 2] = dz[k]!;
+    dirAttr![tri * 12 + slot * 4 + 3] = 1 - sparkle;
+  };
+
   // Skirts: drop each border edge radially.
   const skirtQuad = (a: number, b: number, cell: number, which: number): void => {
     const o = t * 9;
@@ -249,6 +379,7 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
       positions[o + slot * 3 + 2] = Z;
       const d2 = X * X + Y * Y + Z * Z;
       if (d2 > maxDist2) maxDist2 = d2;
+      if (dirAttr) setDir(t, slot, k);
     };
     const color = (tri: number): void => {
       for (let q = 0; q < 3; q++) {
@@ -276,6 +407,11 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
     w2(0, a, 0);
     w2(1, b, skirt);
     w2(2, a, skirt);
+    if (dirAttr) {
+      setDir(t, 0, a);
+      setDir(t, 1, b);
+      setDir(t, 2, a);
+    }
     color(t);
     t++;
   };
@@ -306,6 +442,8 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
     positions,
     colors,
     water,
+    emit,
+    dir: dirAttr,
     center: [cx, cy, cz],
     minR,
     maxR,
