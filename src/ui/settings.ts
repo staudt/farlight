@@ -133,6 +133,17 @@ export class SettingsScreen {
     flight.className = 'st-sec';
     flight.innerHTML = '<h3>FLIGHT</h3>';
     flight.appendChild(this.buildRow({ kind: 'toggle', key: 'resume', label: 'Resume last flight' }));
+    flight.appendChild(this.buildRow({ kind: 'toggle', key: 'showTips', label: 'Show tips' }));
+    const tips = document.createElement('div');
+    tips.className = 'st-row';
+    tips.innerHTML = '<span class="st-label">Tips</span><span class="st-ctl"><button type="button" class="st-btn" data-k="tips">Reset tips</button></span>';
+    const tipsBtn = tips.querySelector('button') as HTMLButtonElement;
+    tipsBtn.addEventListener('click', () => {
+      this.st.set('tipsSeen', []);
+      tipsBtn.textContent = 'Tips reset';
+      window.setTimeout(() => (tipsBtn.textContent = 'Reset tips'), 2000);
+    });
+    flight.appendChild(tips);
     const reset = document.createElement('div');
     reset.className = 'st-row st-reset';
     reset.innerHTML = '<span class="st-label">Progress</span><span class="st-ctl"><button type="button" class="st-btn danger" data-k="reset">Reset progress</button><button type="button" class="st-btn" data-k="cancel" hidden>Cancel</button></span>';

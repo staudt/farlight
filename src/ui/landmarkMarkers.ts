@@ -75,6 +75,12 @@ export class LandmarkMarkers {
     return m;
   }
 
+  /** True while a "?" marker (an undiscovered landmark) is on screen. */
+  get undiscoveredShown(): boolean {
+    for (const [l, m] of this.markers) if (m.shown && !l.discovered) return true;
+    return false;
+  }
+
   update(): void {
     const w = this.world;
     const cam = this.gfx.camera;

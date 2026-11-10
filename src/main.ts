@@ -32,6 +32,7 @@ import { clearPendingJump, Hyperspace, playArrival, readPendingJump } from './re
 import { buildTravelUrl } from './ui/galaxyMath';
 import { SkyLabels } from './ui/skyLabels';
 import { FpsCounter } from './ui/fpsCounter';
+import { Guide } from './ui/guide';
 import { PhotoMode, photoEvents, saveFrame } from './ui/photoMode';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -219,6 +220,12 @@ document.addEventListener('visibilitychange', () => {
 const skyLabels = new SkyLabels(document.getElementById('hud')!, world, gfx);
 const fpsCounter = new FpsCounter(document.getElementById('hud')!);
 
+const guide = new Guide(document.getElementById('hud')!, world, {
+  blocked: () => overlay.isOpen || overlay.locked || settingsScreen.isOpen || photo.active || hyper.active,
+  device: () => (touchOn ? 'touch' : gamepad.connected ? 'gamepad' : 'keyboard'),
+  undiscoveredMarker: () => landmarkMarkers.undiscoveredShown,
+});
+
 const alignDir = new Vector3();
 let last = performance.now();
 let fpsAcc = 0;
@@ -267,6 +274,7 @@ function frame(now: number): void {
   galaxyMap.update();
   skyLabels.update();
   fpsCounter.update(realDt);
+  guide.update(realDt);
 
   fpsAcc += realDt;
   fpsFrames++;
@@ -306,6 +314,7 @@ window.__game = {
   overlay,
   settings: settingsScreen,
   galaxyMap,
+  guide,
   hyper,
   scenarios: Object.keys(SCENARIOS),
   /** Soak test hook: applies a named scenario in place. */

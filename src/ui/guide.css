@@ -1,0 +1,33 @@
+.guide-tip {
+  position: absolute;
+  left: 50%;
+  bottom: 112px;
+  transform: translateX(-50%);
+  max-width: min(640px, calc(100vw - 32px));
+  padding: 9px 20px;
+  border: 1px solid var(--hud-faint);
+  border-radius: 8px;
+  background: rgba(6, 14, 28, 0.72);
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  line-height: 1.6;
+  text-align: center;
+  color: var(--hud-text);
+  opacity: 0;
+  transition: opacity 1.2s ease;
+  pointer-events: none;
+}
+.guide-tip.on {
+  opacity: 1;
+}
+.guide-tip b {
+  font-weight: 600;
+  color: var(--hud-line);
+}
+body.touch .guide-tip {
+  bottom: 62px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  padding: 6px 14px;
+  max-width: calc(100vw - 300px);
+}

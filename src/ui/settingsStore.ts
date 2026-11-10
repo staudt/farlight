@@ -24,6 +24,9 @@ export interface Settings {
   showFps: boolean;
   hudScale: HudScale;
   resume: boolean;
+  showTips: boolean;
+  /** Ids of first flight tips already shown. */
+  tipsSeen: string[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -40,6 +43,8 @@ export const DEFAULT_SETTINGS: Settings = {
   showFps: true,
   hudScale: 'normal',
   resume: true,
+  showTips: true,
+  tipsSeen: [],
 };
 
 export const HUD_SCALES: Record<HudScale, number> = { small: 0.85, normal: 1, large: 1.2 };
@@ -82,6 +87,8 @@ export function sanitize(raw: unknown): Settings {
     showFps: bool(r.showFps, d.showFps),
     hudScale: r.hudScale === 'small' || r.hudScale === 'normal' || r.hudScale === 'large' ? r.hudScale : d.hudScale,
     resume: bool(r.resume, d.resume),
+    showTips: bool(r.showTips, d.showTips),
+    tipsSeen: Array.isArray(r.tipsSeen) ? r.tipsSeen.filter((x): x is string => typeof x === 'string').slice(0, 40) : [],
   };
 }
 
@@ -135,7 +142,7 @@ export class SettingsStore {
 
   set<K extends keyof Settings>(key: K, v: Settings[K]): void {
     const next = sanitize({ ...this.value, [key]: v });
-    if (next[key] === this.value[key]) return;
+    if (next[key] === this.value[key] || (Array.isArray(next[key]) && JSON.stringify(next[key]) === JSON.stringify(this.value[key]))) return;
     this.value = next;
     this.save();
     for (const cb of this.listeners) cb(this.value, key);
