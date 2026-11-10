@@ -16,7 +16,10 @@ export type CameraMode = 'chase' | 'cockpit';
  * camera world position; the Three camera itself stays at the origin (floating origin).
  */
 export class ShipCamera {
-  mode: CameraMode = 'chase';
+  /** First person by default; C toggles the chase view. */
+  mode: CameraMode = 'cockpit';
+  /** True when the camera is outside the ship (chase view or orbiting in look mode). */
+  showsShip = false;
   /** Extra field of view in degrees (hyperspace kick). */
   fovExtra = 0;
   readonly worldPos = new Vector3();
@@ -103,6 +106,7 @@ export class ShipCamera {
       }
     }
     const orbiting = this.lookMode || this.orbitYaw !== 0 || this.orbitPitch !== 0 || this.orbitZoom !== 1;
+    this.showsShip = this.mode === 'chase' || orbiting;
     _look.setFromAxisAngle(_Y, this.lookYaw + this.orbitYaw);
     _look2.setFromAxisAngle(_X, this.lookPitch + this.orbitPitch);
     _viewQ.copy(this.smoothQuat).multiply(_look).multiply(_look2);

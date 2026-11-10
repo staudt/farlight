@@ -9,6 +9,7 @@ export type Action =
   | 'journal'
   | 'target'
   | 'hud'
+  | 'help'
   | 'debug'
   | 'stop'
   | 'photo'
@@ -268,7 +269,8 @@ const KEY_ACTIONS: Record<string, Action> = {
   KeyG: 'galaxy',
   KeyJ: 'journal',
   KeyT: 'target',
-  KeyH: 'hud',
+  KeyH: 'help',
+  KeyU: 'hud',
   KeyP: 'photo',
   KeyV: 'look',
   KeyK: 'snapshot',

@@ -23,7 +23,7 @@ Io beneath a looming Jupiter, Saturn's rings, and a dive into Jupiter's cloud se
 | Shift | Boost (4x, climb high to go fast) |
 | X | Brake |
 | , / . | Slow down / speed up time |
-| C | Chase or cockpit camera |
+| C | First person (default) or chase camera |
 | V | Look mode: the ship keeps flying while you look around |
 | K | Snapshot (saves a PNG) |
 | M | System map, click a body to target it |
@@ -32,7 +32,8 @@ Io beneath a looming Jupiter, Saturn's rings, and a dive into Jupiter's cloud se
 | P | Photo mode: time pauses, orbit a free camera, scrub the time of day, capture a PNG |
 | T | Cycle targets |
 | F (hold) | Align the nose with the target |
-| H | Hide the HUD |
+| H | Show or hide the key help |
+| U | Hide the HUD |
 | N | Mute |
 | F3 | Tuning panel |
 

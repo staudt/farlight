@@ -388,17 +388,6 @@
   color: var(--hud-dim);
   transform: translate(-50%, 0);
 }
-.alignhint {
-  position: absolute;
-  left: 50%;
-  top: calc(50% - 86px);
-  transform: translateX(-50%);
-  font-size: 12px;
-  color: var(--hud-line);
-  opacity: 0;
-  transition: opacity 0.4s ease;
-  white-space: nowrap;
-}
 
 /* Toast */
 .toast {
@@ -702,4 +691,53 @@ body.touch .fps-counter {
   bottom: calc(6px + env(safe-area-inset-bottom)) !important;
   left: calc(14px + env(safe-area-inset-left)) !important;
   font-size: 9px !important;
+}
+
+/* Help: a quiet H HELP tag in the top right; H toggles the key list in its place. */
+.helptag {
+  position: absolute;
+  top: 5px;
+  right: 30px;
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  color: var(--hud-dim);
+  opacity: 0.95;
+}
+.helptag b {
+  color: var(--hud-line);
+  font-weight: 600;
+}
+.helppanel {
+  position: absolute;
+  top: 20px;
+  right: 28px;
+  width: 300px;
+  padding: 12px 18px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.helppanel.on {
+  opacity: 1;
+}
+.help-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  line-height: 1.95;
+  letter-spacing: 0.16em;
+  color: var(--hud-dim);
+}
+.help-row b {
+  color: var(--hud-line);
+  font-weight: 600;
+  white-space: pre;
+}
+.help-open .bodycard {
+  opacity: 0 !important;
+}
+body.touch .helptag,
+body.touch .helppanel {
+  display: none;
 }

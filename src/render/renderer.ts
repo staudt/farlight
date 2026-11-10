@@ -206,7 +206,7 @@ export class GameRenderer {
 
     for (const v of this.bodyViews) v.update(ctx);
     this.shipView.update(ctx);
-    this.shipView.object.visible = this.shipCamera.override ? this.shipCamera.override.shipVisible : this.shipCamera.mode === 'chase';
+    this.shipView.object.visible = this.shipCamera.override ? this.shipCamera.override.shipVisible : this.shipCamera.showsShip;
     for (const u of this.updaters) u(ctx);
 
     this.renderFn(ctx);

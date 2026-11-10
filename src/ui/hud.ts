@@ -49,7 +49,8 @@ export class Hud {
   private readonly targetInfo: HTMLElement;
   private readonly edge: HTMLElement;
   private readonly edgeLabel: HTMLElement;
-  private readonly alignHint: HTMLElement;
+  private readonly helpPanel: HTMLElement;
+  private helpOpen = false;
   private readonly toast: HTMLElement;
   private readonly toastBig: HTMLElement;
   private readonly toastSmall: HTMLElement;
@@ -93,11 +94,10 @@ export class Hud {
         <div class="crosshair"><i class="h" style="left:-14px"></i><i class="h" style="left:6px"></i><i class="v" style="top:-14px"></i><i class="v" style="top:6px"></i><i class="ring"></i><div class="stickdot" data-k="stick"></div></div>
         <div class="target" data-k="target"><div class="box" data-k="tbox"><i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i><div class="info" data-k="tinfo"></div></div></div>
         <div class="edgearrow" data-k="edge"><i></i><em data-k="elabel"></em></div>
-        <div class="alignhint" data-k="align">HOLD F TO ALIGN</div>
         <div class="toast" data-k="toast"><div class="big" data-k="tbig"></div><div class="small" data-k="tsmall"></div></div>
-        <div class="hints hud-panel" data-k="hints">
-          <b>CLICK</b> TO FLY · <b>MOUSE</b> STEER · <b>W S</b> THROTTLE · <b>A D</b> ROLL · <b>Q E</b> YAW · <b>SHIFT</b> BOOST · <b>, .</b> TIME · <b>C</b> CAMERA · <b>V</b> LOOK · <b>K</b> SNAP · <b>I</b> INFO · <b>M</b> MAP · <b>T</b> TARGET · <b>F</b> ALIGN · <b>H</b> HIDE
-        </div>
+        <div class="hints hud-panel" data-k="hints">LEFT THUMB STEER · RIGHT SLIDER THROTTLE · HOLD BOOST</div>
+        <div class="helptag" data-k="helptag"><b>H</b> HELP</div>
+        <div class="helppanel hud-panel" data-k="help"><div class="help-row"><b>CLICK</b><span>FLY (CAPTURE MOUSE)</span></div><div class="help-row"><b>MOUSE</b><span>STEER</span></div><div class="help-row"><b>W  S</b><span>THROTTLE LEVER</span></div><div class="help-row"><b>A  D</b><span>ROLL</span></div><div class="help-row"><b>Q  E</b><span>YAW</span></div><div class="help-row"><b>SHIFT</b><span>BOOST</span></div><div class="help-row"><b>X</b><span>BRAKE</span></div><div class="help-row"><b>,  .</b><span>TIME SLOWER OR FASTER</span></div><div class="help-row"><b>C</b><span>FIRST PERSON OR CHASE</span></div><div class="help-row"><b>V</b><span>LOOK AROUND</span></div><div class="help-row"><b>K</b><span>SNAPSHOT</span></div><div class="help-row"><b>P</b><span>PHOTO MODE</span></div><div class="help-row"><b>T</b><span>NEXT TARGET</span></div><div class="help-row"><b>F</b><span>ALIGN TO TARGET</span></div><div class="help-row"><b>M</b><span>SYSTEM MAP</span></div><div class="help-row"><b>G</b><span>GALAXY MAP</span></div><div class="help-row"><b>J</b><span>JOURNAL</span></div><div class="help-row"><b>I</b><span>PLANET INFO</span></div><div class="help-row"><b>U</b><span>HIDE HUD</span></div><div class="help-row"><b>H</b><span>CLOSE HELP</span></div></div>
         <div class="clickprompt" data-k="prompt">CLICK TO FLY</div>
       </div>`;
     const q = (k: string): HTMLElement => root.querySelector(`[data-k="${k}"]`) as HTMLElement;
@@ -123,7 +123,7 @@ export class Hud {
     this.targetInfo = q('tinfo');
     this.edge = q('edge');
     this.edgeLabel = q('elabel');
-    this.alignHint = q('align');
+    this.helpPanel = q('help');
     this.toast = q('toast');
     this.toastBig = q('tbig');
     this.toastSmall = q('tsmall');
@@ -151,6 +151,11 @@ export class Hud {
       this.hudVisible = !this.hudVisible;
       root.classList.toggle('hidden', !this.hudVisible);
     });
+    input.on('help', () => {
+      this.helpOpen = !this.helpOpen;
+      this.helpPanel.classList.toggle('on', this.helpOpen);
+      root.classList.toggle('help-open', this.helpOpen);
+    });
     input.on('target', () => this.cycleTarget());
     input.on('info', () => this.showCard());
     this.showCard();
@@ -161,9 +166,7 @@ export class Hud {
     window.addEventListener('click', () => this.dismissHints(), { once: true });
     if (input.touchMode) {
       window.addEventListener('pointerdown', () => this.dismissHints(), { once: true });
-      this.hints.innerHTML = 'LEFT THUMB STEER · RIGHT SLIDER THROTTLE · HOLD BOOST';
       this.hints.classList.add('touch');
-      this.alignHint.textContent = 'ALIGN IN MENU';
     }
   }
 
@@ -214,7 +217,7 @@ export class Hud {
     }
     if (this.toastTimer <= 0) this.toast.classList.remove('on');
     this.timeBox.classList.toggle('limited', this.limitedTimer > 0);
-    this.hints.classList.toggle('on', this.age < HINT_SECONDS && this.hudVisible);
+    this.hints.classList.toggle('on', this.input.touchMode && this.age < HINT_SECONDS && this.hudVisible);
     const mapOpen = this.root.ownerDocument.getElementById('map')?.style.display === 'block';
     this.prompt.classList.toggle('on', !this.input.touchMode && !this.input.pointerLocked && !mapOpen && this.age > 0.5);
     this.root.style.visibility = mapOpen ? 'hidden' : 'visible';
@@ -324,7 +327,6 @@ export class Hud {
     if (!t || !this.hudVisible) {
       this.target.style.opacity = '0';
       this.edge.style.opacity = '0';
-      this.alignHint.style.opacity = '0';
       return;
     }
     const cam = this.gfx.camera;
@@ -341,11 +343,6 @@ export class Hud {
     const sx = (nx * 0.5 + 0.5) * W;
     const sy = (-ny * 0.5 + 0.5) * H;
     const onScreen = !behind && Math.abs(nx) < 0.96 && Math.abs(ny) < 0.94;
-
-    // Angle off the nose, for the align hint.
-    const cosOff = dist > 0 ? -_rel.z / dist : 1;
-    const off = Math.acos(Math.max(-1, Math.min(1, cosOff)));
-    this.alignHint.style.opacity = off > 0.45 && !this.input.aligning ? '0.85' : '0';
 
     if (onScreen) {
       const rpx = (t.radius / Math.max(dist, 1) / tanHalf) * (H / 2);
