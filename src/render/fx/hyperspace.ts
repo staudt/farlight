@@ -92,6 +92,8 @@ export class Hyperspace {
   private running = false;
   private navigated = false;
   private dest: GalaxyStar | null = null;
+  /** Called when a jump starts, with its length in seconds (audio spool-up). */
+  onStart: ((seconds: number) => void) | null = null;
   /** Replaceable for tests. */
   navigate: (url: string) => void = (url) => location.assign(url);
 
@@ -138,6 +140,7 @@ export class Hyperspace {
     this.root.classList.add('on');
     document.getElementById('hud')?.classList.add('hidden');
     savePendingJump(dest.id);
+    this.onStart?.(seconds);
     // Engines to the maximum for the duration.
     this.input.external.boost = true;
     this.input.external.throttleSet = 1;

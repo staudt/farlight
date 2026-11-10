@@ -229,8 +229,12 @@ export class Hud {
 
   // Events and toasts
 
+  /** Listener for notify calls (audio cues). */
+  onNotify: ((big: string, small: string) => void) | null = null;
+
   /** Gentle message from other systems (survey, travel). `fine` is an optional small line under it. */
   notify(big: string, small: string, fine = ''): void {
+    this.onNotify?.(big, small);
     this.showToast(big, small, fine);
   }
 
