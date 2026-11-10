@@ -22,6 +22,7 @@ import { config } from '../../core/config';
 import { createPropMaterial, createPropMeshes, disposePropMeshes } from './props';
 import { quality } from '../quality';
 import { createTerrainMaterial } from './terrainMaterial';
+import { RingMesh, makeRingUniforms } from './ringView';
 
 const enum State {
   Idle,
@@ -65,6 +66,8 @@ const _q = new Quaternion();
 const _cam = new Vector3();
 const _camDir = new Vector3();
 const _v = new Vector3();
+const _sunW = new Vector3();
+const _sunL = new Vector3();
 
 /** Cube sphere quadtree chunked LOD planet. The root level doubles as the far view. */
 export class PlanetView implements BodyView {
@@ -86,6 +89,8 @@ export class PlanetView implements BodyView {
   private visibleNow = new Set<ChunkNode>();
   private visiblePrev = new Set<ChunkNode>();
   private readonly minHorizonR: number;
+  /** Rocky planets can carry rings too (same renderer as the gas giants, no ring shadow on the ground). */
+  private readonly rings: RingMesh | null;
 
   constructor(body: Body) {
     this.body = body;
@@ -98,6 +103,12 @@ export class PlanetView implements BodyView {
     this.maxInFlight = Math.max(6, this.pool.size * 4);
     this.maxLevel = maxLevelFor(body.radius, 400);
     this.minHorizonR = body.radius - body.terrainAmplitude * 1.6;
+    this.rings = body.def.rings ? new RingMesh(body.def.rings, makeRingUniforms(body.def.rings, body.def.seed)) : null;
+    if (this.rings) {
+      // The ring mesh is built at unit planet radius; the group scale (apparent size boost) is applied on top.
+      this.rings.mesh.scale.setScalar(body.radius);
+      this.object.add(this.rings.mesh);
+    }
     for (let f = 0; f < FACE_COUNT; f++) {
       const n = new ChunkNode(null, f, 0, 0, 0, body.radius);
       this.roots.push(n);
@@ -272,6 +283,14 @@ export class PlanetView implements BodyView {
       pu.uNightGlow!.value = pc.nightGlow;
     }
 
+    if (this.rings) {
+      _sunW.copy(ctx.world.universe.root.position).sub(b.position).normalize();
+      _sunL.copy(_sunW).applyQuaternion(_q);
+      this.rings.sunLocal.value.copy(_sunL);
+      this.rings.camLocal.value.copy(_cam).divideScalar(R);
+      this.rings.sunView.value.copy(sunView);
+    }
+
     this.visibleNow.clear();
     for (const root of this.roots) this.traverse(root, _cam, camLen, cull);
 
@@ -312,6 +331,7 @@ export class PlanetView implements BodyView {
     this.propMaterial.dispose();
     for (const m of this.glowMaterials.values()) m.dispose();
     this.lightsTexture?.dispose();
+    this.rings?.dispose();
   }
 }
 

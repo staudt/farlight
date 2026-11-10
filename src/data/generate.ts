@@ -4,6 +4,7 @@ import { generateLandmarks, type LandmarkWorld } from './landmarkGen';
 import { makeName, makeUniqueNames, moonName, slug } from './names';
 import { SOLAR_SYSTEM } from './solarSystem';
 import { addSpaceScenery } from './spaceScenery';
+import { applyVariety } from './variety';
 import type {
   AtmosphereDef,
   BiomeDef,
@@ -39,7 +40,7 @@ export const GALAXY_RADIUS = 50000;
 // ---------------------------------------------------------------------------------------------
 // Small helpers
 
-class Rng {
+export class Rng {
   private readonly next: () => number;
   constructor(seed: number) {
     this.next = mulberry32(seed);
@@ -80,24 +81,24 @@ class Rng {
   }
 }
 
-const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
-const round = (x: number, d = 3): number => Math.round(x * 10 ** d) / 10 ** d;
+export const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
+export const round = (x: number, d = 3): number => Math.round(x * 10 ** d) / 10 ** d;
 
 /** Per channel multiplicative jitter. */
-function jit(c: RGB, rng: Rng, amt = 0.1): RGB {
+export function jit(c: RGB, rng: Rng, amt = 0.1): RGB {
   return [0, 1, 2].map((i) => round(clamp01(c[i]! * (1 + rng.range(-amt, amt))))) as unknown as RGB;
 }
 
-function mix(a: RGB, b: RGB, t: number): RGB {
+export function mix(a: RGB, b: RGB, t: number): RGB {
   return [round(a[0] + (b[0] - a[0]) * t), round(a[1] + (b[1] - a[1]) * t), round(a[2] + (b[2] - a[2]) * t)];
 }
 
-function mul(c: RGB, k: number): RGB {
+export function mul(c: RGB, k: number): RGB {
   return [round(clamp01(c[0] * k)), round(clamp01(c[1] * k)), round(clamp01(c[2] * k))];
 }
 
 /** HSL (h in degrees) to RGB. Not gamma converted; tuned by eye like Sol's palettes. */
-function hsl(h: number, s: number, l: number): RGB {
+export function hsl(h: number, s: number, l: number): RGB {
   const hh = (((h % 360) + 360) % 360) / 360;
   const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
   const p = 2 * l - q;
@@ -142,7 +143,7 @@ function surfaceTemp(a: Archetype, tEq: number): number {
   }
 }
 
-function celsiusText(c: number): string {
+export function celsiusText(c: number): string {
   const v = Math.round(c / 5) * 5;
   return v < 0 ? `minus ${-v} °C` : `${v} °C`;
 }
@@ -281,7 +282,7 @@ function buildStar(rng: Rng, star: GalaxyStar, spec: StarSpec): BodyDef {
 // ---------------------------------------------------------------------------------------------
 // Skies and palettes
 
-interface SkyTheme {
+export interface SkyTheme {
   name: string;
   /** Rayleigh channel ratios; the brightest channel is scaled to the zenith depth. */
   ratio: RGB;
@@ -290,7 +291,7 @@ interface SkyTheme {
   aurora: RGB[];
 }
 
-const SKIES: Record<string, SkyTheme> = {
+export const SKIES: Record<string, SkyTheme> = {
   blue: { name: 'blue', ratio: [0.18, 0.4, 1], mie: [1, 1, 1], cloud: [1, 1, 1], aurora: [[0.2, 1.0, 0.5], [0.6, 0.3, 1.0]] },
   violet: { name: 'violet', ratio: [0.5, 0.16, 1], mie: [1, 0.85, 1], cloud: [1, 0.9, 1], aurora: [[0.9, 0.3, 1.0], [0.3, 0.6, 1.0]] },
   green: { name: 'green', ratio: [0.28, 1, 0.38], mie: [0.9, 1, 0.85], cloud: [0.92, 1, 0.9], aurora: [[0.4, 1.0, 0.3], [1.0, 0.9, 0.3]] },
@@ -300,12 +301,12 @@ const SKIES: Record<string, SkyTheme> = {
   amber: { name: 'amber', ratio: [1, 0.55, 0.16], mie: [1, 0.78, 0.5], cloud: [1, 0.9, 0.75], aurora: [[1.0, 0.5, 0.2], [1.0, 0.9, 0.3]] },
 };
 
-function rayleigh(theme: SkyTheme, depth: number, rng: Rng): RGB {
+export function rayleigh(theme: SkyTheme, depth: number, rng: Rng): RGB {
   const n = normMax(theme.ratio);
   return [round(n[0] * depth * rng.range(0.9, 1.1), 4), round(n[1] * depth * rng.range(0.92, 1.08), 4), round(n[2] * depth * rng.range(0.92, 1.08), 4)];
 }
 
-function auroraFor(rng: Rng, theme: SkyTheme, chance: number): AtmosphereDef['aurora'] {
+export function auroraFor(rng: Rng, theme: SkyTheme, chance: number): AtmosphereDef['aurora'] {
   if (!rng.chance(chance)) return undefined;
   const palette: RGB[] = [...theme.aurora, [0.2, 0.9, 1.0], [1.0, 0.3, 0.4], [0.3, 1.0, 0.5]];
   const a = rng.pick(palette);
@@ -316,7 +317,7 @@ function auroraFor(rng: Rng, theme: SkyTheme, chance: number): AtmosphereDef['au
 // ---------------------------------------------------------------------------------------------
 // Terrain building blocks
 
-function jitterLayers(layers: NoiseLayer[], rng: Rng, f = 0.2): NoiseLayer[] {
+export function jitterLayers(layers: NoiseLayer[], rng: Rng, f = 0.2): NoiseLayer[] {
   return layers.map((l) => ({
     ...l,
     frequency: round(l.frequency * rng.range(1 - f, 1 + f), 2),
@@ -325,7 +326,7 @@ function jitterLayers(layers: NoiseLayer[], rng: Rng, f = 0.2): NoiseLayer[] {
   }));
 }
 
-function features(rng: Rng, kind: FeatureDef['kind'], count: number, radius: [number, number], height: [number, number]): FeatureDef[] {
+export function features(rng: Rng, kind: FeatureDef['kind'], count: number, radius: [number, number], height: [number, number]): FeatureDef[] {
   const out: FeatureDef[] = [];
   for (let i = 0; i < count; i++) {
     out.push({
@@ -339,7 +340,7 @@ function features(rng: Rng, kind: FeatureDef['kind'], count: number, radius: [nu
   return out;
 }
 
-function craters(rng: Rng, count: [number, number], maxR: [number, number]): CraterDef {
+export function craters(rng: Rng, count: [number, number], maxR: [number, number]): CraterDef {
   return {
     count: rng.int(count[0], count[1]),
     minRadius: round(rng.range(0.002, 0.005), 4),
@@ -349,7 +350,7 @@ function craters(rng: Rng, count: [number, number], maxR: [number, number]): Cra
   };
 }
 
-const EARTH_LAYERS: NoiseLayer[] = [
+export const EARTH_LAYERS: NoiseLayer[] = [
   { type: 'fbm', frequency: 1.5, amplitude: 1.0, octaves: 5, warp: 0.4 },
   { type: 'ridged', frequency: 5, amplitude: 0.95, octaves: 5, mask: { frequency: 1.8, threshold: 0.05 } },
   { type: 'ridged', frequency: 16, amplitude: 0.25, octaves: 4, lacunarity: 2.1, mask: { frequency: 2.4, threshold: 0.0 } },
@@ -376,9 +377,9 @@ const MOON_LAYERS: NoiseLayer[] = [
 // ---------------------------------------------------------------------------------------------
 // Archetypes
 
-type Archetype = 'lava' | 'desert' | 'earthlike' | 'ocean' | 'ice' | 'alien' | 'toxic' | 'cratered' | 'gas' | 'iceGiant';
+export type Archetype = 'lava' | 'desert' | 'earthlike' | 'ocean' | 'ice' | 'alien' | 'toxic' | 'cratered' | 'gas' | 'iceGiant';
 
-interface Built {
+export interface Built {
   archetype: Archetype;
   kind: 'rocky' | 'gas';
   /** Planet radius in Earth radii. */
@@ -398,7 +399,7 @@ interface Built {
   hazards?: string[];
 }
 
-interface Flora {
+export interface Flora {
   forest: RGB;
   grass: RGB;
   meadow: RGB;
@@ -415,7 +416,7 @@ interface Flora {
   alienDesert?: RGB;
 }
 
-const FLORAS: Record<string, Flora> = {
+export const FLORAS: Record<string, Flora> = {
   terran: { forest: [0.02, 0.14, 0.04], grass: [0.1, 0.35, 0.05], meadow: [0.28, 0.46, 0.07], desert: [0.66, 0.4, 0.15], tundra: [0.3, 0.32, 0.2], sand: [0.72, 0.62, 0.36], rock: [0.3, 0.26, 0.22], trunk: [0.14, 0.34, 0.15], words: 'forests' },
   autumn: { forest: [0.3, 0.07, 0.02], grass: [0.5, 0.25, 0.05], meadow: [0.7, 0.42, 0.1], desert: [0.62, 0.4, 0.2], tundra: [0.36, 0.28, 0.18], sand: [0.78, 0.66, 0.4], rock: [0.3, 0.24, 0.2], trunk: [0.65, 0.25, 0.05], words: 'copper forests' },
 };
@@ -424,7 +425,7 @@ interface Water {
   color: RGB;
   deepColor: RGB;
 }
-const WATERS: Record<string, Water> = {
+export const WATERS: Record<string, Water> = {
   blue: { color: [0.05, 0.42, 0.5], deepColor: [0.008, 0.07, 0.25] },
   turquoise: { color: [0.05, 0.55, 0.5], deepColor: [0.01, 0.2, 0.3] },
   amber: { color: [0.6, 0.3, 0.05], deepColor: [0.22, 0.08, 0.01] },
@@ -483,7 +484,7 @@ const ALIEN_THEMES: Theme[] = [
   },
 ];
 
-function livingBiomes(rng: Rng, f: Flora, seaLevel: number, ocean: boolean, alien = false): BiomeDef[] {
+export function livingBiomes(rng: Rng, f: Flora, seaLevel: number, ocean: boolean, alien = false): BiomeDef[] {
   const j = (c: RGB): RGB => jit(c, rng, 0.08);
   const beachColor = f.beach ?? f.sand;
   const biomes: BiomeDef[] = [
@@ -503,7 +504,7 @@ function livingBiomes(rng: Rng, f: Flora, seaLevel: number, ocean: boolean, alie
   return biomes;
 }
 
-function livingProps(f: Flora, rng: Rng, alien: boolean): PropDef[] {
+export function livingProps(f: Flora, rng: Rng, alien: boolean): PropDef[] {
   if (alien) {
     const crystal = f.crystal ?? mix(f.trunk, [1, 1, 1], 0.4);
     return [
@@ -523,7 +524,7 @@ function livingProps(f: Flora, rng: Rng, alien: boolean): PropDef[] {
 }
 
 /** Brightest channel to 1, so a dark palette colour becomes a usable glow colour. */
-function glowOf(c: RGB): RGB {
+export function glowOf(c: RGB): RGB {
   const m = Math.max(c[0], c[1], c[2], 1e-3);
   return [round(c[0] / m, 2), round(c[1] / m, 2), round(c[2] / m, 2)];
 }
@@ -552,7 +553,7 @@ function addBioluminescence(terrain: TerrainDef, f: Flora, waterColor: RGB): boo
   return true;
 }
 
-function skyAtmosphere(rng: Rng, theme: SkyTheme, o: { height: [number, number]; depth: [number, number]; mie: [number, number]; sun: [number, number]; coverage: [number, number]; cloudAlt?: number }): AtmosphereDef {
+export function skyAtmosphere(rng: Rng, theme: SkyTheme, o: { height: [number, number]; depth: [number, number]; mie: [number, number]; sun: [number, number]; coverage: [number, number]; cloudAlt?: number }): AtmosphereDef {
   const height = round(rng.range(o.height[0], o.height[1]), 3);
   return {
     height,
@@ -665,7 +666,7 @@ function pastel(c: RGB, amt = 0.5): RGB {
  * Creatures for a living world. Uses its own random stream (from the body seed), so no draw of the
  * system generator changes and existing worlds keep their look.
  */
-function lifeFor(archetype: Archetype, def: BodyDef): LifeDef[] | undefined {
+export function lifeFor(archetype: Archetype, def: BodyDef): LifeDef[] | undefined {
   const rnd = mulberry32(hashInts(def.seed, 9173));
   const out: LifeDef[] = [];
   const gulls: LifeDef = { kind: 'birds', color: [0.95, 0.95, 0.93], count: 22, minAlt: 40, maxAlt: 1500, biomes: ['coast'], day: true, size: 11 };
@@ -685,7 +686,7 @@ function lifeFor(archetype: Archetype, def: BodyDef): LifeDef[] | undefined {
   return out.length ? out : undefined;
 }
 
-const DESERT_PALETTES: { low: RGB; high: RGB; sand: RGB; dust: RGB; mie: RGB; name: string }[] = [
+export const DESERT_PALETTES: { low: RGB; high: RGB; sand: RGB; dust: RGB; mie: RGB; name: string }[] = [
   { low: [0.2, 0.14, 0.12], high: [0.7, 0.48, 0.27], sand: [0.8, 0.42, 0.2], dust: [0.6, 0.26, 0.13], mie: [1.0, 0.62, 0.35], name: 'red' },
   { low: [0.25, 0.2, 0.1], high: [0.78, 0.62, 0.3], sand: [0.88, 0.7, 0.32], dust: [0.65, 0.5, 0.22], mie: [1.0, 0.8, 0.4], name: 'ochre' },
   { low: [0.35, 0.3, 0.28], high: [0.85, 0.8, 0.7], sand: [0.92, 0.88, 0.78], dust: [0.7, 0.62, 0.55], mie: [1.0, 0.92, 0.8], name: 'pale' },
@@ -694,7 +695,7 @@ const DESERT_PALETTES: { low: RGB; high: RGB; sand: RGB; dust: RGB; mie: RGB; na
   { low: [0.12, 0.16, 0.12], high: [0.4, 0.55, 0.4], sand: [0.5, 0.6, 0.3], dust: [0.3, 0.4, 0.25], mie: [0.8, 0.95, 0.55], name: 'green' },
 ];
 
-function buildDesert(rng: Rng): Built {
+export function buildDesert(rng: Rng): Built {
   const p = rng.pick(DESERT_PALETTES);
   const feats: FeatureDef[] = [];
   if (rng.chance(0.6)) feats.push(...features(rng, 'volcano', rng.int(1, 2), [0.07, 0.12], [0.7, 1.0]));
@@ -1140,9 +1141,9 @@ function pickArchetype(rng: Rng, t: number): Archetype {
 // ---------------------------------------------------------------------------------------------
 // Moons and rings
 
-type MoonKind = 'cratered' | 'ice' | 'volcanic';
+export type MoonKind = 'cratered' | 'ice' | 'volcanic';
 
-function buildMoon(rng: Rng, kind: MoonKind, name: string, parent: BodyDef, ratio: number, parentMassKg: number): BodyDef {
+export function buildMoon(rng: Rng, kind: MoonKind, name: string, parent: BodyDef, ratio: number, parentMassKg: number): BodyDef {
   const radius = rng.range(3e5, 2.4e6) * (kind === 'cratered' ? 0.8 : 1);
   const a = ratio * parent.physical.radius;
   const period = 2 * Math.PI * Math.sqrt((a * a * a) / (G_CONST * parentMassKg));
@@ -1419,6 +1420,8 @@ export function generateSystem(star: GalaxyStar): StarSystemDef {
     if (targetA < a * 1.4) targetA = a * 1.4;
   }
 
+  // Rare archetypes and big moons rewrite finished planets from their own streams, so every draw above is untouched.
+  applyVariety(bodies, planets, star, spec.luminosity);
   return addSpaceScenery({ id: star.id, name: star.name, seed: star.seed, bodies }, star, spec.luminosity);
 }
 

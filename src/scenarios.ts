@@ -429,7 +429,148 @@ export const SCENARIOS: Record<string, Scenario> = {
     generic: true,
     apply: (w) => nebulaSpace(w),
   },
+  'eyeball-terminator': {
+    description: 'Low over the habitable twilight ring of a tidally locked world, the red sun fixed on the horizon',
+    generic: true,
+    apply: (w) => eyeballTerminator(w),
+  },
+  'ring-world-sky': {
+    description: 'On a rocky world with great rings, looking up at them arching across the sky',
+    generic: true,
+    apply: (w) => ringWorldSky(w),
+  },
+  'archipelago-low': {
+    description: 'Gliding low over a world of thousands of small islands in warm lagoons',
+    generic: true,
+    apply: (w) => islandLow(w),
+  },
+  'mesa-world-low': {
+    description: 'Low over a terraced land of flat topped mesas and banded rock',
+    generic: true,
+    apply: (w) => variantLow(w, (d) => d.info.features.includes('Terraced mesas'), 160),
+  },
+  'canyon-world-low': {
+    description: 'Low over plateaus split by a branching network of deep canyons',
+    generic: true,
+    apply: (w) => variantLow(w, (d) => d.info.features.includes('Branching canyons'), 1200),
+  },
+  'crystal-world-low': {
+    description: 'Low over a plain bristling with glittering crystal spires',
+    generic: true,
+    apply: (w) => variantLow(w, (d) => d.info.features.includes('Crystal plains'), 90),
+  },
 };
+
+/** The body named by `?focus=`, else the first planet whose def passes `pred`, else the most interesting one. */
+function variantBody(w: World, pred: (d: BodyDef) => boolean): BodyDef {
+  const wanted = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('focus') : null;
+  const bodies = w.universe.system.bodies;
+  return bodies.find((b) => b.id === wanted && b.kind !== 'star') ?? bodies.find((b) => b.kind === 'rocky' && pred(b)) ?? focusBody(w);
+}
+
+/** Low flight over a scenic spot on a variant world (see `scenicSpot`). */
+function variantLow(w: World, pred: (d: BodyDef) => boolean, altitude?: number): void {
+  const def = variantBody(w, pred);
+  if (def.kind === 'gas') return w.placeInSpace(def.id, w.universe.get(def.id).radius * 3);
+  const spot = scenicSpot(w, def.id);
+  w.place({ body: def.id, lat: spot.lat, lon: spot.lon, altitude: altitude ?? spot.altitude, heading: spot.heading, pitch: altitude ? -6 : 1, throttle: 0.3, time: 0 });
+}
+
+/** Skims a small island on the day side of an archipelago world: land underfoot, water and more islands around. */
+function islandLow(w: World): void {
+  const def = variantBody(w, (d) => d.info.features.includes('Thousands of islands'));
+  w.clock.time = 0;
+  w.universe.update(0);
+  const body = w.universe.get(def.id);
+  const sampler = w.sampler(body) as Partial<TerrainSampler>;
+  if (!def.terrain || typeof sampler.sample !== 'function') return variantLow(w, () => true);
+  const sun = body.worldToLocalDir(w.universe.root.position.clone().sub(body.position).normalize(), new Vector3());
+  const smp = makeSample();
+  const dir = new Vector3();
+  const nb = new Vector3();
+  const nrth = new Vector3();
+  const est = new Vector3();
+  const wet = (d: Vector3): boolean => {
+    sampler.sample!(d.x, d.y, d.z, smp);
+    return smp.water;
+  };
+  let best = { lat: 10, lon: 0, score: -1 };
+  for (let lat = -40; lat <= 40; lat += 3) {
+    for (let lon = -180; lon < 180; lon += 3) {
+      latLonToDir(lat * DEG2RAD, lon * DEG2RAD, dir);
+      const elev = Math.asin(Math.min(1, Math.max(-1, dir.dot(sun)))) / DEG2RAD;
+      if (elev < 22 || elev > 55 || wet(dir)) continue;
+      nrth.set(0, 1, 0).addScaledVector(dir, -dir.y).normalize();
+      est.crossVectors(nrth, dir);
+      let score = 0;
+      for (const km of [2.5, 7]) {
+        for (let k = 0; k < 6; k++) {
+          const az = k * (Math.PI / 3);
+          const t = (km * 1000) / body.radius;
+          nb.copy(dir).addScaledVector(nrth, Math.cos(az) * t).addScaledVector(est, Math.sin(az) * t).normalize();
+          const water = wet(nb);
+          score += km < 5 ? (water ? 1 : 0.2) : water ? 0.3 : 1;
+        }
+      }
+      if (score > best.score) best = { lat, lon, score };
+    }
+  }
+  w.place({ body: def.id, lat: best.lat, lon: best.lon, altitude: 200, heading: 70, pitch: -3, throttle: 0.15, time: 0 });
+}
+
+/**
+ * Over the temperate ring of an eyeball world (biome axis 'substellar'), facing the fixed sun low
+ * on the horizon. Scans both terminators for dry ground with water or lush ground around it.
+ */
+function eyeballTerminator(w: World): void {
+  const def = variantBody(w, (d) => d.terrain?.biomeAxis === 'substellar');
+  w.clock.time = 0;
+  w.universe.update(0);
+  const body = w.universe.get(def.id);
+  const sampler = w.sampler(body) as Partial<TerrainSampler>;
+  const terrain = def.terrain;
+  if (!terrain || typeof sampler.sample !== 'function') return w.placeInSpace(def.id, body.radius * 3);
+  const smp = makeSample();
+  const dir = new Vector3();
+  const nb = new Vector3();
+  const nrth = new Vector3();
+  const est = new Vector3();
+  const classOf = (d: Vector3): string => {
+    sampler.sample!(d.x, d.y, d.z, smp);
+    return smp.water ? 'water' : biomeNameAt(terrain, smp, 0.1);
+  };
+  let best = { lat: 0, lon: 82, score: -1 };
+  for (const side of [1, -1]) {
+    for (let lat = -50; lat <= 50; lat += 5) {
+      for (const lonAbs of [70, 74, 78]) {
+        const lon = side * lonAbs;
+        latLonToDir(lat * DEG2RAD, lon * DEG2RAD, dir);
+        if (classOf(dir) === 'water') continue;
+        const seen = new Set<string>();
+        for (let k = 0; k < 8; k++) {
+          const az = k * (Math.PI / 4);
+          const t = 5000 / body.radius;
+          nrth.set(0, 1, 0).addScaledVector(dir, -dir.y).normalize();
+          nb.copy(dir).addScaledVector(nrth, Math.cos(az) * t).addScaledVector(est.crossVectors(nrth, dir), Math.sin(az) * t).normalize();
+          seen.add(classOf(nb));
+        }
+        const score = seen.size + (seen.has('water') ? 1.5 : 0) + (seen.has('forest') ? 1 : 0) - Math.abs(lat) / 60;
+        if (score > best.score) best = { lat, lon, score };
+      }
+    }
+  }
+  // East of the sub-stellar point the sun is to the west, and the other way round.
+  w.place({ body: def.id, lat: best.lat, lon: best.lon, altitude: 180, heading: best.lon > 0 ? 270 : 90, pitch: 3, throttle: 0.15, time: 0 });
+}
+
+/** On a rocky ringed world at mid latitude, facing the equator with the rings overhead. */
+function ringWorldSky(w: World): void {
+  const def = variantBody(w, (d) => d.kind === 'rocky' && d.rings !== undefined);
+  w.clock.time = 0;
+  w.universe.update(0);
+  const lat = 26;
+  w.place({ body: def.id, lat, localHour: 10.5, altitude: 140, heading: 180, pitch: 28, throttle: 0.05, time: 0 });
+}
 
 /** Camera `radii` out above lat/lon (degrees) with the spot at the given local solar hour (night). */
 function nightView(w: World, bodyId: string, latDeg: number, lonDeg: number, radii: number, hour: number): void {
