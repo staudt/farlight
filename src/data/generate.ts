@@ -10,6 +10,7 @@ import type {
   CraterDef,
   FeatureDef,
   GasDef,
+  LifeDef,
   NoiseLayer,
   OrbitDef,
   PropDef,
@@ -651,6 +652,36 @@ function buildLiving(rng: Rng, archetype: 'earthlike' | 'ocean' | 'alien'): Buil
     features: fts,
     summary: rng.pick(summaries[archetype]),
   };
+}
+
+
+/** A bright, pastel version of a palette colour, for creatures that should read against any sky. */
+function pastel(c: RGB, amt = 0.5): RGB {
+  return mix(glowOf(c), [1, 1, 1], amt);
+}
+
+/**
+ * Creatures for a living world. Uses its own random stream (from the body seed), so no draw of the
+ * system generator changes and existing worlds keep their look.
+ */
+function lifeFor(archetype: Archetype, def: BodyDef): LifeDef[] | undefined {
+  const rnd = mulberry32(hashInts(def.seed, 9173));
+  const out: LifeDef[] = [];
+  const gulls: LifeDef = { kind: 'birds', color: [0.95, 0.95, 0.93], count: 22, minAlt: 40, maxAlt: 1500, biomes: ['coast'], day: true, size: 11 };
+  if (archetype === 'earthlike') {
+    out.push(gulls, { kind: 'birds', color: [0.09, 0.08, 0.1], count: 16, minAlt: 40, maxAlt: 900, biomes: ['forest'], day: true, size: 9, chance: 0.3 });
+  } else if (archetype === 'ocean') {
+    out.push(gulls, { kind: 'fish', color: [0.1, 0.22, 0.3], count: 60, minAlt: 0, maxAlt: 400, biomes: ['shallows'], day: true, size: 3.4 });
+  } else if (archetype === 'alien') {
+    const props = def.terrain?.props ?? [];
+    const base = (props.find((p) => p.kind === 'crystal') ?? props.find((p) => p.kind === 'tree'))?.color ?? def.visual.color;
+    const whales = rnd() < 0.4;
+    if (whales) {
+      out.push({ kind: 'skyWhales', color: mul(pastel(base, 0.1), 0.62), count: 3, minAlt: 2000, maxAlt: 8000, size: 700, chance: 0.3, glow: 1.4 });
+      out.push({ kind: 'fireflies', color: glowOf(base), count: 14, minAlt: 2, maxAlt: 9, biomes: ['forest', 'grass', 'meadow'], night: true, size: 0.5, glow: 3.2 });
+    }
+  }
+  return out.length ? out : undefined;
 }
 
 const DESERT_PALETTES: { low: RGB; high: RGB; sand: RGB; dust: RGB; mie: RGB; name: string }[] = [
@@ -1354,6 +1385,8 @@ export function generateSystem(star: GalaxyStar): StarSystemDef {
         summary: built.summary,
       },
     };
+    const life = living ? lifeFor(built.archetype, def) : undefined;
+    if (life) def.life = life;
     if (living) hasLiving = true;
     planets.push({ def, built });
     bodies.push(def);

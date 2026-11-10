@@ -22,6 +22,7 @@ import { Starfield } from './sky/starfield';
 import { SpaceScenery } from './space';
 import { ShipView } from './ship/shipView';
 import { Cockpit } from './ship/cockpit';
+import { installLife } from './life';
 
 const BASE_SUN_LIGHT = 3;
 
@@ -98,6 +99,7 @@ export class GameRenderer {
       viewportHeight: 1,
     };
     this.renderFn = () => this.renderer.render(this.scene, this.camera);
+    installLife(this);
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
