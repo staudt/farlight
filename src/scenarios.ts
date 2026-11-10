@@ -391,6 +391,10 @@ export const SCENARIOS: Record<string, Scenario> = {
     description: 'Over the slopes of Olympus Mons, the summit caldera ahead',
     apply: (w) => landmarkApproach(w, 'mars', 'olympus_caldera', { distance: 22000, altitude: 3500, heading: 90, hour: 10, lookLift: 200 }),
   },
+  'landmark-yellowstone': {
+    description: 'Gliding toward the Yellowstone geysers: steaming vents among orange and ochre terraces around blue pools',
+    apply: (w) => landmarkApproach(w, 'earth', 'yellowstone', { distance: 1100, altitude: 420, heading: 0, hour: 10.5, lookLift: 20, throttle: 0.08 }),
+  },
   'landmark-tranquility': {
     description: 'Low over the Sea of Tranquility, the lander and flag just ahead',
     apply: (w) => landmarkApproach(w, 'moon', 'tranquility', { distance: 90, altitude: 14, heading: 270, hour: 9, lookLift: 3, throttle: 0.05 }),
@@ -406,6 +410,17 @@ export const SCENARIOS: Record<string, Scenario> = {
       if (!lm) return w.placeInSpace(wanted, w.universe.get(wanted).radius * 3);
       const r = lm.footprint;
       landmarkApproach(w, lm.body.id, lm.def.id, { distance: Math.max(700, r * 9), altitude: Math.max(90, r * 1.2), heading: 20, hour: 10, lookLift: lm.footprint * 0.5, throttle: 0.06 });
+    },
+  },
+  'landmark-crystal': {
+    description: 'Approaching a crystal canyon (or the first landmark) on a generated world from a few km: glowing crystal clusters',
+    generic: true,
+    apply: (w) => {
+      const wanted = focusBody(w).id;
+      const all = w.landmarks.all.filter((l) => l.body.id === wanted);
+      const lm = all.find((l) => l.def.kind === 'crystalCanyon') ?? w.landmarks.all.find((l) => l.def.kind === 'crystalCanyon') ?? all[0];
+      if (!lm) return w.placeInSpace(wanted, w.universe.get(wanted).radius * 3);
+      landmarkApproach(w, lm.body.id, lm.def.id, { distance: 2400, altitude: 350, heading: 20, hour: 10, lookLift: 60, throttle: 0.06 });
     },
   },
   arrival: {

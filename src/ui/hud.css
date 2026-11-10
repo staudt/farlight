@@ -492,7 +492,7 @@ body.touch .compass-deg {
   top: 40px;
 }
 body.touch .bodycard {
-  top: 56px;
+  top: calc(18px + 38px * var(--hud-scale, 1)); /* under the button row at any HUD size */
   right: 80px;
 }
 body.touch .timebox {

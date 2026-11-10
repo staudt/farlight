@@ -133,14 +133,22 @@ const crystalCanyon: Builder = (s, _f, { r, h, ground }, color, seed) => {
     for (let c = 0; c < n; c++) {
       const ox = (hash01(seed, i, c + 10) - 0.5) * r * 0.06;
       const oz = (hash01(seed, i, c + 20) - 0.5) * r * 0.05;
-      const big = hash01(seed, i, c + 30) < 0.14 ? 2.6 : 1;
-      const ch = h * (0.16 + 0.3 * hash01(seed, i, c + 40)) * big;
-      const rad = ch * (0.13 + 0.07 * hash01(seed, i, c + 50));
+      const big = hash01(seed, i, c + 30) < 0.18 ? 2 : 1;
+      const ch = h * (0.5 + 0.6 * hash01(seed, i, c + 40)) * big;
+      const rad = ch * (0.2 + 0.08 * hash01(seed, i, c + 50));
       const px = x + ox;
       const pz = bestZ + oz;
       const lean = ch * 0.18;
       const tone = mixc(color, [1, 1, 1], 0.05 * hash01(seed, i, c + 60));
-      needle(s, px, pz, ground(px, pz) - 2, ch, rad, (hash01(seed, i, c + 70) - 0.5) * lean * 2, (hash01(seed, i, c + 80) - 0.5) * lean * 2, seed + i * 13 + c, tone, 1.1);
+      needle(s, px, pz, ground(px, pz) - 2, ch, rad, (hash01(seed, i, c + 70) - 0.5) * lean * 2, (hash01(seed, i, c + 80) - 0.5) * lean * 2, seed + i * 13 + c, tone, 1.8);
+      // A ring of smaller crystals leaning out from the base makes a cluster.
+      for (let q = 0; q < 4; q++) {
+        const qa = (q / 4) * TAU + hash01(seed, i, c + 90);
+        const qx = px + Math.cos(qa) * rad * 1.6;
+        const qz = pz + Math.sin(qa) * rad * 1.6;
+        const qh = ch * (0.35 + 0.3 * hash01(seed, i, c + 100 + q));
+        needle(s, qx, qz, ground(qx, qz) - 2, qh, rad * 0.6, Math.cos(qa) * qh * 0.25, Math.sin(qa) * qh * 0.25, seed + i * 17 + c * 5 + q, tone, 1.8);
+      }
     }
   }
 };
@@ -371,6 +379,29 @@ const geyserField: Builder = (s, f, { r, h, ground }, color, seed) => {
     const big = i === 0 ? 1.4 : 0.55 + 0.7 * hash01(seed, i, 3);
     const mr = r * 0.06 * big;
     frustum(s, { cx: x, cz: z, y0: g - BURY, y1: g + mr * 0.45, rx0: mr * 1.5, rz0: mr * 1.5, rx1: mr * 0.5, rz1: mr * 0.5, seg: 8, jitter: 0.25, seed: seed + i }, [0.55, 0.5, 0.42], 0, 1);
+    // Mineral terraces around the vent: a blue pool, then orange, ochre and cream rings.
+    const tr = mr * 5;
+    const rings: [number, number, V3, number][] = [
+      [0, 0.34, [0.0, 0.28, 0.85], 0.35],
+      [0.34, 0.52, [0.75, 0.62, 0.35], 0.1],
+      [0.52, 0.74, [0.8, 0.18, 0.02], 0.3],
+      [0.74, 0.92, [0.55, 0.32, 0.04], 0.2],
+      [0.92, 1.2, [0.62, 0.5, 0.3], 0.1],
+    ];
+    const SEG = 20;
+    for (const [i0, i1, col, em] of rings) {
+      for (let k = 0; k < SEG; k++) {
+        const a0 = (k / SEG) * TAU;
+        const a1 = ((k + 1) / SEG) * TAU;
+        const p = (rad: number, an: number): V3 => {
+          const px = x + Math.cos(an) * rad;
+          const pz = z + Math.sin(an) * rad;
+          return [px, Math.max(ground(px, pz), g - mr * 0.1) + 0.8, pz];
+        };
+        const wob = 1 + 0.18 * (hash01(seed, i * 7 + k, 9) - 0.5);
+        s.quad(p(tr * i0 * wob, a0), p(tr * i1 * wob, a0), p(tr * i1 * wob, a1), p(tr * i0 * wob, a1), col, em, 1);
+      }
+    }
     // Vent glow ring.
     const ph = hash01(seed, i, 4);
     const ph2 = hash01(seed, i, 5);

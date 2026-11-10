@@ -273,7 +273,9 @@ export class Guide {
   private nightLights(): boolean {
     const w = this.world;
     const body = w.ship.frame.body;
-    if (!body.def.terrain?.nightLights || w.atmosphereDepth <= GUIDE.glowDepth) return false;
+    const t = body.def.terrain;
+    const glows = !!t && (t.nightLights || t.water?.emissive !== undefined || t.biomes.some((b) => b.emissive !== undefined));
+    if (!glows || w.atmosphereDepth <= GUIDE.glowDepth) return false;
     const ship = w.ship;
     const up = ship.pos.clone().normalize();
     if (ship.frame.rotating) up.applyQuaternion(body.rotation);

@@ -63,13 +63,29 @@ const SPRAY_VERT = /* glsl */ `
   #include <logdepthbuf_pars_vertex>
   attribute float aSize;
   attribute float aAlpha;
+  attribute vec3 aRel;
   uniform float uPx;
   varying float vAlpha;
+  varying vec2 vDir;
+  varying float vHalf;
   void main() {
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     float d = max(-mv.z, 1.0);
-    gl_PointSize = clamp(aSize * uPx * projectionMatrix[1][1] / d, 1.0, 220.0);
-    vAlpha = aAlpha * smoothstep(4.0, 22.0, d);
+    // Streak along the airflow relative to the ship: world length from speed, projected to screen.
+    vec3 dv = (viewMatrix * vec4(aRel, 0.0)).xyz;
+    float sp = length(dv);
+    vec3 dn = dv / max(sp, 1e-3);
+    float lw = aSize * (1.0 + sp * 0.06);
+    vec4 c0 = projectionMatrix * (mv - vec4(dn * lw * 0.5, 0.0));
+    vec4 c1 = projectionMatrix * (mv + vec4(dn * lw * 0.5, 0.0));
+    vec2 s = c1.xy / max(c1.w, 0.01) - c0.xy / max(c0.w, 0.01);
+    s.x *= projectionMatrix[1][1] / projectionMatrix[0][0];
+    float len = length(s) * uPx;
+    vDir = len > 1e-4 ? s / length(s) : vec2(1.0, 0.0);
+    float px = clamp(len, 4.0, 160.0);
+    gl_PointSize = px;
+    vHalf = 0.5 * px;
+    vAlpha = aAlpha * smoothstep(10.0, 40.0, d);
     gl_Position = projectionMatrix * mv;
     #include <logdepthbuf_vertex>
   }`;
@@ -79,12 +95,17 @@ const SPRAY_FRAG = /* glsl */ `
   #include <logdepthbuf_pars_fragment>
   uniform vec3 uColor;
   varying float vAlpha;
+  varying vec2 vDir;
+  varying float vHalf;
   void main() {
     #include <logdepthbuf_fragment>
-    vec2 c = gl_PointCoord - 0.5;
-    float d = length(c) * 2.0;
-    float soft = exp(-d * d * 3.2) * (1.0 - smoothstep(0.7, 1.0, d));
-    gl_FragColor = vec4(uColor, soft * vAlpha);
+    vec2 c = (gl_PointCoord - 0.5) * 2.0;
+    c.y = -c.y;
+    float along = dot(c, vDir);
+    float perp = dot(c, vec2(-vDir.y, vDir.x));
+    float w = max(0.9 / vHalf, 0.02);
+    float streak = exp(-perp * perp / (w * w)) * (1.0 - along * along);
+    gl_FragColor = vec4(uColor, streak * vAlpha);
   }`;
 
 const _l = new Vector3();
@@ -254,6 +275,7 @@ class Spray {
   private posA: BufferAttribute;
   private sizeA: BufferAttribute;
   private alphaA: BufferAttribute;
+  private relA: BufferAttribute;
   private uPx = { value: 400 };
   private seed = 1234567;
 
@@ -262,7 +284,9 @@ class Spray {
     this.posA = new BufferAttribute(new Float32Array(MAX_PARTICLES * 3), 3);
     this.sizeA = new BufferAttribute(new Float32Array(MAX_PARTICLES), 1);
     this.alphaA = new BufferAttribute(new Float32Array(MAX_PARTICLES), 1);
-    for (const a of [this.posA, this.sizeA, this.alphaA]) a.setUsage(35048);
+    this.relA = new BufferAttribute(new Float32Array(MAX_PARTICLES * 3), 3);
+    for (const a of [this.posA, this.sizeA, this.alphaA, this.relA]) a.setUsage(35048);
+    g.setAttribute('aRel', this.relA);
     g.setAttribute('position', this.posA);
     g.setAttribute('aSize', this.sizeA);
     g.setAttribute('aAlpha', this.alphaA);
@@ -341,10 +365,10 @@ class Spray {
         const sgn = side < 0 ? -1 : 1;
         // Most of the mist is the ship's pressure wave: kicked up on the sea ahead and to both sides,
         // where the camera can see it rush past. The rest is the wake left behind.
-        const bow = this.rnd() < 0.7;
-        const lat = sgn * (4 + Math.abs(side) * (6 + sp * 0.07));
+        const bow = this.rnd() < 0.2;
+        const lat = sgn * (7 + Math.abs(side) * (6 + sp * 0.07));
         const along = bow ? 12 + this.rnd() * (30 + sp * 0.3) : 6 - this.rnd() * (14 + sp * 0.03);
-        const vy = 3 + this.rnd() * (4 + Math.min(28, sp * 0.11)) * strength;
+        const vy = 1 + this.rnd() * (2 + Math.min(10, sp * 0.04)) * strength;
         const vr = sgn * (3 + this.rnd() * (3 + 0.05 * sp));
         const vf = sp * (bow ? 0.05 + this.rnd() * 0.15 : 0.55 + this.rnd() * 0.3);
         this.pos[k * 3] = origin.x + up.x * 0.8 + _r.x * lat + fwd.x * along;
@@ -354,9 +378,9 @@ class Spray {
         this.vel[k * 3 + 1] = up.y * vy + _r.y * vr + fwd.y * vf;
         this.vel[k * 3 + 2] = up.z * vy + _r.z * vr + fwd.z * vf;
         this.age[k] = 0;
-        this.life[k] = 0.9 + this.rnd() * 1.5;
-        this.size0[k] = (0.9 + this.rnd() * 1.3) * big;
-        this.size1[k] = (2.6 + this.rnd() * 4 + sp * 0.015) * big;
+        this.life[k] = 0.4 + this.rnd() * 0.7;
+        this.size0[k] = (0.12 + this.rnd() * 0.25) * big;
+        this.size1[k] = (0.3 + this.rnd() * 0.5) * big;
       }
     } else {
       this.emitAcc = 0;
@@ -370,6 +394,10 @@ class Spray {
     const pa = this.posA.array as Float32Array;
     const sa = this.sizeA.array as Float32Array;
     const aa = this.alphaA.array as Float32Array;
+    const ra = this.relA.array as Float32Array;
+    const fx = fwd.x;
+    const fy = fwd.y;
+    const fz = fwd.z;
     for (let i = 0; i < this.alive; i++) {
       _l.set(this.pos[i * 3]!, this.pos[i * 3 + 1]!, this.pos[i * 3 + 2]!).applyQuaternion(body.rotation);
       pa[i * 3] = _l.x + ox;
@@ -377,11 +405,17 @@ class Spray {
       pa[i * 3 + 2] = _l.z + oz;
       const t = this.age[i]! / this.life[i]!;
       sa[i] = this.size0[i]! + (this.size1[i]! - this.size0[i]!) * Math.sqrt(t);
-      aa[i] = 0.9 * smooth(0, 0.08, t) * (1 - t) * (1 - t);
+      aa[i] = 0.75 * smooth(0, 0.06, t) * (1 - t) * (1 - t);
+      const k3 = i * 3;
+      _d.set(this.vel[k3]! - fx * speed, this.vel[k3 + 1]! - fy * speed, this.vel[k3 + 2]! - fz * speed).applyQuaternion(body.rotation);
+      ra[k3] = _d.x;
+      ra[k3 + 1] = _d.y;
+      ra[k3 + 2] = _d.z;
     }
     this.posA.needsUpdate = true;
     this.sizeA.needsUpdate = true;
     this.alphaA.needsUpdate = true;
+    this.relA.needsUpdate = true;
     this.points.geometry.setDrawRange(0, this.alive);
   }
 }
