@@ -1,4 +1,4 @@
-import type { BodyDef, LandmarkDef, LandmarkKind, RGB, StarSystemDef } from './types';
+import type { BodyDef, FeatureDef, LandmarkDef, LandmarkKind, RGB, StarSystemDef } from './types';
 
 const DEG = Math.PI / 180;
 const DAY = 86400;
@@ -427,7 +427,8 @@ const jupiter: BodyDef = {
     meanAnomalyAtEpoch: 150 * DEG,
     period: 11.862 * YEAR,
   },
-  visual: { color: [0.82, 0.68, 0.48] },
+  // Ceres is close enough that the default sphere of influence would overlap Jupiter's.
+  visual: { color: [0.82, 0.68, 0.48], soiFactor: 24 },
   gas: {
     bands: [
       [0.88, 0.76, 0.52],
@@ -842,6 +843,395 @@ const neptune: BodyDef = {
 };
 
 // ---------------------------------------------------------------------------------------------
+// More worlds: Saturn, Uranus and Neptune moons and two dwarf planets.
+// ---------------------------------------------------------------------------------------------
+
+/** A chain of overlapping plateaus along a great circle of latitude 0 (Iapetus ridge). */
+function ridgeChain(fromLon: number, toLon: number, step: number, radius: number, height: number): FeatureDef[] {
+  const out: FeatureDef[] = [];
+  for (let lon = fromLon; lon <= toLon + 1e-9; lon += step) {
+    out.push({ kind: 'mesa', name: 'Equatorial Ridge', lat: 0, lon: lon * DEG, radius, height });
+  }
+  return out;
+}
+
+const enceladus: BodyDef = {
+  id: 'enceladus',
+  name: 'Enceladus',
+  kind: 'rocky',
+  parentId: 'saturn',
+  // Seed chosen so the geyser vents all sit on the southern hemisphere, like the real fissures.
+  seed: 62246,
+  physical: { radius: 2.521e5, surfaceGravity: 0.0115, rotationPeriod: 1.370218 * DAY, axialTilt: 0, tidallyLocked: true },
+  orbit: {
+    semiMajorAxis: 2.38037e8,
+    eccentricity: 0.0047,
+    inclination: 0.009 * DEG,
+    ascendingNode: 0,
+    argPeriapsis: 0,
+    meanAnomalyAtEpoch: 75 * DEG,
+    period: 1.370218 * DAY,
+  },
+  visual: { color: [0.96, 0.98, 1.0] },
+  effects: [{ kind: 'geyser', intensity: 1, size: 0.28, count: 6, color: [0.94, 0.97, 1.0] }],
+  terrain: {
+    amplitude: 0.012,
+    layers: [
+      { type: 'fbm', frequency: 2, amplitude: 0.5, octaves: 4 },
+      { type: 'ridged', frequency: 7, amplitude: 0.3, octaves: 4, mask: { frequency: 2, threshold: 0.45 } },
+      { type: 'fbm', frequency: 26, amplitude: 0.05, octaves: 3 },
+    ],
+    craters: { count: 160, minRadius: 0.01, maxRadius: 0.14, depth: 0.16, rimHeight: 0.05 },
+    features: [
+      { kind: 'canyon', name: 'Tiger Stripes', lat: -77 * DEG, lon: 20 * DEG, radius: 0.3, height: -0.8 },
+      { kind: 'canyon', name: 'Tiger Stripes', lat: -83 * DEG, lon: -40 * DEG, radius: 0.28, height: -0.8 },
+      { kind: 'canyon', name: 'Tiger Stripes', lat: -80 * DEG, lon: 150 * DEG, radius: 0.3, height: -0.8 },
+    ],
+    biomes: [
+      { name: 'tiger stripes', color: [0.28, 0.56, 0.82], latitude: [1.22, 1.6], moisture: [0.36, 0.6] },
+      { name: 'old cratered ice', color: [0.82, 0.86, 0.9], maxHeight: -0.15 },
+      { name: 'fresh snow', color: [0.97, 0.98, 1.0] },
+    ],
+    polarCaps: { latitude: 1.3, color: [0.9, 0.95, 1.0] },
+  },
+  info: {
+    type: 'Moon',
+    atmosphere: 'Water vapour plumes',
+    temperature: 'minus 198 °C',
+    features: ['Tiger Stripes', 'Ice geysers', 'Brightest world', 'Hidden ocean'],
+    hazards: ['Ice geysers', 'Deep cold'],
+    summary: 'A snow white moon whose blue cracked south pole breathes plumes of ice into space.',
+  },
+};
+
+const mimas: BodyDef = {
+  id: 'mimas',
+  name: 'Mimas',
+  kind: 'rocky',
+  parentId: 'saturn',
+  seed: 67,
+  physical: { radius: 1.982e5, surfaceGravity: 0.0064, rotationPeriod: 0.942422 * DAY, axialTilt: 0, tidallyLocked: true },
+  orbit: {
+    semiMajorAxis: 1.8552e8,
+    eccentricity: 0.0196,
+    inclination: 1.57 * DEG,
+    ascendingNode: 0,
+    argPeriapsis: 0,
+    meanAnomalyAtEpoch: 200 * DEG,
+    period: 0.942422 * DAY,
+  },
+  visual: { color: [0.62, 0.61, 0.6] },
+  terrain: {
+    amplitude: 0.02,
+    layers: [
+      { type: 'fbm', frequency: 2, amplitude: 0.5, octaves: 4 },
+      { type: 'ridged', frequency: 9, amplitude: 0.12, octaves: 3 },
+      { type: 'fbm', frequency: 30, amplitude: 0.05, octaves: 3 },
+    ],
+    craters: { count: 900, minRadius: 0.006, maxRadius: 0.16, depth: 0.22, rimHeight: 0.08 },
+    // The central peak of Herschel.
+    features: [{ kind: 'mesa', name: 'Herschel Peak', lat: 0, lon: -100 * DEG, radius: 0.04, height: 2.2 }],
+    biomes: [
+      { name: 'dark ice', color: [0.38, 0.38, 0.4], maxHeight: -0.2 },
+      { name: 'grey ice', color: [0.66, 0.66, 0.67] },
+    ],
+  },
+  info: {
+    type: 'Moon',
+    atmosphere: 'None',
+    temperature: 'minus 200 °C',
+    features: ['Herschel crater', 'Central peak', 'Heavy cratering'],
+    hazards: ['Deep cold'],
+    summary: 'A small grey ice ball scarred by one impact so big it nearly broke it.',
+  },
+};
+
+const iapetus: BodyDef = {
+  id: 'iapetus',
+  name: 'Iapetus',
+  kind: 'rocky',
+  parentId: 'saturn',
+  seed: 71,
+  physical: { radius: 7.345e5, surfaceGravity: 0.0223, rotationPeriod: 79.3215 * DAY, axialTilt: 0, tidallyLocked: true },
+  orbit: {
+    semiMajorAxis: 3.5613e9,
+    eccentricity: 0.0286,
+    inclination: 8 * DEG,
+    ascendingNode: 0,
+    argPeriapsis: 0,
+    meanAnomalyAtEpoch: 20 * DEG,
+    period: 79.3215 * DAY,
+  },
+  visual: { color: [0.5, 0.46, 0.42] },
+  terrain: {
+    amplitude: 0.05,
+    // Bright and dark halves split about the Saturn facing axis (the real split is leading and trailing).
+    biomeAxis: 'substellar',
+    layers: [
+      { type: 'fbm', frequency: 2, amplitude: 0.45, octaves: 5 },
+      { type: 'ridged', frequency: 8, amplitude: 0.2, octaves: 4 },
+      { type: 'fbm', frequency: 28, amplitude: 0.05, octaves: 3 },
+    ],
+    craters: { count: 600, minRadius: 0.004, maxRadius: 0.1, depth: 0.2, rimHeight: 0.07 },
+    features: ridgeChain(-72, 72, 9, 0.09, 1.1),
+    biomes: [
+      { name: 'ridge rock', color: [0.26, 0.22, 0.2], maxSlope: 0.12, minHeight: 0.9 },
+      { name: 'dark cap', color: [0.035, 0.027, 0.022], latitude: [0, 0.6] },
+      { name: 'dusty margin', color: [0.34, 0.27, 0.2], latitude: [0.6, 0.95] },
+      { name: 'bright ice', color: [0.92, 0.9, 0.86] },
+    ],
+  },
+  info: {
+    type: 'Moon',
+    atmosphere: 'None',
+    temperature: 'minus 143 °C',
+    features: ['Two tone faces', 'Equatorial ridge', 'Dark cap'],
+    hazards: ['Deep cold'],
+    summary: 'A moon painted half coal and half snow, with a mountain wall running around its waist.',
+  },
+};
+
+const miranda: BodyDef = {
+  id: 'miranda',
+  name: 'Miranda',
+  kind: 'rocky',
+  parentId: 'uranus',
+  seed: 73,
+  physical: { radius: 2.357e5, surfaceGravity: 0.0079, rotationPeriod: 1.413479 * DAY, axialTilt: 0, tidallyLocked: true },
+  orbit: {
+    semiMajorAxis: 1.2939e8,
+    eccentricity: 0.0013,
+    inclination: 4.34 * DEG,
+    ascendingNode: 0,
+    argPeriapsis: 0,
+    meanAnomalyAtEpoch: 140 * DEG,
+    period: 1.413479 * DAY,
+  },
+  visual: { color: [0.62, 0.62, 0.64] },
+  terrain: {
+    amplitude: 0.08,
+    layers: [
+      { type: 'fbm', frequency: 2, amplitude: 0.45, octaves: 4 },
+      { type: 'ridged', frequency: 5, amplitude: 0.5, octaves: 4, warp: 0.5, terraces: 5 },
+      { type: 'billow', frequency: 3, amplitude: 0.3, octaves: 3, mask: { frequency: 2.5, threshold: 0.5 } },
+      { type: 'fbm', frequency: 24, amplitude: 0.04, octaves: 3 },
+    ],
+    craters: { count: 220, minRadius: 0.01, maxRadius: 0.14, depth: 0.2, rimHeight: 0.06 },
+    // Verona Rupes: a sheer wall, raised ground to the south of it.
+    features: [{ kind: 'cliff', name: 'Verona Rupes', lat: -20 * DEG, lon: -13 * DEG, radius: 0.34, height: 1.4 }],
+    biomes: [
+      { name: 'dark grooves', color: [0.3, 0.3, 0.33], maxHeight: -0.25 },
+      { name: 'bright scarps', color: [0.88, 0.89, 0.92], minHeight: 0.4 },
+      { name: 'patchwork ice', color: [0.58, 0.58, 0.6], moisture: [0.55, 1] },
+      { name: 'grey ice', color: [0.7, 0.7, 0.72] },
+    ],
+    props: [{ kind: 'rock', density: 40, color: [0.7, 0.7, 0.72], minSize: 3, maxSize: 14, maxSlope: 0.9 }],
+  },
+  info: {
+    type: 'Moon',
+    atmosphere: 'None',
+    temperature: 'minus 187 °C',
+    features: ['Verona Rupes', 'Patchwork terrain', 'Giant canyons'],
+    hazards: ['Sheer drops', 'Deep cold'],
+    summary: 'A moon that looks as if it was broken and glued back together, with the tallest cliff known.',
+  },
+};
+
+const triton: BodyDef = {
+  id: 'triton',
+  name: 'Triton',
+  kind: 'rocky',
+  parentId: 'neptune',
+  // Seed chosen so the geyser vents cluster in the southern cap.
+  seed: 38226,
+  physical: { radius: 1.3534e6, surfaceGravity: 0.0797, rotationPeriod: 5.876854 * DAY, axialTilt: 0, tidallyLocked: true },
+  orbit: {
+    semiMajorAxis: 3.54759e8,
+    eccentricity: 0.000016,
+    inclination: 23 * DEG,
+    ascendingNode: 0,
+    argPeriapsis: 0,
+    meanAnomalyAtEpoch: 250 * DEG,
+    // Triton circles Neptune backwards.
+    period: -5.876854 * DAY,
+  },
+  visual: { color: [0.8, 0.58, 0.55] },
+  effects: [{ kind: 'geyser', intensity: 1, size: 0.13, count: 6, color: [0.5, 0.4, 0.38] }],
+  terrain: {
+    amplitude: 0.012,
+    layers: [
+      { type: 'fbm', frequency: 2, amplitude: 0.4, octaves: 4 },
+      { type: 'billow', frequency: 38, amplitude: 0.22, octaves: 3, mask: { frequency: 3, threshold: 0.4 } },
+      { type: 'ridged', frequency: 9, amplitude: 0.14, octaves: 3 },
+    ],
+    craters: { count: 40, minRadius: 0.01, maxRadius: 0.06, depth: 0.12, rimHeight: 0.04 },
+    biomes: [
+      { name: 'dark streaks', color: [0.3, 0.2, 0.2], moisture: [0.7, 1], latitude: [0, 1.3] },
+      { name: 'cantaloupe', color: [0.5, 0.33, 0.32], maxHeight: -0.05 },
+      { name: 'nitrogen frost', color: [0.78, 0.5, 0.48] },
+    ],
+    polarCaps: { latitude: 1.0, color: [0.88, 0.68, 0.66] },
+  },
+  info: {
+    type: 'Moon',
+    atmosphere: 'Wisp of nitrogen',
+    temperature: 'minus 235 °C',
+    features: ['Pink nitrogen ice', 'Dark geysers', 'Cantaloupe terrain', 'Backward orbit'],
+    hazards: ['Nitrogen geysers', 'Extreme cold'],
+    summary: 'A pink frozen moon that circles Neptune backwards and streaks its ice with dark geyser smoke.',
+  },
+};
+
+const ceres: BodyDef = {
+  id: 'ceres',
+  name: 'Ceres',
+  kind: 'rocky',
+  parentId: 'sun',
+  seed: 79,
+  physical: { radius: 4.73e5, surfaceGravity: 0.029, rotationPeriod: 9.074 * 3600, axialTilt: 4 * DEG },
+  orbit: {
+    semiMajorAxis: 2.7675 * AU,
+    eccentricity: 0.0758,
+    inclination: 10.59 * DEG,
+    ascendingNode: 80.3 * DEG,
+    argPeriapsis: 73.6 * DEG,
+    meanAnomalyAtEpoch: 100 * DEG,
+    period: 4.6 * YEAR,
+  },
+  visual: { color: [0.22, 0.21, 0.2] },
+  terrain: {
+    amplitude: 0.025,
+    layers: [
+      { type: 'fbm', frequency: 2, amplitude: 0.5, octaves: 5 },
+      { type: 'ridged', frequency: 8, amplitude: 0.14, octaves: 3 },
+      { type: 'fbm', frequency: 28, amplitude: 0.05, octaves: 3 },
+    ],
+    craters: { count: 700, minRadius: 0.005, maxRadius: 0.09, depth: 0.2, rimHeight: 0.07 },
+    features: [
+      { kind: 'volcano', name: 'Ahuna Mons', lat: -10 * DEG, lon: -316 * DEG, radius: 0.07, height: 1.4 },
+      // A bright dome in the heart of Occator.
+      { kind: 'mesa', name: 'Cerealia Facula', lat: 19.8 * DEG, lon: -121 * DEG, radius: 0.025, height: 0.5 },
+    ],
+    biomes: [
+      { name: 'bright salt', color: [0.95, 0.93, 0.88], minHeight: 0.62, maxSlope: 0.5 },
+      { name: 'dark clay', color: [0.11, 0.105, 0.1], maxHeight: -0.05 },
+      { name: 'grey regolith', color: [0.2, 0.19, 0.175] },
+    ],
+    props: [{ kind: 'rock', density: 60, color: [0.3, 0.28, 0.26], minSize: 2, maxSize: 14, maxSlope: 0.9 }],
+  },
+  info: {
+    type: 'Dwarf planet',
+    atmosphere: 'None',
+    temperature: 'minus 105 °C',
+    features: ['Occator bright spots', 'Ahuna Mons', 'Salt deposits', 'Main belt giant'],
+    hazards: ['Deep cold'],
+    summary: 'The largest rock of the main belt, dark and quiet, except for dazzling white salt in one crater.',
+  },
+};
+
+const pluto: BodyDef = {
+  id: 'pluto',
+  name: 'Pluto',
+  kind: 'rocky',
+  parentId: 'sun',
+  seed: 83,
+  // Pluto and Charon face each other: the spin matches the orbit of Charon and both lean 119.6 degrees.
+  physical: { radius: 1.1883e6, surfaceGravity: 0.063, rotationPeriod: 6.387 * DAY, axialTilt: 119.6 * DEG },
+  orbit: {
+    semiMajorAxis: 39.482 * AU,
+    eccentricity: 0.2488,
+    inclination: 17.16 * DEG,
+    ascendingNode: 110.3 * DEG,
+    argPeriapsis: 113.8 * DEG,
+    meanAnomalyAtEpoch: 15 * DEG,
+    period: 247.9 * YEAR,
+  },
+  visual: { color: [0.74, 0.6, 0.5] },
+  atmosphere: {
+    height: 0.09,
+    scaleHeight: 0.3,
+    rayleighDepth: [0.004, 0.012, 0.04],
+    mieDepth: 0.04,
+    mieG: 0.7,
+    mieColor: [0.55, 0.7, 1.0],
+    sunIntensity: 10,
+    stabilization: 0.5,
+  },
+  terrain: {
+    amplitude: 0.03,
+    layers: [
+      { type: 'fbm', frequency: 2, amplitude: 0.22, octaves: 5 },
+      { type: 'ridged', frequency: 7, amplitude: 0.45, octaves: 4, mask: { frequency: 3, threshold: 0.52 } },
+      { type: 'fbm', frequency: 22, amplitude: 0.04, octaves: 3 },
+    ],
+    craters: { count: 160, minRadius: 0.006, maxRadius: 0.06, depth: 0.1, rimHeight: 0.04 },
+    // The lobes and the tip of the heart (its middle is the Sputnik Planitia landmark).
+    features: [
+      { kind: 'crater', name: 'Sputnik Planitia', lat: 29 * DEG, lon: 162 * DEG, radius: 0.15, height: -1.2 },
+      { kind: 'crater', name: 'Sputnik Planitia', lat: 29 * DEG, lon: 192 * DEG, radius: 0.15, height: -1.2 },
+      { kind: 'crater', name: 'Sputnik Planitia', lat: 9 * DEG, lon: 177 * DEG, radius: 0.1, height: -1.2 },
+    ],
+    biomes: [
+      { name: 'nitrogen plain', color: [1.0, 0.97, 0.9], maxHeight: -0.4 },
+      { name: 'water ice mountains', color: [0.8, 0.86, 0.94], minHeight: 0.28 },
+            { name: 'tholin plains', color: [0.4, 0.17, 0.1], moisture: [0, 0.5] },
+      { name: 'tan plains', color: [0.58, 0.36, 0.25] },
+    ],
+    props: [{ kind: 'rock', density: 50, color: [0.5, 0.4, 0.34], minSize: 3, maxSize: 16, maxSlope: 0.9 }],
+  },
+  info: {
+    type: 'Dwarf planet',
+    atmosphere: 'Thin nitrogen haze',
+    temperature: 'minus 229 °C',
+    features: ['Sputnik Planitia', 'Water ice mountains', 'Blue haze', 'Charon overhead'],
+    hazards: ['Extreme cold'],
+    summary: 'A pale red world with a great white heart, where mountains of ice rise under a blue haze.',
+  },
+};
+
+const charon: BodyDef = {
+  id: 'charon',
+  name: 'Charon',
+  kind: 'rocky',
+  parentId: 'pluto',
+  seed: 89,
+  physical: { radius: 6.06e5, surfaceGravity: 0.0288, rotationPeriod: 6.387 * DAY, axialTilt: 0, tidallyLocked: true },
+  orbit: {
+    semiMajorAxis: 1.9591e7,
+    eccentricity: 0.0002,
+    // In Pluto's equatorial plane, so it hangs over one spot of Pluto.
+    inclination: 119.6 * DEG,
+    ascendingNode: 0,
+    argPeriapsis: 0,
+    meanAnomalyAtEpoch: 0,
+    period: 6.387 * DAY,
+  },
+  visual: { color: [0.52, 0.5, 0.5] },
+  terrain: {
+    amplitude: 0.025,
+    layers: [
+      { type: 'fbm', frequency: 2, amplitude: 0.45, octaves: 5 },
+      { type: 'ridged', frequency: 6, amplitude: 0.22, octaves: 4 },
+      { type: 'fbm', frequency: 24, amplitude: 0.05, octaves: 3 },
+    ],
+    craters: { count: 380, minRadius: 0.005, maxRadius: 0.09, depth: 0.2, rimHeight: 0.07 },
+    biomes: [
+      { name: 'grey ice', color: [0.55, 0.54, 0.54], maxHeight: -0.2 },
+      { name: 'pale plains', color: [0.7, 0.69, 0.68] },
+    ],
+    polarCaps: { latitude: 1.15, color: [0.4, 0.17, 0.1] },
+  },
+  info: {
+    type: 'Moon',
+    atmosphere: 'None',
+    temperature: 'minus 220 °C',
+    features: ['Red polar cap', 'Serenity Chasma', 'Locked to Pluto'],
+    hazards: ['Extreme cold'],
+    summary: 'A grey ice world so big that it and Pluto circle each other, always face to face.',
+  },
+};
+
+// ---------------------------------------------------------------------------------------------
 // Landmarks: real places (and a few plausible ones), authored in meters, stored as fractions.
 
 interface LandmarkSpec {
@@ -907,12 +1297,37 @@ landmarks(europa, [
 landmarks(titan, [
   { id: 'kraken_mare', name: 'Kraken Mare Shore', kind: 'craterLake', lat: 68, lon: -35, r: 2000, h: 120, description: 'A still methane sea under an orange sky.', color: [0.2, 0.15, 0.06] },
 ]);
+landmarks(enceladus, [
+  { id: 'tiger_stripes', name: 'Tiger Stripes', kind: 'canyon', lat: -82, lon: 0, r: 4800, h: 600, description: 'Four blue scars slice the south pole, and white plumes rise from their floors.', color: [0.25, 0.55, 0.85] },
+]);
+landmarks(mimas, [
+  { id: 'herschel', name: 'Herschel Crater', kind: 'crater', lat: 0, lon: -100, r: 3800, h: 1100, description: 'One impact left a bowl a third as wide as the whole moon, with a mountain at its heart.' },
+]);
+landmarks(iapetus, [
+  { id: 'equatorial_ridge', name: 'Equatorial Ridge', kind: 'summit', lat: 0, lon: 0, r: 900, h: 700, description: 'A wall of mountains circles the moon at its waist, black at the base and white at the crest.', noStamp: true },
+]);
+landmarks(miranda, [
+  { id: 'verona_rupes', name: 'Verona Rupes', kind: 'summit', lat: -21.6, lon: -13, r: 500, h: 400, description: 'The tallest cliff known. A dropped stone would fall for minutes.', noStamp: true },
+]);
+landmarks(triton, [
+  { id: 'akupara', name: 'Akupara Maculae', kind: 'geyserField', lat: -45, lon: 30, r: 2500, h: 1200, description: 'Dark plumes lean on the thin wind and paint long streaks across the pink ice.', color: [0.38, 0.3, 0.3] },
+]);
+landmarks(ceres, [
+  { id: 'occator', name: 'Occator Crater', kind: 'glowingPool', lat: 19.8, lon: -121, r: 4600, h: 500, description: 'Salt as white as snow lies inside a dark crater and shines like a lamp.', color: [0.8, 0.76, 0.66] },
+]);
+landmarks(pluto, [
+  { id: 'sputnik_planitia', name: 'Sputnik Planitia', kind: 'crater', lat: 22, lon: 177, r: 16600, h: 4200, description: 'A heart of smooth white ice, the size of a country, with nothing to disturb it.', color: [0.95, 0.92, 0.84] },
+  { id: 'tenzing', name: 'Tenzing Montes', kind: 'summit', lat: 12, lon: 140, r: 500, h: 400, description: 'Mountains of water ice, hard as rock in the deep cold.' },
+]);
+landmarks(charon, [
+  { id: 'serenity', name: 'Serenity Chasma', kind: 'canyon', lat: -5, lon: 90, r: 11000, h: 1600, description: 'A canyon far deeper than the Grand Canyon, cut across the grey ice.', color: [0.4, 0.4, 0.42] },
+]);
 
 export const SOLAR_SYSTEM: StarSystemDef = {
   id: 'sol',
   name: 'Sol',
   seed: 1977,
-  bodies: [sun, mercury, venus, earth, moon, mars, phobos, deimos, jupiter, io, europa, ganymede, callisto, saturn, titan, uranus, neptune],
+  bodies: [sun, mercury, venus, earth, moon, mars, phobos, deimos, ceres, jupiter, io, europa, ganymede, callisto, saturn, titan, enceladus, mimas, iapetus, uranus, miranda, neptune, triton, pluto, charon],
 };
 
 // Space scenery: belts, a bright comet inbound near Earth's orbit, and the Milky Way backdrop.

@@ -315,6 +315,77 @@ export const SCENARIOS: Record<string, Scenario> = {
       limbView(w, 'europa', (lat * 180) / Math.PI, (lon * 180) / Math.PI, 1.3, 32, 0.08);
     },
   },
+  'enceladus-geysers': {
+    description: 'Over the blue fissures of Enceladus as plumes of ice rise into the dark',
+    apply: (w) => {
+      const body = w.universe.get('enceladus');
+      const site = geyserSites(body.def.seed, 6)[0]!;
+      const { lat, lon } = dirToLatLon(site.dir.x, site.dir.y, site.dir.z);
+      limbView(w, 'enceladus', (lat * 180) / Math.PI, (lon * 180) / Math.PI, 1.5, 30, 0.1);
+    },
+  },
+  'iapetus-ridge': {
+    description: 'Low over the black and white faces of Iapetus, the great equatorial ridge ahead',
+    apply: (w) => landmarkApproach(w, 'iapetus', 'equatorial_ridge', { distance: 22000, altitude: 3000, heading: 0, hour: 10, lookLift: 1500, throttle: 0.2 }),
+  },
+  'miranda-cliff': {
+    description: 'Approaching the sheer wall of Verona Rupes on Miranda',
+    apply: (w) => landmarkApproach(w, 'miranda', 'verona_rupes', { distance: 9000, altitude: 1800, heading: 180, hour: 10, lookLift: 800, throttle: 0.15 }),
+  },
+  'triton-geysers': {
+    description: 'Over the pink nitrogen ice of Triton as dark geysers streak the sky',
+    apply: (w) => {
+      const body = w.universe.get('triton');
+      const site = geyserSites(body.def.seed, 6)[0]!;
+      const { lat, lon } = dirToLatLon(site.dir.x, site.dir.y, site.dir.z);
+      limbView(w, 'triton', (lat * 180) / Math.PI, (lon * 180) / Math.PI, 1.4, 30, 0.06);
+    },
+  },
+  'ceres-bright-spots': {
+    description: 'Gliding toward the dazzling white salt of Occator crater on Ceres',
+    apply: (w) => landmarkApproach(w, 'ceres', 'occator', { distance: 9000, altitude: 1500, heading: 90, hour: 11, lookLift: 0, throttle: 0.15 }),
+  },
+  'pluto-heart': {
+    description: 'Pluto from orbit, the heart of Sputnik Planitia glowing white on red ground',
+    apply: (w) => faceLatLon(w, 'pluto', 22, 177, 2.0),
+  },
+  'pluto-charon-sky': {
+    description: 'On Pluto in the blue haze, Charon hanging huge and still in the sky',
+    apply: (w) => {
+      // Pluto and Charon are locked, so Charon stays over one longitude. Find it, then stand north of it.
+      const pluto = w.universe.get('pluto');
+      const charon = w.universe.get('charon');
+      w.universe.update(0);
+      const to = pluto.worldToLocalDir(charon.position.clone().sub(pluto.position).normalize(), new Vector3());
+      const sub = dirToLatLon(to.x, to.y, to.z);
+      const lonDeg = (sub.lon * 180) / Math.PI;
+      const time = findLocalHourTime(w, 'pluto', lonDeg, 17);
+      w.universe.update(time);
+      const sunLocal = pluto.worldToLocalDir(w.universe.root.position.clone().sub(pluto.position).normalize(), new Vector3());
+      // Stand 55 degrees off the sub Charon point, on whichever side the sun lights better.
+      const spot = new Vector3();
+      let best = { lat: sub.lat, sign: 1, el: -2 };
+      for (const sign of [1, -1]) {
+        const lat = sub.lat + sign * 62 * DEG2RAD;
+        latLonToDir(lat, sub.lon, spot);
+        const el = spot.dot(sunLocal);
+        if (el > best.el) best = { lat, sign, el };
+      }
+      w.place({ body: 'pluto', lat: best.lat / DEG2RAD, lon: lonDeg, altitude: 900, heading: best.sign > 0 ? 180 : 0, pitch: 12, throttle: 0.05, time });
+    },
+  },
+  'iapetus-two-tone': {
+    description: 'Iapetus from orbit, half coal and half snow, the ridge circling its waist',
+    apply: (w) => faceLatLon(w, 'iapetus', 0, 60, 3.2),
+  },
+  'uranus-calm': {
+    description: 'Pale cyan Uranus, calm and nearly featureless, rolling on its side',
+    apply: (w) => faceLatLon(w, 'uranus', 10, 0, 3.4),
+  },
+  'neptune-storm': {
+    description: 'Deep blue Neptune with its dark storm on the day side',
+    apply: (w) => faceLatLon(w, 'neptune', -28, 34, 3.4),
+  },
   'mars-dust-devils': {
     description: 'Low over the Martian plains as dust devils twist across the ground',
     apply: (w) => {
