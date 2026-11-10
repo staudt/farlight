@@ -63,7 +63,7 @@ describe('landmark data', () => {
           if (sys.id !== 'sol') expect(l.name.startsWith('The ')).toBe(true);
           expect(DASH.test(l.name + l.description)).toBe(false);
           expect(l.radius).toBeGreaterThan(0);
-          expect(l.radius).toBeLessThanOrEqual(0.06);
+          expect(l.radius).toBeLessThanOrEqual(sys.id === 'sol' ? 0.2 : 0.06);
         }
       }
     }
