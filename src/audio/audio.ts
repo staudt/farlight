@@ -165,7 +165,8 @@ export const midiToHz = (m: number): number => 440 * Math.pow(2, (m - 69) / 12);
 
 /** D major pentatonic chime notes. */
 const CHIME_NOTES = [74, 76, 78, 81, 83, 86];
-const ENGINE_MULTS = [1, 0.5, 1.007];
+// Harmonic multiples only: a detuned pair (e.g. 1.007) beats every few seconds, heard as a swelling wave.
+const ENGINE_MULTS = [1, 0.5, 2];
 
 export class AudioEngine {
   tuning: AudioTuning = defaultTuning();
@@ -360,6 +361,18 @@ export class AudioEngine {
     return g;
   }
 
+  /**
+   * A gain stage centred on 1 that a slow oscillator wobbles by +-depth. Put it BEFORE a layer's
+   * level gain: an LFO connected straight to a level adds to it, so a layer at level 0 would
+   * still swing audibly (heard as endless waves, even in space).
+   */
+  private wobble(ctx: AudioContext, hz: number, depth: number): GainNode {
+    const g = ctx.createGain();
+    g.gain.value = 1;
+    this.lfo(ctx, hz, depth, g.gain);
+    return g;
+  }
+
   /** A slow oscillator that wobbles an AudioParam by +-depth. */
   private lfo(ctx: AudioContext, hz: number, depth: number, target: AudioParam): void {
     const o = ctx.createOscillator();
@@ -450,7 +463,8 @@ export class AudioEngine {
     const panLfo = ctx.createOscillator();
     panLfo.frequency.value = 0.11;
     const panDepth = ctx.createGain();
-    panDepth.gain.value = 0.35;
+    // No left and right sweep: a periodic pan is heard as a wave too.
+    panDepth.gain.value = 0;
     panLfo.connect(panDepth).connect(this.engPan.pan);
     panLfo.start();
 
@@ -494,7 +508,8 @@ export class AudioEngine {
       sine.frequency.value = hz;
       tri.frequency.value = hz;
       tri.type = 'triangle';
-      tri.detune.value = (i % 2 ? 1 : -1) * 6;
+      // Unison, not detuned: detuned voices beat against each other and pulse like waves.
+      tri.detune.value = 0;
       const gs = ctx.createGain();
       gs.gain.value = 0.16 / (1 + i * 0.25);
       const gt = ctx.createGain();
@@ -565,20 +580,19 @@ export class AudioEngine {
 
     // Dust: gritty gusts.
     this.dustGust = gain0();
-    this.noiseSource(ctx).connect(filt('bandpass', 1300, 0.9)).connect(this.dustGust).connect(out);
-    this.lfo(ctx, 0.23, 0.45, this.dustGust.gain);
+    this.noiseSource(ctx).connect(filt('bandpass', 1300, 0.9)).connect(this.wobble(ctx, 0.23, 0.45)).connect(this.dustGust).connect(out);
     this.dustGrit = gain0();
     this.patterSource(ctx, 1.7).connect(filt('bandpass', 2600, 1.2)).connect(this.dustGrit).connect(out);
 
     // Gas giant: deep roar and low rumbles.
     this.gasRoar = gain0();
-    this.noiseSource(ctx).connect(filt('lowpass', 240, 0.8)).connect(this.gasRoar).connect(out);
-    this.lfo(ctx, 0.06, 0.25, this.gasRoar.gain);
+    this.noiseSource(ctx).connect(filt('lowpass', 240, 0.8)).connect(this.wobble(ctx, 0.06, 0.25)).connect(this.gasRoar).connect(out);
     this.gasRumble = gain0();
-    this.tone(ctx, 'sine', 31, 0.7, this.gasRumble);
-    this.tone(ctx, 'sine', 47.5, 0.4, this.gasRumble);
+    const rumbleWob = this.wobble(ctx, 0.09, 0.3);
+    this.tone(ctx, 'sine', 31, 0.7, rumbleWob);
+    this.tone(ctx, 'sine', 47.5, 0.4, rumbleWob);
+    rumbleWob.connect(this.gasRumble);
     this.gasRumble.connect(out);
-    this.lfo(ctx, 0.09, 0.3, this.gasRumble.gain);
 
     // Heavy air: a pressure drone, two close sines beating slowly plus a dark noise bed.
     this.pressure = gain0();
@@ -590,9 +604,10 @@ export class AudioEngine {
 
     // Volcanic plumes: a deep rumble.
     this.plumeRumble = gain0();
-    this.noiseSource(ctx).connect(filt('lowpass', 85, 1)).connect(this.plumeRumble);
-    this.tone(ctx, 'sine', 29, 0.6, this.plumeRumble);
-    this.lfo(ctx, 0.37, 0.3, this.plumeRumble.gain);
+    const plumeWob = this.wobble(ctx, 0.37, 0.3);
+    this.noiseSource(ctx).connect(filt('lowpass', 85, 1)).connect(plumeWob);
+    this.tone(ctx, 'sine', 29, 0.6, plumeWob);
+    plumeWob.connect(this.plumeRumble);
     this.plumeRumble.connect(this.master);
 
     // Asteroid belt: a soft high shimmer of four slowly breathing partials.
@@ -612,7 +627,8 @@ export class AudioEngine {
     this.cabinHum = ctx.createGain();
     this.cabinHum.gain.value = 0;
     this.tone(ctx, 'sine', 118, 0.5, this.cabinHum);
-    this.tone(ctx, 'sine', 177.3, 0.15, this.cabinHum);
+    // An exact 3:2 above the fundamental: a near miss (177.3) beats against its overtones.
+    this.tone(ctx, 'sine', 177, 0.15, this.cabinHum);
     this.cabinHum.connect(this.master);
     this.cabinRush = ctx.createGain();
     this.cabinRush.gain.value = 0;

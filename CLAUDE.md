@@ -104,3 +104,8 @@ Farlight is a relaxed solar system glider (working title was Space Glider 3D). L
 - One NaN pixel turns the whole frame black through bloom. If the smoke test reports a black frame with no console errors, suspect NaN in a post shader, or a lost WebGL context under GPU memory pressure (the smoke state reports `contextLost`; the game reloads itself on restore).
 - Smoke tests pick a free port; never hardcode preview ports (parallel agents collide).
 - Effects merged into one EffectPass share a shader: prefix every #define (ATMO_, CLOUD_).
+
+## Audio notes
+- Never connect an LFO straight to a layer's level `gain` AudioParam: Web Audio ADDS the LFO to the base value, so a layer "at 0" still swings audibly everywhere (this caused an endless "wave" sound in space). Use `wobble()` (a gain stage centred on 1) before the level gain.
+- Avoid near-miss frequency pairs (detuned unisons, 1.007 ratios, 177.3 vs 118 Hz): they beat and read as pulsing waves.
+- `artifacts/probe-env.mjs`-style checks: attach an AnalyserNode to `audio.master`, sample RMS for 10 s, and look at the modulation (sd/mean). In space it should stay under about 0.1.
