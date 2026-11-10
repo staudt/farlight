@@ -888,7 +888,7 @@ const enceladus: BodyDef = {
       { kind: 'canyon', name: 'Tiger Stripes', lat: -80 * DEG, lon: 150 * DEG, radius: 0.3, height: -0.8 },
     ],
     biomes: [
-      { name: 'tiger stripes', color: [0.28, 0.56, 0.82], latitude: [1.22, 1.6], moisture: [0.36, 0.6] },
+      { name: 'tiger stripes', color: [0.28, 0.56, 0.82], latitude: [1.22, 1.6], hemisphere: 'south', moisture: [0.36, 0.6] },
       { name: 'old cratered ice', color: [0.82, 0.86, 0.9], maxHeight: -0.15 },
       { name: 'fresh snow', color: [0.97, 0.98, 1.0] },
     ],
@@ -965,8 +965,7 @@ const iapetus: BodyDef = {
   visual: { color: [0.5, 0.46, 0.42] },
   terrain: {
     amplitude: 0.05,
-    // Bright and dark halves split about the Saturn facing axis (the real split is leading and trailing).
-    biomeAxis: 'substellar',
+    // Dark leading hemisphere (+Z of the locked frame), bright trailing one.
     layers: [
       { type: 'fbm', frequency: 2, amplitude: 0.45, octaves: 5 },
       { type: 'ridged', frequency: 8, amplitude: 0.2, octaves: 4 },
@@ -976,8 +975,8 @@ const iapetus: BodyDef = {
     features: ridgeChain(-72, 72, 9, 0.09, 1.1),
     biomes: [
       { name: 'ridge rock', color: [0.26, 0.22, 0.2], maxSlope: 0.12, minHeight: 0.9 },
-      { name: 'dark cap', color: [0.035, 0.027, 0.022], latitude: [0, 0.6] },
-      { name: 'dusty margin', color: [0.34, 0.27, 0.2], latitude: [0.6, 0.95] },
+      { name: 'dark cap', color: [0.035, 0.027, 0.022], direction: { axis: [0, 0, 1], minDot: 0.25, softness: 0.1 }, latitude: [0, 1.1] },
+      { name: 'dusty margin', color: [0.34, 0.27, 0.2], direction: { axis: [0, 0, 1], minDot: -0.05, softness: 0.12 } },
       { name: 'bright ice', color: [0.92, 0.9, 0.86] },
     ],
   },
@@ -1056,7 +1055,7 @@ const triton: BodyDef = {
     period: -5.876854 * DAY,
   },
   visual: { color: [0.8, 0.58, 0.55] },
-  effects: [{ kind: 'geyser', intensity: 1, size: 0.13, count: 6, color: [0.5, 0.4, 0.38] }],
+  effects: [{ kind: 'geyser', intensity: 1, size: 0.13, count: 6, color: [0.1, 0.09, 0.09] }],
   terrain: {
     amplitude: 0.012,
     layers: [
@@ -1165,14 +1164,15 @@ const pluto: BodyDef = {
       { type: 'fbm', frequency: 22, amplitude: 0.04, octaves: 3 },
     ],
     craters: { count: 160, minRadius: 0.006, maxRadius: 0.06, depth: 0.1, rimHeight: 0.04 },
-    // The lobes and the tip of the heart (its middle is the Sputnik Planitia landmark).
+    // Sputnik Planitia: two overlapping lobes and a tapering tip make the heart.
     features: [
-      { kind: 'crater', name: 'Sputnik Planitia', lat: 29 * DEG, lon: 162 * DEG, radius: 0.15, height: -1.2 },
-      { kind: 'crater', name: 'Sputnik Planitia', lat: 29 * DEG, lon: 192 * DEG, radius: 0.15, height: -1.2 },
-      { kind: 'crater', name: 'Sputnik Planitia', lat: 9 * DEG, lon: 177 * DEG, radius: 0.1, height: -1.2 },
+      { kind: 'plain', name: 'Sputnik Planitia', lat: 29 * DEG, lon: 166 * DEG, radius: 0.3, height: -0.5 },
+      { kind: 'plain', name: 'Sputnik Planitia', lat: 29 * DEG, lon: 188 * DEG, radius: 0.3, height: -0.5 },
+      { kind: 'plain', name: 'Sputnik Planitia', lat: 14 * DEG, lon: 177 * DEG, radius: 0.22, height: -0.5 },
+      { kind: 'plain', name: 'Sputnik Planitia', lat: 4 * DEG, lon: 177 * DEG, radius: 0.12, height: -0.5 },
     ],
     biomes: [
-      { name: 'nitrogen plain', color: [1.0, 0.97, 0.9], maxHeight: -0.4 },
+      { name: 'nitrogen plain', color: [1.0, 0.97, 0.9], maxHeight: -0.3 },
       { name: 'water ice mountains', color: [0.8, 0.86, 0.94], minHeight: 0.28 },
             { name: 'tholin plains', color: [0.4, 0.17, 0.1], moisture: [0, 0.5] },
       { name: 'tan plains', color: [0.58, 0.36, 0.25] },
@@ -1313,10 +1313,13 @@ landmarks(triton, [
   { id: 'akupara', name: 'Akupara Maculae', kind: 'geyserField', lat: -45, lon: 30, r: 2500, h: 1200, description: 'Dark plumes lean on the thin wind and paint long streaks across the pink ice.', color: [0.38, 0.3, 0.3] },
 ]);
 landmarks(ceres, [
-  { id: 'occator', name: 'Occator Crater', kind: 'glowingPool', lat: 19.8, lon: -121, r: 4600, h: 500, description: 'Salt as white as snow lies inside a dark crater and shines like a lamp.', color: [0.8, 0.76, 0.66] },
+  { id: 'occator', name: 'Occator Crater', kind: 'crater', lat: 19.8, lon: -121, r: 4600, h: 500, description: 'A dark crater whose floor is dotted with patches of salt as white as snow.', color: [0.82, 0.8, 0.72] },
+  { id: 'vinalia', name: 'Vinalia Faculae', kind: 'glowingPool', lat: 20.9, lon: -119.6, r: 900, h: 90, description: 'Salt left by briny water, bright as a lamp.', color: [0.85, 0.82, 0.74] },
+  { id: 'occator_west', name: 'Occator Salt', kind: 'glowingPool', lat: 18.9, lon: -122.1, r: 650, h: 70, description: 'A smaller patch of white salt on the dark floor.', color: [0.85, 0.82, 0.74] },
+  { id: 'occator_south', name: 'Occator Salt', kind: 'glowingPool', lat: 20.3, lon: -123, r: 520, h: 60, description: 'A tiny patch of white salt on the dark floor.', color: [0.85, 0.82, 0.74] },
 ]);
 landmarks(pluto, [
-  { id: 'sputnik_planitia', name: 'Sputnik Planitia', kind: 'crater', lat: 22, lon: 177, r: 16600, h: 4200, description: 'A heart of smooth white ice, the size of a country, with nothing to disturb it.', color: [0.95, 0.92, 0.84] },
+  { id: 'sputnik_planitia', name: 'Sputnik Planitia', kind: 'crater', lat: 22, lon: 177, r: 16600, h: 300, noStamp: true, description: 'A heart of smooth white ice, the size of a country, with nothing to disturb it.', color: [0.95, 0.92, 0.84] },
   { id: 'tenzing', name: 'Tenzing Montes', kind: 'summit', lat: 12, lon: 140, r: 500, h: 400, description: 'Mountains of water ice, hard as rock in the deep cold.' },
 ]);
 landmarks(charon, [

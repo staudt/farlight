@@ -189,3 +189,31 @@ describe('rare archetypes', () => {
     expect(generateSystem(star)).toEqual(generateSystem(star));
   });
 });
+
+describe('biome hemisphere and direction rules', () => {
+  const terrain: TerrainDef = {
+    amplitude: 0.01,
+    layers: [{ type: 'fbm', frequency: 2, amplitude: 0.1, octaves: 2 }],
+    biomes: [
+      { name: 'south', color: [0, 0, 1], hemisphere: 'south', latitude: [1.0, 1.6] },
+      { name: 'lead', color: [0, 0, 0], direction: { axis: [0, 0, 1], minDot: 0.25 } },
+      { name: 'rest', color: [1, 1, 1] },
+    ],
+  };
+  const at = (x: number, y: number, z: number): string => {
+    const s = createHeightSampler(fakeWorld(terrain), 6e6);
+    const out = makeSample();
+    s.sample(x, y, z, out);
+    out.n = 0;
+    return biomeNameAt(terrain, out, 0);
+  };
+  test('hemisphere keeps a polar biome to one pole', () => {
+    expect(at(0, -1, 0)).toBe('south');
+    expect(at(0, 1, 0)).toBe('rest');
+  });
+  test('direction splits the surface by a half space', () => {
+    expect(at(0, 0, 1)).toBe('lead');
+    expect(at(0, 0, -1)).toBe('rest');
+    expect(at(1, 0, 0)).toBe('rest');
+  });
+});

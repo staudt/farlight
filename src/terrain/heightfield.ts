@@ -360,6 +360,11 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
           sum += bowl + depth * 0.22 * Math.exp(-rd * rd);
           break;
         }
+        case 'plain': {
+          // A broad smooth basin with a steep rim; overlapping plains merge into one shape.
+          sum -= Math.abs(ht) * smoothstep(1.0, 0.6, tt);
+          break;
+        }
         case 'cliff': {
           // A step along the east axis: raised ground to the south, a sheer face at b = 0.
           const a = x * f.ex + y * f.ey + z * f.ez;

@@ -316,7 +316,7 @@ export interface CraterDef {
   rimHeight: number;
 }
 
-export type FeatureKind = 'volcano' | 'canyon' | 'spires' | 'mesa' | 'crater' | 'cliff';
+export type FeatureKind = 'volcano' | 'canyon' | 'spires' | 'mesa' | 'crater' | 'cliff' | 'plain';
 
 export interface FeatureDef {
   kind: FeatureKind;
@@ -381,6 +381,14 @@ export interface BiomeDef {
   maxSlope?: number;
   /** Absolute latitude range in radians. */
   latitude?: readonly [number, number];
+  /** Restrict to one hemisphere of the biome axis (north is +Y, or the sub-stellar side is never south). */
+  hemisphere?: 'north' | 'south';
+  /**
+   * Half-space rule in body-fixed unit coordinates: the dot of the surface direction with `axis`
+   * must lie in [minDot, maxDot] (-1..1), with a soft edge of `softness` (default 0.08). For tidally
+   * locked moons +X faces the parent, +Y is the orbit normal and +Z is the leading side.
+   */
+  direction?: { axis: readonly [number, number, number]; minDot?: number; maxDot?: number; softness?: number };
   /** Moisture noise range 0..1. */
   moisture?: readonly [number, number];
   /** Self lit surface (lava, glowing growth): fades in with night, `day` keeps a share by day. */

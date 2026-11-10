@@ -1,5 +1,5 @@
 import { Simplex3 } from '../core/noise';
-import type { RGB, TerrainDef } from '../data/types';
+import type { BiomeDef, RGB, TerrainDef } from '../data/types';
 import type { TerrainSample } from './heightfield';
 
 let jitterNoise: Simplex3 | null = null;
@@ -14,6 +14,22 @@ function window(x: number, lo: number | undefined, hi: number | undefined, w: nu
   let m = 1;
   if (lo !== undefined) m *= smoothstep(lo - w, lo + w, x);
   if (hi !== undefined) m *= 1 - smoothstep(hi - w, hi + w, x);
+  return m;
+}
+
+/**
+ * Membership from the optional hemisphere and direction rules of a biome (1 when it has none).
+ * `lat` is the signed latitude-like coordinate, `w` the soft edge width.
+ */
+function placeMask(rule: BiomeDef, s: TerrainSample, lat: number, w: number): number {
+  let m = 1;
+  if (rule.hemisphere) m *= smoothstep(-w, w, rule.hemisphere === 'north' ? lat : -lat);
+  const d = rule.direction;
+  if (d) {
+    const a = d.axis;
+    const dot = (s.x * a[0] + s.y * a[1] + s.z * a[2]) / (Math.hypot(a[0], a[1], a[2]) || 1);
+    m *= window(dot, d.minDot, d.maxDot, d.softness ?? 0.08);
+  }
   return m;
 }
 
@@ -69,6 +85,7 @@ export function biomeColor(def: TerrainDef, s: TerrainSample, slope: number, det
       let m = window(n, rule.minHeight, rule.maxHeight, hw);
       if (rule.maxSlope !== undefined) m *= 1 - smoothstep(rule.maxSlope - 0.1, rule.maxSlope + 0.1, slope);
       if (rule.latitude) m *= window(absLat, rule.latitude[0], rule.latitude[1], lw);
+      if (rule.hemisphere || rule.direction) m *= placeMask(rule, s, s.lat + jn2 * 0.03 * detail, lw);
       if (rule.moisture) m *= window(moist, rule.moisture[0], rule.moisture[1], mw);
       const wgt = i === rules.length - 1 ? rem : m * rem;
       r += rule.color[0] * wgt;
@@ -142,6 +159,7 @@ export function biomeNameAt(def: TerrainDef, s: TerrainSample, slope: number): s
     let m = window(n, rule.minHeight, rule.maxHeight, 0.012);
     if (rule.maxSlope !== undefined) m *= 1 - smoothstep(rule.maxSlope - 0.1, rule.maxSlope + 0.1, slope);
     if (rule.latitude) m *= window(absLat, rule.latitude[0], rule.latitude[1], 0.04);
+    if (rule.hemisphere || rule.direction) m *= placeMask(rule, s, s.lat + jn2 * 0.03, 0.04);
     if (rule.moisture) m *= window(moist, rule.moisture[0], rule.moisture[1], 0.05);
     const wgt = i === rules.length - 1 ? rem : m * rem;
     if (wgt > bestW) {

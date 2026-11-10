@@ -349,6 +349,10 @@ export const SCENARIOS: Record<string, Scenario> = {
     description: 'Pluto from orbit, the heart of Sputnik Planitia glowing white on red ground',
     apply: (w) => faceLatLon(w, 'pluto', 22, 177, 2.0),
   },
+  'pluto-orbit-heart': {
+    description: 'High over Pluto, the whole white heart of Sputnik Planitia facing the camera',
+    apply: (w) => faceLatLon(w, 'pluto', 20, 177, 3.2),
+  },
   'pluto-charon-sky': {
     description: 'On Pluto in the blue haze, Charon hanging huge and still in the sky',
     apply: (w) => {
@@ -376,7 +380,7 @@ export const SCENARIOS: Record<string, Scenario> = {
   },
   'iapetus-two-tone': {
     description: 'Iapetus from orbit, half coal and half snow, the ridge circling its waist',
-    apply: (w) => faceLatLon(w, 'iapetus', 0, 60, 3.2),
+    apply: (w) => faceLatLon(w, 'iapetus', 0, -40, 3.2),
   },
   'uranus-calm': {
     description: 'Pale cyan Uranus, calm and nearly featureless, rolling on its side',
