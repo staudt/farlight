@@ -4,6 +4,7 @@ import { Vector3 } from 'three';
 import { config } from '../core/config';
 import type { Input } from '../input/input';
 import type { GameRenderer } from '../render/renderer';
+import { hudZoom } from './settingsStore';
 import { DEFAULT_SCALE } from '../data/scale';
 import { beltAt, scaleBelts, type ScaledBelt } from '../render/space/spaceData';
 import { LandmarkTarget, type Targetable } from '../sim/landmarks';
@@ -356,8 +357,10 @@ export class Hud {
       return;
     }
     const cam = this.gfx.camera;
-    const W = this.root.clientWidth || window.innerWidth;
-    const H = this.root.clientHeight || window.innerHeight;
+    // The layer is zoomed by CSS (HUD size setting): work in its own coordinates.
+    const zoom = hudZoom();
+    const W = (this.root.clientWidth || window.innerWidth) / zoom;
+    const H = (this.root.clientHeight || window.innerHeight) / zoom;
     _rel.copy(t.position).sub(this.gfx.shipCamera.worldPos);
     const dist = _rel.length();
     _rel.applyQuaternion(cam.quaternion.clone().invert());

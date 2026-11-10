@@ -4,6 +4,7 @@ import type { GameRenderer } from '../render/renderer';
 import type { LandmarkTarget } from '../sim/landmarks';
 import type { World } from '../sim/world';
 import { formatDistance, noDashes } from './format';
+import { hudZoom } from './settingsStore';
 
 const _rel = new Vector3();
 const _qi = new Quaternion();
@@ -82,8 +83,9 @@ export class LandmarkMarkers {
     for (const [l, m] of this.markers) if (!list.includes(l) && m.shown) this.hide(m);
     if (list.length === 0) return;
     const camPos = this.gfx.shipCamera.worldPos;
-    const W = window.innerWidth;
-    const H = window.innerHeight;
+    const zoom = hudZoom();
+    const W = window.innerWidth / zoom;
+    const H = window.innerHeight / zoom;
     const tanHalf = Math.tan((cam.fov * Math.PI) / 360);
     _qi.copy(cam.quaternion).invert();
     // Camera in body fixed coordinates for the line of sight test.

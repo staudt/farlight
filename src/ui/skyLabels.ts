@@ -30,6 +30,7 @@ export class SkyLabels {
         left: '0',
         top: '0',
         font: '500 10px Rajdhani, sans-serif',
+        fontSize: 'calc(10px * var(--hud-scale, 1))',
         letterSpacing: '0.28em',
         color: 'rgba(170, 235, 255, 0.62)',
         textShadow: '0 0 6px rgba(0, 0, 0, 0.6)',

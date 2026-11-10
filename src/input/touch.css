@@ -342,3 +342,10 @@ body.photo .t-menu-layer {
     right: calc(env(safe-area-inset-right) + 76px);
   }
 }
+
+/* HUD size setting: the fixed position controls follow it (the floating stick tracks the finger, so it stays). */
+.t-slider,
+.t-boost,
+.t-row {
+  zoom: var(--hud-scale, 1);
+}

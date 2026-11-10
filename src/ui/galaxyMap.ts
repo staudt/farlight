@@ -1,7 +1,7 @@
 import type { GalaxyDef, GalaxyStar, PlayerProgress } from '../data/galaxy';
 import { generateSystem, pickFocusBody } from '../data/generate';
 import type { BodyDef, StarSystemDef } from '../data/types';
-import { loadProgress, surveyProgress } from '../sim/survey';
+import { loadProgress, systemExploration } from '../sim/survey';
 import { escapeHtml, noDashes } from './format';
 import {
   DEFAULT_TRAVEL_FACTOR,
@@ -330,7 +330,7 @@ export class GalaxyMap {
     if (!sel) return;
     const info = this.systemInfo(sel);
     const visited = this.progress.visited.includes(sel.id) || sel.id === this.current.id;
-    const prog = visited ? surveyProgress(this.progress, sel.id, info.bodyIds) : { done: 0, total: info.bodyIds.length, fraction: 0 };
+    const prog = visited ? systemExploration(this.progress, sel.id, info.system.bodies.filter((b) => b.kind !== 'star')) : { done: 0, total: info.bodyIds.length, fraction: 0 };
     const q = (s: string): HTMLElement => this.card.querySelector(s) as HTMLElement;
     q('.gm-name').textContent = noDashes(sel.name).toUpperCase();
     q('.gm-sub').textContent = `${CLASS_NAMES[sel.starClass] ?? ''} · CLASS ${sel.starClass} · ${sel.planetCount} PLANETS`;
