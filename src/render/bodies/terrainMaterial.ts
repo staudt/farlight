@@ -83,6 +83,9 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
         // Skirts are shaded like the ground they hang from, not like vertical walls.
         N = normalize(mix(N, R, skirt));
         float isWater = step(0.5, mod(vWater.x, 2.0));
+        // The sea surface is a sphere: start from the smooth radial normal. Flat triangle normals
+        // differ by tiny amounts that the sharp sun glitter turns into a zigzag on fine chunks.
+        N = normalize(mix(N, R, isWater * (1.0 - skirt)));
         // Directional swells: tilt of the facet normal, crest height and breaking foam from a few waves.
         float crest = 0.0;
         float foam = 0.0;

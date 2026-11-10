@@ -286,7 +286,8 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
     fg /= cnt;
     fb /= cnt;
     const rnd = (hashInts(baseSeed, cell, which) & 0xffff) / 65535;
-    const kv = 1 + (rnd - 0.5) * 0.14 * facetVar;
+    // Water stays calm: brightness jitter per facet reads as a zigzag on still seas.
+    const kv = isWater ? 1 : 1 + (rnd - 0.5) * 0.14 * facetVar;
     // A subtle warm/cool shift per facet makes the low poly look read on land.
     const tint = isWater ? 0 : (((hashInts(baseSeed, cell, which + 7) & 0xff) / 255) - 0.5) * 0.05 * facetVar;
     for (let q = 0; q < 3; q++) {
