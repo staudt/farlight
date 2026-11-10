@@ -64,7 +64,7 @@ const TEXT: Record<TipId, Record<Device, string>> = {
   look: {
     keyboard: 'PRESS {V} TO LOOK AROUND · {K} FOR A SNAPSHOT',
     touch: 'TAP {MENU} TO LOOK AROUND · {CAMERA} FOR A SNAPSHOT',
-    gamepad: 'PRESS {L3} TO LOOK AROUND · HOLD {START} FOR A SNAPSHOT',
+    gamepad: 'PRESS {L3} TO LOOK AROUND · HOLD {BACK} FOR A SNAPSHOT',
   },
   glow: {
     keyboard: 'NIGHT SIDES GLOW',
