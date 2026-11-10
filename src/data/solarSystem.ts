@@ -103,6 +103,12 @@ const earth: BodyDef = {
       { kind: 'mesa', density: 4, color: [0.85, 0.5, 0.3], minSize: 30, maxSize: 90, biomes: ['desert'], maxSlope: 0.5 },
     ],
   },
+  life: [
+    { kind: 'birds', color: [0.95, 0.95, 0.93], count: 22, minAlt: 40, maxAlt: 1500, biomes: ['coast'], day: true, size: 11 },
+    { kind: 'birds', color: [0.09, 0.08, 0.1], count: 16, minAlt: 40, maxAlt: 900, biomes: ['forest'], day: true, size: 9, chance: 0.3 },
+    { kind: 'fish', color: [0.1, 0.22, 0.3], count: 60, minAlt: 0, maxAlt: 400, biomes: ['shallows'], latitude: [0, 0.6], day: true, size: 3.4 },
+    { kind: 'fireflies', color: [0.7, 1.0, 0.25], count: 14, minAlt: 2, maxAlt: 9, biomes: ['forest', 'grass', 'meadow'], night: true, size: 0.5, glow: 3.2 },
+  ],
   info: {
     type: 'Terrestrial',
     atmosphere: 'Breathable',

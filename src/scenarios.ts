@@ -9,6 +9,10 @@ import { dirToLatLon, latLonToDir } from './terrain/api';
 import { devilSites, geyserSites } from './render/weather/plumes';
 import { pickFocusBody } from './data/generate';
 import type { BodyDef } from './data/types';
+import { findLifeSpot } from './render/life/spots';
+import { whalePlan } from './render/life/skyWhales';
+import { Flock } from './render/life/boids';
+import { flockPlan } from './render/life/birds';
 
 export interface Scenario {
   description: string;
@@ -115,6 +119,77 @@ export const SCENARIOS: Record<string, Scenario> = {
     description: 'Gliding over a bioluminescent alien world at night, glowing forests, crystals or seas',
     generic: true,
     apply: (w) => glowNight(w, (d) => d.terrain?.props?.some((p) => (p.glow ?? 0) > 0) === true || !!d.terrain?.water?.emissive, 220),
+  },
+  'earth-birds': {
+    description: 'Low over a coast in the morning, a flock of gulls wheeling just ahead',
+    apply: (w) => {
+      const earth = w.universe.get('earth');
+      const spot = findLifeSpot(w, earth, 'birds', {
+        centres: [[-41.8, -73.8], [47.7, -124.4], [62.5, 6], [39.4, -8.6], [-42.5, 171.5], [58, 15.5]],
+        radius: 22000,
+        wantNeighbours: 5,
+        cluster: 3000,
+        standoff: 260,
+        bearing: 60,
+        only: (d) => d.biomes?.includes('coast') === true,
+        aim: (d, h) => {
+          const p = flockPlan(d, h.rnd);
+          const f = new Flock(p.n, p.seed, p.orbitR, undefined, p.hover);
+          return [f.tx, f.tz];
+        },
+      });
+      const s = spot ?? { lat: 39.4, lon: -8.6, heading: 330 };
+      w.place({ body: 'earth', lat: s.lat, lon: s.lon, altitude: 190, heading: s.heading + 17, pitch: -2, throttle: 0, time: findLocalHourTime(w, 'earth', s.lon, 10.5) });
+    },
+  },
+  'earth-fish': {
+    description: 'Skimming turquoise shallows at noon, schools of silver fish darting just under the surface',
+    apply: (w) => {
+      const earth = w.universe.get('earth');
+      const spot = findLifeSpot(w, earth, 'fish', {
+        centres: [[24.5, -77.8], [-18, 147.5], [18, -66], [4, 73], [-8, 115], [10, 123]],
+        radius: 30000,
+        wantNeighbours: 4,
+        cluster: 700,
+        standoff: 150,
+        bearing: 90,
+      });
+      const s = spot ?? { lat: 24.5, lon: -77.8, heading: 90 };
+      w.place({ body: 'earth', lat: s.lat, lon: s.lon, altitude: 38, heading: s.heading + 22, pitch: -9, throttle: 0.03, time: findLocalHourTime(w, 'earth', s.lon, 11.5) });
+    },
+  },
+  'earth-fireflies': {
+    description: 'Landed at the edge of a forest at night, fireflies drifting and blinking among the trees',
+    apply: (w) => {
+      const earth = w.universe.get('earth');
+      const spot = findLifeSpot(w, earth, 'fireflies', {
+        centres: [[58, 15.5], [-41.8, -73.8], [47.7, -124.4], [62.5, 6]],
+        radius: 4000,
+        wantNeighbours: 3,
+        cluster: 400,
+        standoff: 16,
+        bearing: 0,
+      });
+      const s = spot ?? { lat: 58, lon: 15.5, heading: 0 };
+      w.place({ body: 'earth', lat: s.lat, lon: s.lon, altitude: 0, heading: s.heading, landed: true, time: findLocalHourTime(w, 'earth', s.lon, 23.5) });
+    },
+  },
+  'alien-skywhales': {
+    description: 'Gliding beside a pod of huge translucent sky whales over an alien world in daylight',
+    generic: true,
+    apply: (w) => {
+      const system = w.universe.system;
+      const focus = focusBody(w);
+      const has = (d: BodyDef): boolean => d.life?.some((l) => l.kind === 'skyWhales') === true;
+      const def = has(focus) ? focus : system.bodies.find(has) ?? focus;
+      w.clock.time = 0;
+      w.universe.update(0);
+      const body = w.universe.get(def.id);
+      const spot = findLifeSpot(w, body, 'skyWhales', { standoff: 1800, bearing: 40, altitude: (d, h) => whalePlan(d, h.rnd, 3).baseAgl - 150 });
+      const s = spot ?? { lat: 10, lon: 0, heading: 40 };
+      const alt = spot?.altitude ?? 3000;
+      w.place({ body: def.id, lat: s.lat, lon: s.lon, altitude: alt, heading: s.heading, pitch: 0, throttle: 0.04, time: findLocalHourTime(w, def.id, s.lon, 10) });
+    },
   },
   'earth-forest-low': {
     description: 'Gliding 300 metres over the boreal forests of Sweden in the morning',

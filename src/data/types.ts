@@ -43,6 +43,8 @@ export interface BodyDef {
   gas?: GasDef;
   rings?: RingDef;
   star?: StarDef;
+  /** Purely atmospheric creatures (birds, sky whales, fish, fireflies). */
+  life?: LifeDef[];
   info: BodyInfo;
 }
 
@@ -286,6 +288,32 @@ export interface PropDef {
   maxSlope?: number;
   biomes?: string[];
   /** Bioluminescence: night glow of the instance colour, HDR weight (about 0.5 to 2). Crystals always glow. */
+  glow?: number;
+}
+
+export type LifeKind = 'birds' | 'skyWhales' | 'fish' | 'fireflies';
+
+export interface LifeDef {
+  kind: LifeKind;
+  /** Body colour, linear RGB. Whales and fireflies also glow in it at night. */
+  color: RGB;
+  /** Most individuals in one group (flock, pod, school, swarm). Smaller groups happen too. */
+  count: number;
+  /** Altitude band in game meters above the ground. Birds, whales and fireflies live in it; fish are seen from below `maxAlt`. */
+  minAlt: number;
+  maxAlt: number;
+  /** Where groups appear: biome names, or 'coast', 'land', 'water', 'shallows'. Any match counts. Omit for anywhere. */
+  biomes?: string[];
+  /** Only by day or only at night. */
+  day?: boolean;
+  night?: boolean;
+  /** Body length (wingspan for birds) in game meters. */
+  size: number;
+  /** Chance that a ground cell with a matching site holds a group, 0..1 (default per kind). */
+  chance?: number;
+  /** Absolute latitude band in radians where the group appears. */
+  latitude?: readonly [number, number];
+  /** HDR strength of the night glow (whales, fireflies). */
   glow?: number;
 }
 

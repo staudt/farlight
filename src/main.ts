@@ -12,6 +12,7 @@ import { GameRenderer } from './render/renderer';
 import { getShake, installShipFx } from './render/fx';
 import { createHeightSamplerForBody, createPlanetView, loadTerrainData, terrainPending } from './terrain';
 import { installWeather, weatherSettings } from './render/weather';
+import { lifeSettings } from './render/life/settings';
 import { DEFAULT_SCENARIO, SCENARIOS } from './scenarios';
 import { World } from './sim/world';
 import { DebugPanel } from './ui/debugPanel';
@@ -128,6 +129,12 @@ for (const [name, o] of Object.entries(weatherSettings)) {
   }
 }
 wxFolder.add({ strike: () => weather.lightning.strikeNow() }, 'strike');
+
+const lifeFolder = debug.folder('Life');
+for (const [k, v] of Object.entries(lifeSettings)) {
+  if (typeof v === 'boolean') lifeFolder.add(lifeSettings, k as never);
+  else lifeFolder.add(lifeSettings, k as never, 0, k === 'scatterRadius' ? 600 : 3);
+}
 
 const photo = new PhotoMode(world, gfx, post, input, system.id);
 input.on('warpUp', () => !photo.active && world.clock.step(1));
