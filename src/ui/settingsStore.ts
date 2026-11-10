@@ -162,3 +162,8 @@ export function applyDomSettings(s: Settings): void {
   root.style.setProperty('--hud-scale', String(HUD_SCALES[s.hudScale]));
   document.body.classList.toggle('no-fps', !s.showFps);
 }
+
+/** Current HUD zoom factor. Elements inside `.hud-layer` are zoomed by CSS, so screen coordinates placed in them divide by it. */
+export function hudZoom(): number {
+  return HUD_SCALES[settings.get('hudScale')];
+}

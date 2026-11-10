@@ -381,7 +381,7 @@ const geyserField: Builder = (s, f, { r, h, ground }, color, seed) => {
       const pr = mr * (0.4 + v * 1.5);
       const py = g + mr * 0.5 + v * steamH;
       // The plume leans downwind a little.
-      blob(f, x + v * v * steamH * 0.12 * (ph - 0.5) * 2, py, z + v * v * steamH * 0.1 * (ph2 - 0.5) * 2, pr, pr * 0.9, pr, seed + i * 31 + k, mixc(color, [1, 1, 1], 0.3), { mode: Mode.Steam, jitter: 0.3, detail: 1 });
+      blob(f, x + v * v * steamH * 0.12 * (ph - 0.5) * 2, py, z + v * v * steamH * 0.1 * (ph2 - 0.5) * 2, pr, pr * 0.9, pr, seed + i * 31 + k, mixc(color, [1, 1, 1], 0.3), { mode: Mode.Steam, jitter: 0.3, detail: 2 });
     }
   }
 };
@@ -417,20 +417,24 @@ const canyon: Builder = (s, _f, { lm, r, h, ground }, color, seed) => {
   }
 };
 
-/** Cairn with a pole and a pennant. */
+/** Cairn with a tall pole, a big pennant and a small beacon, sized to read from a few km. */
 const summit: Builder = (s, _f, { ground }, color, seed) => {
+  const K = 3.5;
   const g = ground(0, 0);
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * TAU;
-    blob(s, Math.cos(a) * 4, g + 0.6, Math.sin(a) * 4, 2.6, 1.6, 2.4, seed + i, tint(color, 0.8 + 0.3 * hash01(seed, i)), { jitter: 0.5 });
+    blob(s, Math.cos(a) * 4 * K, g + 0.6 * K, Math.sin(a) * 4 * K, 2.6 * K, 1.6 * K, 2.4 * K, seed + i, tint(color, 0.8 + 0.3 * hash01(seed, i)), { jitter: 0.5 });
   }
-  blob(s, 0, g + 2.2, 0, 3.6, 2.6, 3.4, seed + 11, tint(color, 1.05), { jitter: 0.45 });
-  blob(s, 0.4, g + 4.4, 0.2, 2.2, 1.6, 2.0, seed + 12, tint(color, 0.95), { jitter: 0.45 });
-  frustum(s, { cx: 0, cz: 0, y0: g + 4, y1: g + 42, rx0: 0.35, rz0: 0.35, rx1: 0.2, rz1: 0.2, seg: 4, seed }, [0.6, 0.55, 0.5], 0, 1);
-  const px = 0;
-  const pz = 0;
-  s.tri([px, g + 41.5, pz], [px + 14, g + 38, pz + 0.4], [px, g + 34.5, pz], [1, 0.45, 0.1], 0.9, 1);
-  s.tri([px, g + 41.5, pz], [px, g + 34.5, pz], [px + 14, g + 38, pz + 0.4], [1, 0.45, 0.1], 0.9, 1);
+  blob(s, 0, g + 2.2 * K, 0, 3.6 * K, 2.6 * K, 3.4 * K, seed + 11, tint(color, 1.05), { jitter: 0.45 });
+  blob(s, 0.4 * K, g + 4.4 * K, 0.2 * K, 2.2 * K, 1.6 * K, 2.0 * K, seed + 12, tint(color, 0.95), { jitter: 0.45 });
+  frustum(s, { cx: 0, cz: 0, y0: g + 4 * K, y1: g + 42 * K, rx0: 0.35 * K, rz0: 0.35 * K, rx1: 0.2 * K, rz1: 0.2 * K, seg: 4, seed }, [0.6, 0.55, 0.5], 0, 1);
+  const top = g + 41.5 * K;
+  const mid = g + 34.5 * K;
+  const tip = g + 38 * K;
+  s.tri([0, top, 0], [14 * K, tip, 0.4 * K], [0, mid, 0], [1, 0.45, 0.1], 0.9, 1);
+  s.tri([0, top, 0], [0, mid, 0], [14 * K, tip, 0.4 * K], [1, 0.45, 0.1], 0.9, 1);
+  // A beacon on top: warm light that stays visible against snow and sky.
+  blob(s, 0, g + 43 * K, 0, 1.2 * K, 1.2 * K, 1.2 * K, 5, [1.0, 0.55, 0.15], { emit: 5, mode: Mode.Glow, jitter: 0, detail: 0 });
 };
 
 /** Rounded red dome with banded stone and rubble at the foot. */

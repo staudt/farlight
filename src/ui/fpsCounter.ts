@@ -15,6 +15,7 @@ export class FpsCounter {
       top: '10px',
       left: '14px',
       font: '500 11px Rajdhani, sans-serif',
+      fontSize: 'calc(11px * var(--hud-scale, 1))',
       letterSpacing: '0.22em',
       color: 'rgba(150, 230, 255, 0.7)',
       pointerEvents: 'none',

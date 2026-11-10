@@ -29,6 +29,7 @@ Io beneath a looming Jupiter, Saturn's rings, and a dive into Jupiter's cloud se
 | M | System map, click a body to target it |
 | G | Galaxy map: pick a star and Begin Travel to jump there |
 | J | Journal: visited systems and survey progress |
+| I | Planet info card |
 | P | Photo mode: time pauses, orbit a free camera, scrub the time of day, capture a PNG |
 | T | Cycle targets |
 | F (hold) | Align the nose with the target |

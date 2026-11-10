@@ -1,10 +1,11 @@
 import { Vector3 } from 'three';
 import { config } from '../core/config';
+import type { CometTarget } from '../sim/comets';
 import { LandmarkTarget } from '../sim/landmarks';
 import type { Body } from '../sim/universe';
 import type { World } from '../sim/world';
 import { DEFAULT_SCALE } from '../data/scale';
-import { cometState, scaleBelts, scaleComets, type ScaledBelt, type ScaledComet } from '../render/space/spaceData';
+import { cometState, scaleBelts, type ScaledBelt } from '../render/space/spaceData';
 import { escapeHtml, formatDistance, formatDuration, noDashes, rgbCss } from './format';
 import './map.css';
 
@@ -31,7 +32,8 @@ export class SystemMap {
   private readonly card: HTMLElement;
   private zoom = 1;
   private pan: P2 = { x: 0, y: 0 };
-  private hover: Body | null = null;
+  private hover: Body | CometTarget | null = null;
+  private cometScreen = new Map<CometTarget, P2>();
   private mouse: P2 = { x: -999, y: -999 };
   private readonly pointers = new Map<number, P2>();
   private dragMoved = 0;
@@ -43,7 +45,6 @@ export class SystemMap {
   private cardTimer = 0;
   private readonly planets: Body[];
   private readonly belts: ScaledBelt[];
-  private readonly comets: ScaledComet[];
   private readonly d0: number;
   private readonly dMax: number;
   private readonly m0: number;
@@ -65,7 +66,6 @@ export class SystemMap {
     const uni = world.universe;
     this.planets = uni.root.children.filter((b) => b.kind !== 'star'); // a companion star sits far outside the scale
     this.belts = scaleBelts(uni.system, DEFAULT_SCALE);
-    this.comets = scaleComets(uni.system, DEFAULT_SCALE);
     const pd = this.planets.map((b) => hypot2(b.localPosition));
     // Use semi major axes so layout does not wobble with eccentric orbits.
     const pa = this.planets.map((b, i) => b.orbit?.a ?? pd[i] ?? 1);
@@ -152,14 +152,21 @@ export class SystemMap {
     this.zoom = nz;
   }
 
-  private nearest(x: number, y: number, radius: number): Body | null {
-    let best: Body | null = null;
+  private nearest(x: number, y: number, radius: number): Body | CometTarget | null {
+    let best: Body | CometTarget | null = null;
     let bestD = radius;
     for (const [b, p] of this.screen) {
       const d = Math.hypot(p.x - x, p.y - y);
       if (d < bestD) {
         bestD = d;
         best = b;
+      }
+    }
+    for (const [c, p] of this.cometScreen) {
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (d < bestD) {
+        bestD = d;
+        best = c;
       }
     }
     return best;
@@ -351,7 +358,10 @@ export class SystemMap {
   private drawComets(): void {
     const ctx = this.ctx;
     const star = this.toScreen({ x: 0, y: 0 }, { x: 0, y: 0 });
-    for (const c of this.comets) {
+    this.cometScreen.clear();
+    const picked = this.world.target;
+    for (const ct of this.world.comets) {
+      const c = ct.comet;
       cometState(c, this.world.universe.time, _cp, _cv);
       const d = Math.hypot(_cp.x, _cp.z);
       const ang = Math.atan2(_cp.z, _cp.x);
@@ -360,6 +370,7 @@ export class SystemMap {
       const dx = p.x - star.x;
       const dy = p.y - star.y;
       const l = Math.hypot(dx, dy) || 1;
+      this.cometScreen.set(ct, p);
       ctx.save();
       ctx.lineCap = 'round';
       ctx.strokeStyle = 'rgba(150,200,255,0.8)';
@@ -378,7 +389,20 @@ export class SystemMap {
       ctx.beginPath();
       ctx.arc(p.x, p.y, 2.4, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = 'rgba(217,251,255,0.7)';
+      const hot = ct === this.hover || ct === picked;
+      if (hot) {
+        ctx.strokeStyle = LINE;
+        ctx.lineWidth = 1;
+        const m = 9;
+        ctx.beginPath();
+        for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
+          ctx.moveTo(p.x + sx * m, p.y + sy * (m - 4));
+          ctx.lineTo(p.x + sx * m, p.y + sy * m);
+          ctx.lineTo(p.x + sx * (m - 4), p.y + sy * m);
+        }
+        ctx.stroke();
+      }
+      ctx.fillStyle = hot ? '#ffffff' : 'rgba(217,251,255,0.7)';
       ctx.font = '600 11px Rajdhani, sans-serif';
       ctx.fillText(noDashes(c.def.name).toUpperCase(), p.x + 8, p.y - 9);
       ctx.restore();
@@ -413,7 +437,8 @@ export class SystemMap {
 
   private updateCard(): void {
     const t = this.world.target;
-    const body = this.hover ?? (t instanceof LandmarkTarget ? t.body : (t as Body | null));
+    const hov = this.hover && 'def' in this.hover && 'kind' in this.hover ? this.hover : null;
+    const body = hov ?? (t instanceof LandmarkTarget ? t.body : t && 'kind' in t ? (t as Body) : null);
     this.card.classList.toggle('on', !!body);
     if (!body) return;
     const now = performance.now();

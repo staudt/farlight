@@ -42,6 +42,17 @@ export function beltDensity(b: ScaledBelt, r: number, y: number): number {
   return radial * Math.exp(-k * k);
 }
 
+/**
+ * The belt the point (star centred game meters) is inside, with hysteresis so the edge does not flicker:
+ * entering needs density above `enter`, a belt already `current` is kept until it falls below `leave`.
+ */
+export function beltAt(belts: readonly ScaledBelt[], x: number, y: number, z: number, current: ScaledBelt | null = null, enter = 0.3, leave = 0.12): ScaledBelt | null {
+  const r = Math.hypot(x, z);
+  if (current && beltDensity(current, r, y) >= leave) return current;
+  for (const b of belts) if (beltDensity(b, r, y) >= enter) return b;
+  return null;
+}
+
 /** Keplerian angular speed in rad per sim second for a circular orbit at game radius r. */
 export function beltOmega(r: number, scale: ScaleProfile): number {
   const au = r / (AU * scale.planetOrbitScale);

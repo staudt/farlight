@@ -4,6 +4,9 @@ import { Vector3 } from 'three';
 import { config } from '../core/config';
 import type { Input } from '../input/input';
 import type { GameRenderer } from '../render/renderer';
+import { hudZoom } from './settingsStore';
+import { DEFAULT_SCALE } from '../data/scale';
+import { beltAt, scaleBelts, type ScaledBelt } from '../render/space/spaceData';
 import { LandmarkTarget, type Targetable } from '../sim/landmarks';
 import type { Body } from '../sim/universe';
 import type { FlightPhase } from '../sim/warp';
@@ -78,6 +81,7 @@ export class Hud {
     private readonly gfx: GameRenderer,
     private readonly input: Input,
   ) {
+    this.belts = scaleBelts(world.universe.system, DEFAULT_SCALE);
     this.lastPhase = world.phase;
     this.lastBody = world.ship.frame.body;
     root.innerHTML = `
@@ -99,7 +103,7 @@ export class Hud {
         <div class="toast" data-k="toast"><div class="big" data-k="tbig"></div><div class="small" data-k="tsmall"></div><div class="fine" data-k="tfine"></div></div>
         <div class="hints hud-panel" data-k="hints">LEFT THUMB STEER · RIGHT SLIDER THROTTLE · HOLD BOOST</div>
         <div class="helptag" data-k="helptag"><b>H</b> HELP</div>
-        <div class="helppanel hud-panel" data-k="help"><div class="help-row"><b>CLICK</b><span>FLY (CAPTURE MOUSE)</span></div><div class="help-row"><b>MOUSE</b><span>STEER</span></div><div class="help-row"><b>W  S</b><span>THROTTLE LEVER</span></div><div class="help-row"><b>A  D</b><span>ROLL</span></div><div class="help-row"><b>Q  E</b><span>YAW</span></div><div class="help-row"><b>SHIFT</b><span>BOOST</span></div><div class="help-row"><b>X</b><span>BRAKE</span></div><div class="help-row"><b>,  .</b><span>TIME SLOWER OR FASTER</span></div><div class="help-row"><b>C</b><span>FIRST PERSON OR CHASE</span></div><div class="help-row"><b>V</b><span>LOOK AROUND</span></div><div class="help-row"><b>K</b><span>SNAPSHOT</span></div><div class="help-row"><b>P</b><span>PHOTO MODE</span></div><div class="help-row"><b>T</b><span>NEXT TARGET</span></div><div class="help-row"><b>F</b><span>ALIGN TO TARGET</span></div><div class="help-row"><b>M</b><span>SYSTEM MAP</span></div><div class="help-row"><b>G</b><span>GALAXY MAP</span></div><div class="help-row"><b>J</b><span>JOURNAL</span></div><div class="help-row"><b>I</b><span>PLANET INFO</span></div><div class="help-row"><b>O</b><span>SETTINGS</span></div><div class="help-row"><b>U</b><span>HIDE HUD</span></div><div class="help-row"><b>H</b><span>CLOSE HELP</span></div></div>
+        <div class="helppanel hud-panel" data-k="help"><div class="help-row"><b>CLICK</b><span>FLY (CAPTURE MOUSE)</span></div><div class="help-row"><b>MOUSE</b><span>STEER</span></div><div class="help-row"><b>W  S</b><span>THROTTLE LEVER</span></div><div class="help-row"><b>A  D</b><span>ROLL</span></div><div class="help-row"><b>Q  E</b><span>YAW</span></div><div class="help-row"><b>SHIFT</b><span>BOOST</span></div><div class="help-row"><b>X</b><span>BRAKE</span></div><div class="help-row"><b>,  .</b><span>TIME SLOWER OR FASTER</span></div><div class="help-row"><b>C</b><span>FIRST PERSON OR CHASE</span></div><div class="help-row"><b>V</b><span>LOOK AROUND</span></div><div class="help-row"><b>K</b><span>SNAPSHOT</span></div><div class="help-row"><b>P</b><span>PHOTO MODE</span></div><div class="help-row"><b>T</b><span>NEXT TARGET</span></div><div class="help-row"><b>F</b><span>ALIGN TO TARGET</span></div><div class="help-row"><b>M</b><span>SYSTEM MAP</span></div><div class="help-row"><b>G</b><span>GALAXY MAP</span></div><div class="help-row"><b>J</b><span>JOURNAL</span></div><div class="help-row"><b>I</b><span>PLANET INFO</span></div><div class="help-row"><b>O</b><span>SETTINGS</span></div><div class="help-row"><b>U</b><span>HIDE HUD</span></div><div class="help-row"><b>N</b><span>MUTE</span></div><div class="help-row"><b>H</b><span>CLOSE HELP</span></div></div>
         <div class="clickprompt" data-k="prompt">CLICK TO FLY</div>
       </div>`;
     const q = (k: string): HTMLElement => root.querySelector(`[data-k="${k}"]`) as HTMLElement;
@@ -174,6 +178,8 @@ export class Hud {
   }
 
   private hintsDismissed = false;
+  private inBelt: ScaledBelt | null = null;
+  private readonly belts: ScaledBelt[];
 
   /** Shows the body card for a few seconds, then it fades. */
   showCard(): void {
@@ -191,7 +197,7 @@ export class Hud {
     const w = this.world;
     const frameBody = w.ship.frame.body;
     // Bodies and the landmarks of the body we are at, nearest first.
-    const pool: Targetable[] = [...w.universe.bodies.filter((b) => b !== frameBody), ...w.landmarks.of(frameBody)];
+    const pool: Targetable[] = [...w.universe.bodies.filter((b) => b !== frameBody), ...w.landmarks.of(frameBody), ...w.comets];
     const list = pool
       .map((b) => ({ b, d: b.position.distanceTo(w.shipWorldPos) }))
       .sort((a, b) => a.d - b.d)
@@ -264,6 +270,20 @@ export class Hud {
       else if (was === 'atmosphere') this.showToast(body.name, 'LEAVING ATMOSPHERE');
     }
     this.lastPhase = phase;
+    this.detectBelt();
+  }
+
+  /** A calm toast when the ship drifts into or out of an asteroid belt. */
+  private detectBelt(): void {
+    const w = this.world;
+    const star = w.universe.root.position;
+    const p = w.shipWorldPos;
+    const now = beltAt(this.belts, p.x - star.x, p.y - star.y, p.z - star.z, this.inBelt);
+    if (now === this.inBelt) return;
+    const was = this.inBelt;
+    this.inBelt = now;
+    if (now) this.showToast(now.def.name.toUpperCase(), 'ENTERING');
+    else if (was) this.showToast(was.def.name.toUpperCase(), 'LEAVING');
   }
 
   // Compass
@@ -341,8 +361,10 @@ export class Hud {
       return;
     }
     const cam = this.gfx.camera;
-    const W = this.root.clientWidth || window.innerWidth;
-    const H = this.root.clientHeight || window.innerHeight;
+    // The layer is zoomed by CSS (HUD size setting): work in its own coordinates.
+    const zoom = hudZoom();
+    const W = (this.root.clientWidth || window.innerWidth) / zoom;
+    const H = (this.root.clientHeight || window.innerHeight) / zoom;
     _rel.copy(t.position).sub(this.gfx.shipCamera.worldPos);
     const dist = _rel.length();
     _rel.applyQuaternion(cam.quaternion.clone().invert());
