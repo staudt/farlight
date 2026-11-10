@@ -178,6 +178,11 @@ export class Hud {
   }
 
   private hintsDismissed = false;
+
+  /** True while the touch controls hint panel is up (the guide waits for it). */
+  get hintsVisible(): boolean {
+    return this.hints.classList.contains('on');
+  }
   private inBelt: ScaledBelt | null = null;
   private readonly belts: ScaledBelt[];
 

@@ -57,6 +57,8 @@ export class SkyLabels {
     _qi.copy(cam.quaternion).invert();
     const local = w.ship.frame.body;
 
+    // Bodies are ordered parents first: a moon label crowding its planet's label is dropped.
+    _placed.length = 0;
     for (const [b, el] of this.labels) {
       let show = b !== local && b !== w.target;
       let sx = 0;
@@ -83,6 +85,16 @@ export class SkyLabels {
             sy -= 6;
           }
         }
+      }
+      if (show) {
+        const wpx = 14 + b.name.length * 8;
+        for (const p of _placed) {
+          if (Math.abs(sy - p.y) < 14 && sx < p.x + p.w && p.x < sx + wpx) {
+            show = false;
+            break;
+          }
+        }
+        if (show) _placed.push({ x: sx, y: sy, w: wpx });
       }
       // Touch the DOM only on change: style writes and string building are per frame costs.
       let st = this.state.get(el);
@@ -116,6 +128,7 @@ function occluded(from: Vector3, to: Vector3, body: Body): boolean {
 }
 
 const _rel = new Vector3();
+const _placed: { x: number; y: number; w: number }[] = [];
 const _qi = new Quaternion();
 const _d = new Vector3();
 const _oc = new Vector3();

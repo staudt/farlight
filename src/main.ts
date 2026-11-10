@@ -222,7 +222,7 @@ const skyLabels = new SkyLabels(document.getElementById('hud')!, world, gfx);
 const fpsCounter = new FpsCounter(document.getElementById('hud')!);
 
 const guide = new Guide(document.getElementById('hud')!, world, {
-  blocked: () => overlay.isOpen || overlay.locked || settingsScreen.isOpen || photo.active || hyper.active,
+  blocked: () => overlay.isOpen || overlay.locked || settingsScreen.isOpen || photo.active || hyper.active || hud.hintsVisible,
   device: () => (touchOn ? 'touch' : gamepad.connected ? 'gamepad' : 'keyboard'),
   undiscoveredMarker: () => landmarkMarkers.undiscoveredShown,
 });
