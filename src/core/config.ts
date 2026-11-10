@@ -145,6 +145,26 @@ export const config = {
     /** Seconds of inactivity before the panel hides. */
     panelHide: 2,
   },
+  /** Oceans: animated waves, shore foam and the low flight wake. */
+  water: {
+    enabled: true,
+    /** Global multipliers on top of each body's `terrain.water.waves`. */
+    waveAmplitude: 1,
+    waveSpeed: 1,
+    foam: 1,
+    /** Shore foam band width multiplier (1 is about 110 m, wider on coarse terrain). */
+    foamWidth: 1,
+    /** Wake: below this height over water the ship throws spray, meters. */
+    wakeAltitude: 60,
+    /** Wake: speed (m/s) where the spray starts and where it is full. */
+    wakeSpeedMin: 25,
+    wakeSpeedFull: 110,
+    /** Seconds the surface foam trail lasts. */
+    wakeLife: 6,
+    /** Spray particles at fxScale 1. */
+    sprayMax: 2400,
+    spraySize: 1,
+  },
   /** Surface props (trees, rocks, spires, crystals, mesas). */
   props: {
     enabled: true,

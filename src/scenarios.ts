@@ -74,6 +74,27 @@ export const SCENARIOS: Record<string, Scenario> = {
     description: 'Low along the green coast of Portugal in the morning',
     apply: (w) => w.place({ body: 'earth', lat: 39.4, lon: -8.6, altitude: 1500, heading: 330, pitch: 2, throttle: 0.6, time: findLocalHourTime(w, 'earth', -8.6, 8.5) }),
   },
+  'ocean-skim': surface('Skimming 30 m over the open Pacific toward a low morning sun: glitter path, spray and wake', {
+    body: 'earth', lat: 5, lon: -150, localHour: 8.4, altitude: 30, heading: 90, pitch: 0, throttle: 0.9,
+  }),
+  'ocean-coast': {
+    description: 'Along the Portuguese coast at 150 m: surf lines and foam where the sea meets the shore',
+    apply: (w) => {
+      const spot = coastSpot(w, 'earth', 40.2, -9.4);
+      w.place({ body: 'earth', lat: spot?.lat ?? 40.2, lon: spot?.lon ?? -9.4, altitude: 150, heading: spot?.heading ?? 180, pitch: 0, throttle: 0.08, time: findLocalHourTime(w, 'earth', spot?.lon ?? -9.4, 10.5) });
+    },
+  },
+  'alien-ocean': {
+    description: 'Low over the sea of a generated ocean world, foam in a tint of its own water',
+    generic: true,
+    apply: (w) => {
+      const f = focusBody(w);
+      const focus = f.terrain?.water ? w.universe.get(f.id) : (w.universe.bodies.find((b) => b.kind === 'rocky' && b.def.terrain?.water) ?? w.universe.get(f.id));
+      const spot = oceanSpot(w, focus.id);
+      if (!spot) return w.placeInSpace(focus.id, focus.radius * 3);
+      w.place({ body: focus.id, lat: spot.lat, lon: spot.lon, altitude: 40, heading: spot.heading, pitch: 0, throttle: 0.8, time: 0 });
+    },
+  },
   'cockpit-earth': {
     description: 'Cockpit view low over the Portuguese coast in the morning',
     apply: (w) => w.place({ body: 'earth', lat: 38.7, lon: -9.4, altitude: 700, heading: 20, pitch: 0, throttle: 0.55, time: findLocalHourTime(w, 'earth', -9.4, 8.5) }),
@@ -574,6 +595,84 @@ interface Scenic {
   altitude: number;
   heading: number;
 }
+
+/** Finds open water a few hundred meters off a coast near (lat, lon): returns the spot and a heading that runs along the shore. */
+function coastSpot(w: World, bodyId: string, lat0: number, lon0: number): { lat: number; lon: number; heading: number } | null {
+  w.clock.time = 0;
+  w.universe.update(0);
+  const body = w.universe.get(bodyId);
+  const sampler = w.sampler(body) as Partial<TerrainSampler>;
+  if (typeof sampler.sample !== 'function') return null;
+  const smp = makeSample();
+  const d = new Vector3();
+  const isWater = (lat: number, lon: number): boolean => {
+    latLonToDir((lat * Math.PI) / 180, (lon * Math.PI) / 180, d);
+    sampler.sample!(d.x, d.y, d.z, smp);
+    return smp.water;
+  };
+  const step = 0.004;
+  const probe = 0.03;
+  let best: { lat: number; lon: number; heading: number; score: number } | null = null;
+  for (let a = -1.5; a <= 1.5; a += 0.02) {
+    for (let b = -1.5; b <= 1.5; b += 0.02) {
+      const lat = lat0 + a;
+      const lon = lon0 + b;
+      if (!isWater(lat, lon)) continue;
+      // Land within a short reach in exactly one compass direction: a straight-ish coast.
+      for (const [dn, de] of [[1, 0], [0, 1], [-1, 0], [0, -1]] as const) {
+        if (isWater(lat + dn * probe, lon + de * probe)) continue;
+        // Deep water on the far side, so the sea is open.
+        if (!isWater(lat - dn * probe, lon - de * probe)) continue;
+        // Back off from the land and check we are still over water, a little off the beach.
+        const sl = lat - dn * step * 12;
+        const so = lon - de * step * 12;
+        if (!isWater(sl, so)) continue;
+        const score = Math.hypot(a, b);
+        if (!best || score < best.score) {
+          // Fly along the shore with the land on the left (heading = direction of travel).
+          const heading = (Math.atan2(dn, -de) * 180) / Math.PI;
+          best = { lat: sl, lon: so, heading: (heading + 360) % 360, score };
+        }
+      }
+    }
+  }
+  return best;
+}
+
+/** Open water on the day side, with land within reach, for sea scenery. */
+function oceanSpot(w: World, bodyId: string): { lat: number; lon: number; heading: number } | null {
+  w.clock.time = 0;
+  w.universe.update(0);
+  const body = w.universe.get(bodyId);
+  const sampler = w.sampler(body) as Partial<TerrainSampler>;
+  if (typeof sampler.sample !== 'function') return null;
+  const sun = body.worldToLocalDir(w.universe.root.position.clone().sub(body.position).normalize(), new Vector3());
+  const smp = makeSample();
+  const d = new Vector3();
+  let best: { lat: number; lon: number; score: number } | null = null;
+  for (let lat = -50; lat <= 50; lat += 5) {
+    for (let lon = -180; lon < 180; lon += 6) {
+      latLonToDir((lat * Math.PI) / 180, (lon * Math.PI) / 180, d);
+      const day = d.dot(sun);
+      if (day < 0.4) continue;
+      sampler.sample(d.x, d.y, d.z, smp);
+      if (!smp.water || smp.depthN < 0.05) continue;
+      // Prefer places with land around (a few km), so the shore and foam are in sight.
+      let land = 0;
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        const dl = 0.012;
+        latLonToDir(((lat + Math.sin(a) * dl * 57.3) * Math.PI) / 180, ((lon + Math.cos(a) * dl * 57.3) * Math.PI) / 180, nb);
+        sampler.sample(nb.x, nb.y, nb.z, smp);
+        if (!smp.water) land++;
+      }
+      const score = land > 0 ? 1 + land + day : day;
+      if (!best || score > best.score) best = { lat, lon, score };
+    }
+  }
+  return best ? { lat: best.lat, lon: best.lon, heading: 0 } : null;
+}
+const nb = new Vector3();
 
 /**
  * Looks for a good low flight start on the day side: sun well up but low enough for shadows,

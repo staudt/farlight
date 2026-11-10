@@ -22,6 +22,7 @@ import { config } from '../../core/config';
 import { createPropMaterial, createPropMeshes, disposePropMeshes } from './props';
 import { quality } from '../quality';
 import { createTerrainMaterial } from './terrainMaterial';
+import { type WaterLook, type WaveUniforms, updateWaveUniforms, waterLook } from './waterWaves';
 
 const enum State {
   Idle,
@@ -71,6 +72,7 @@ export class PlanetView implements BodyView {
   readonly body: Body;
   readonly object = new Group();
   private readonly material: ShaderMaterial;
+  private readonly waterLook: WaterLook;
   private readonly propMaterial: ShaderMaterial;
   private lightsTexture: DataTexture | null = null;
   private readonly glowMaterials = new Map<number, ShaderMaterial>();
@@ -90,7 +92,8 @@ export class PlanetView implements BodyView {
   constructor(body: Body) {
     this.body = body;
     this.object.name = `planet:${body.id}`;
-    this.material = createTerrainMaterial();
+    this.material = createTerrainMaterial(body.def);
+    this.waterLook = waterLook(body.def);
     this.setupLights();
     this.propMaterial = createPropMaterial(this.material.uniforms);
     this.hasProps = (body.def.terrain?.props?.length ?? 0) > 0;
@@ -185,7 +188,7 @@ export class PlanetView implements BodyView {
     const g = new BufferGeometry();
     g.setAttribute('position', new BufferAttribute(r.positions, 3));
     g.setAttribute('aColor', new BufferAttribute(r.colors, 3));
-    g.setAttribute('aWater', new BufferAttribute(r.water, 2));
+    g.setAttribute('aWater', new BufferAttribute(r.water, 3));
     if (r.emit) g.setAttribute('aEmit', new BufferAttribute(r.emit, 4));
     if (r.dir) g.setAttribute('aDir', new BufferAttribute(r.dir, 4));
     g.boundingSphere = new Sphere(new Vector3(0, 0, 0), r.boundRadius);
@@ -262,6 +265,7 @@ export class PlanetView implements BodyView {
     sunView.copy(ctx.world.universe.root.position).sub(b.position).normalize().transformDirection(ctx.camera.matrixWorldInverse);
     (u.uBodyCenterView!.value as Vector3).copy(b.position).sub(ctx.cameraWorld).applyMatrix4(ctx.camera.matrixWorldInverse);
     u.uTime!.value = ctx.realTime;
+    updateWaveUniforms(u as unknown as WaveUniforms, this.waterLook, ctx, b.rotation, _cam);
     u.uGlow!.value = config.props.nightGlow;
     const pc = config.props;
     for (const m of [this.propMaterial, ...this.glowMaterials.values()]) {
