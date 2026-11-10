@@ -1,5 +1,6 @@
 import { Vector3 } from 'three';
 import { config } from '../core/config';
+import { LandmarkTarget } from '../sim/landmarks';
 import type { Body } from '../sim/universe';
 import type { World } from '../sim/world';
 import { DEFAULT_SCALE } from '../data/scale';
@@ -411,7 +412,8 @@ export class SystemMap {
   }
 
   private updateCard(): void {
-    const body = this.hover ?? this.world.target;
+    const t = this.world.target;
+    const body = this.hover ?? (t instanceof LandmarkTarget ? t.body : (t as Body | null));
     this.card.classList.toggle('on', !!body);
     if (!body) return;
     const now = performance.now();
@@ -433,9 +435,17 @@ export class SystemMap {
     ];
     const row = (k: string, v: string, cls = ''): string =>
       `<div class="card-row ${cls}"><span class="k">${k}</span><span class="v">${escapeHtml(noDashes(v))}</span></div>`;
+    const lms = w.landmarks.of(body);
+    const found = lms.filter((l) => l.discovered).length;
+    const lmHtml =
+      lms.length > 0
+        ? `<div class="eta-head">LANDMARKS ${found}/${lms.length}</div>` +
+          lms.map((l) => row(l.discovered ? '◆' : '◇', l.discovered ? l.def.name : '?', l.discovered ? '' : 'dim')).join('')
+        : '';
     this.card.innerHTML =
       `<div class="card-name"><span class="glyph"></span><span>${escapeHtml(noDashes(body.name))}</span></div>` +
       rows.map(([k, v]) => row(k, v)).join('') +
+      lmHtml +
       `<div class="eta-head">TRAVEL ESTIMATE</div>` +
       WARPS.map((x) => row(`×${x}`, formatDuration(dist / speed / x), 'eta-row')).join('');
   }

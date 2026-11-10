@@ -1,4 +1,4 @@
-import type { BodyDef, StarSystemDef } from './types';
+import type { BodyDef, LandmarkDef, LandmarkKind, RGB, StarSystemDef } from './types';
 
 const DEG = Math.PI / 180;
 const DAY = 86400;
@@ -840,6 +840,73 @@ const neptune: BodyDef = {
     summary: 'A deep blue giant lashed by the fastest winds in the solar system.',
   },
 };
+
+// ---------------------------------------------------------------------------------------------
+// Landmarks: real places (and a few plausible ones), authored in meters, stored as fractions.
+
+interface LandmarkSpec {
+  id: string;
+  name: string;
+  kind: LandmarkKind;
+  /** Degrees. */
+  lat: number;
+  lon: number;
+  /** Footprint radius and vertical size, game meters. */
+  r: number;
+  h: number;
+  description: string;
+  color?: RGB;
+  noStamp?: boolean;
+}
+
+function landmarks(def: BodyDef, specs: LandmarkSpec[]): void {
+  const R = def.visual.radius ?? def.physical.radius * 0.1;
+  def.landmarks = specs.map(
+    (s): LandmarkDef => ({
+      id: s.id,
+      name: s.name,
+      kind: s.kind,
+      lat: s.lat * DEG,
+      lon: s.lon * DEG,
+      radius: s.r / R,
+      height: s.h / R,
+      description: s.description,
+      ...(s.color ? { color: s.color } : {}),
+      ...(s.noStamp ? { noStamp: true } : {}),
+    }),
+  );
+}
+
+landmarks(earth, [
+  { id: 'grand_canyon', name: 'Grand Canyon', kind: 'canyon', lat: 36.1, lon: -112.1, r: 12000, h: 450, description: 'Layers of red stone fall away to a river of shadow.', color: [0.1, 0.3, 0.45] },
+  { id: 'victoria_falls', name: 'Victoria Falls', kind: 'waterfall', lat: -17.92, lon: 25.86, r: 2200, h: 220, description: 'The smoke that thunders: a whole river steps off the land.' },
+  { id: 'uluru', name: 'Uluru', kind: 'mesa', lat: -25.34, lon: 131.04, r: 900, h: 330, description: 'A single red stone, awake before the sun.', color: [0.62, 0.17, 0.06] },
+  { id: 'everest', name: 'Everest Summit', kind: 'summit', lat: 27.99, lon: 86.93, r: 60, h: 45, description: 'The highest ground there is, and the wind never rests.' },
+  { id: 'delicate_arch', name: 'Delicate Arch', kind: 'arch', lat: 38.74, lon: -109.5, r: 150, h: 120, description: 'A door of sandstone, framing nothing but sky.' },
+  { id: 'yellowstone', name: 'Yellowstone Geysers', kind: 'geyserField', lat: 44.46, lon: -110.83, r: 500, h: 220, description: 'The ground breathes out in tall white columns.' },
+]);
+landmarks(moon, [
+  { id: 'tranquility', name: 'Tranquility Base', kind: 'lander', lat: 0.67, lon: 23.47, r: 12, h: 8, description: 'A small lander and a flag, left exactly as they were.' },
+  { id: 'tycho_monolith', name: 'Tycho Monolith', kind: 'monolith', lat: -43.3, lon: -11.2, r: 34, h: 320, description: 'A black slab buried in the crater floor, waiting to be found.' },
+  { id: 'shackleton', name: 'Shackleton Crater', kind: 'craterLake', lat: -89.5, lon: 129, r: 1800, h: 150, description: 'Ice that has never seen the sun, deep in a bowl of night.', color: [0.62, 0.8, 0.95] },
+]);
+landmarks(mercury, [
+  { id: 'caloris', name: 'Caloris Basin', kind: 'crater', lat: 30.5, lon: -170.3, r: 6000, h: 500, description: 'A scar of the first great impact, ringed by broken hills.' },
+]);
+landmarks(mars, [
+  { id: 'olympus_caldera', name: 'Olympus Mons Caldera', kind: 'summit', lat: 18.65, lon: -133.8, r: 60, h: 45, description: 'You are higher than any mountain should let you be.', noStamp: true },
+  { id: 'valles_floor', name: 'Valles Marineris Floor', kind: 'crystalCanyon', lat: -6.3, lon: -70, r: 3500, h: 200, description: 'Rust walls rise for miles around a floor strewn with glass.', color: [1.0, 0.55, 0.3], noStamp: true },
+  { id: 'cydonia', name: 'Cydonia Ruins', kind: 'ruins', lat: 40.75, lon: -9.46, r: 220, h: 60, description: 'A ring of broken pillars, older than the weather.' },
+]);
+landmarks(io, [
+  { id: 'loki_patera', name: 'Loki Patera', kind: 'glowingPool', lat: -13, lon: -50, r: 2000, h: 250, description: 'A lake of molten rock that breathes light into the dark.', color: [1.0, 0.42, 0.08], noStamp: true },
+]);
+landmarks(europa, [
+  { id: 'conamara', name: 'Conamara Chaos', kind: 'iceSpire', lat: 9.5, lon: -85.5, r: 1000, h: 350, description: 'Blue needles of ice crowd together and catch the light.' },
+]);
+landmarks(titan, [
+  { id: 'kraken_mare', name: 'Kraken Mare Shore', kind: 'craterLake', lat: 68, lon: -35, r: 2000, h: 120, description: 'A still methane sea under an orange sky.', color: [0.2, 0.15, 0.06] },
+]);
 
 export const SOLAR_SYSTEM: StarSystemDef = {
   id: 'sol',

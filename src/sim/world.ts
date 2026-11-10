@@ -3,6 +3,7 @@ import { config } from '../core/config';
 import type { StarSystemDef } from '../data/types';
 import { FLAT_SAMPLER, type HeightSampler, latLonToDir } from '../terrain/api';
 import { SimClock } from './clock';
+import { LandmarkField, type Targetable } from './landmarks';
 import {
   type Frame,
   frameToWorldPos,
@@ -62,7 +63,8 @@ export class World {
   radialAltitude = Infinity;
   /** 0 outside the atmosphere .. 1 at sea level, linear in height. */
   atmosphereDepth = 0;
-  target: Body | null = null;
+  target: Targetable | null = null;
+  readonly landmarks: LandmarkField;
   /** Set when the auto drop lowered the warp this step. */
   warpDropped = false;
   readonly shipWorldPos = new Vector3();
@@ -78,12 +80,14 @@ export class World {
     const home = this.universe.bodies.find((b) => b.kind === 'rocky') ?? this.universe.root;
     this.ship = new Ship({ body: home, rotating: false });
     this.ship.pos.set(0, 0, home.radius * 3);
+    this.landmarks = new LandmarkField(this);
     this.updateSnapshot();
   }
 
   setHeightProvider(p: HeightSamplerProvider): void {
     this.heightProvider = p;
     this.samplers.clear();
+    for (const l of this.landmarks.all) l.groundHeight = Number.NaN; // sampled again with real terrain
   }
 
   sampler(body: Body): HeightSampler {
@@ -225,6 +229,7 @@ export class World {
     frameToWorldPos(s.frame, s.pos, this.shipWorldPos);
     frameToWorldVel(s.frame, s.pos, s.vel, this.shipWorldVel);
     frameToWorldQuat(s.frame, s.quat, this.shipWorldQuat);
+    this.landmarks.update();
   }
 
   /** World direction -> ship frame direction (for align to target). */

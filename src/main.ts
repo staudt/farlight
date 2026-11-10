@@ -21,7 +21,9 @@ import { SystemMap } from './ui/map';
 import { GalaxyMap } from './ui/galaxyMap';
 import { Journal } from './ui/journal';
 import { MapOverlay } from './ui/mapOverlay';
-import { clearProgress, markVisited, SurveyTracker } from './sim/survey';
+import { clearProgress, DiscoveryTracker, markVisited, SurveyTracker } from './sim/survey';
+import { installLandmarks } from './render/landmarks/layer';
+import { LandmarkMarkers } from './ui/landmarkMarkers';
 import { captureResume, clearResume, loadResume, saveResume } from './sim/resume';
 import { SettingsScreen } from './ui/settings';
 import { applyConfigSettings, applyDomSettings, settings } from './ui/settingsStore';
@@ -88,6 +90,7 @@ if (!resumed) scenario.apply(world);
 const audio = new AudioEngine(world);
 const gfx = new GameRenderer(canvas, world, [createPlanetView, createGasGiantView]); // terrain: chunked planets; gas giants + rings
 installShipFx(gfx);
+installLandmarks(gfx);
 if (resumed) gfx.shipCamera.mode = resumeFlight.cameraMode;
 gfx.cameraShake = getShake;
 const post = new PostStack(gfx);
@@ -181,6 +184,12 @@ survey.onSurveyed = (body) => {
   hud.notify(body.name, 'SURVEYED');
   journal.refresh();
 };
+const discovery = new DiscoveryTracker(world);
+discovery.onDiscovered = (l) => {
+  hud.notify(l.def.name, 'DISCOVERED', l.def.description);
+  journal.refresh();
+};
+const landmarkMarkers = new LandmarkMarkers(document.getElementById('hud')!, world, gfx);
 const settingsScreen = new SettingsScreen({
   input,
   audio,
@@ -189,6 +198,7 @@ const settingsScreen = new SettingsScreen({
     clearProgress();
     clearResume();
     survey.reset();
+    discovery.reload();
     journal.refresh();
   },
 });
@@ -244,6 +254,8 @@ function frame(now: number): void {
   debug.update();
   hud.update(realDt);
   survey.update();
+  discovery.update();
+  landmarkMarkers.update();
   hyper.update(realDt);
   systemMap.update();
   galaxyMap.update();

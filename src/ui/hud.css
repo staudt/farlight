@@ -410,6 +410,15 @@
   margin-right: -0.5em;
   text-shadow: 0 0 24px rgba(95, 242, 255, 0.45);
 }
+.toast .fine {
+  margin: 14px auto 0;
+  max-width: 440px;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  line-height: 1.5;
+  color: rgba(217, 251, 255, 0.72);
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
+}
 .toast .small {
   margin-top: 6px;
   font-size: 14px;

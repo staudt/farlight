@@ -170,6 +170,22 @@ export const config = {
     /** Nebula backdrop brightness. */
     nebula: 1,
   },
+  /** Landmarks and discoveries. */
+  landmarks: {
+    enabled: true,
+    /** A landmark is discovered within this horizontal distance (game meters) and altitude. */
+    discoverRadius: 3000,
+    discoverAltitude: 5000,
+    /** Landed this close (horizontal) also discovers it. */
+    landedRadius: 8000,
+    /** Undiscovered markers show within this distance (game meters). */
+    markerRange: 300000,
+    /** Meshes are built when the camera is closer than this, and drawn within drawRange. */
+    buildRange: 90000,
+    drawRange: 120000,
+    /** HDR strength of landmark glows (pools, monolith, crystals). */
+    glow: 1,
+  },
   debug: {
     showPanel: false,
   },

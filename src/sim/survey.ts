@@ -1,4 +1,9 @@
+import { Vector3 } from 'three';
+import { config } from '../core/config';
 import { PROGRESS_STORAGE_KEY, type PlayerProgress } from '../data/galaxy';
+import { landmarkKey, landmarksOf } from '../data/landmarks';
+import type { BodyDef } from '../data/types';
+import { type LandmarkTarget, surfaceDistance, withinDiscovery } from './landmarks';
 import type { Body } from './universe';
 import type { World } from './world';
 
@@ -33,7 +38,10 @@ export function loadProgress(storage: StorageLike | null = defaultStorage()): Pl
     if (!raw) return emptyProgress();
     const p = JSON.parse(raw) as Partial<PlayerProgress>;
     const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
-    return { visited: strs(p.visited), surveyed: strs(p.surveyed) };
+    const landmarks = strs(p.landmarks);
+    return landmarks.length > 0
+      ? { visited: strs(p.visited), surveyed: strs(p.surveyed), landmarks }
+      : { visited: strs(p.visited), surveyed: strs(p.surveyed) };
   } catch {
     return emptyProgress();
   }
@@ -47,7 +55,7 @@ export function saveProgress(progress: PlayerProgress, storage: StorageLike | nu
   }
 }
 
-/** Forgets every visited and surveyed entry. */
+/** Forgets every visited, surveyed and discovered entry. */
 export function clearProgress(storage: StorageLike | null = defaultStorage()): void {
   saveProgress(emptyProgress(), storage);
 }
@@ -71,6 +79,20 @@ export function markSurveyed(systemId: string, bodyId: string, storage: StorageL
   return true;
 }
 
+/** Returns true when the landmark was new. `key` is `<systemId>/<bodyId>/<landmarkId>`. */
+export function markDiscovered(key: string, storage: StorageLike | null = defaultStorage()): boolean {
+  const p = loadProgress(storage);
+  const list = p.landmarks ?? [];
+  if (list.includes(key)) return false;
+  p.landmarks = [...list, key];
+  saveProgress(p, storage);
+  return true;
+}
+
+export function discoveredKeys(progress: PlayerProgress): Set<string> {
+  return new Set(progress.landmarks ?? []);
+}
+
 export interface SurveyProgress {
   done: number;
   total: number;
@@ -86,6 +108,72 @@ export function surveyProgress(progress: PlayerProgress, systemId: string, bodyI
   const total = bodyIds.length;
   return { done, total, fraction: total > 0 ? done / total : 0 };
 }
+
+/**
+ * Exploration of one body: the body itself (surveyed or not) plus its landmarks.
+ * done / total with total = 1 + landmark count.
+ */
+export function bodyExploration(progress: PlayerProgress, systemId: string, def: Pick<BodyDef, 'id' | 'landmarks'>): SurveyProgress {
+  const surveyed = progress.surveyed.includes(surveyKey(systemId, def.id)) ? 1 : 0;
+  const found = discoveredKeys(progress);
+  let done = surveyed;
+  const lms = landmarksOf(def);
+  for (const l of lms) if (found.has(landmarkKey(systemId, def.id, l.id))) done++;
+  const total = 1 + lms.length;
+  return { done, total, fraction: done / total };
+}
+
+/** Exploration of a whole system: sum of bodyExploration over the bodies given (stars excluded). */
+export function systemExploration(progress: PlayerProgress, systemId: string, defs: readonly Pick<BodyDef, 'id' | 'landmarks'>[]): SurveyProgress {
+  let done = 0;
+  let total = 0;
+  for (const d of defs) {
+    const e = bodyExploration(progress, systemId, d);
+    done += e.done;
+    total += e.total;
+  }
+  return { done, total, fraction: total > 0 ? done / total : 0 };
+}
+
+/**
+ * Discovers landmarks when the ship passes close (see config.landmarks). Fires once per landmark
+ * and stores it in the player progress.
+ */
+export class DiscoveryTracker {
+  /** Called the first time a landmark is discovered. */
+  onDiscovered: ((landmark: LandmarkTarget) => void) | null = null;
+
+  constructor(
+    private readonly world: World,
+    private readonly storage: StorageLike | null = defaultStorage(),
+  ) {
+    this.reload();
+  }
+
+  /** Reads the stored discoveries again (after a reset). */
+  reload(): void {
+    this.world.landmarks.setDiscovered(discoveredKeys(loadProgress(this.storage)));
+  }
+
+  update(): void {
+    const w = this.world;
+    const f = w.ship.frame;
+    if (!config.landmarks.enabled || !f.rotating || f.body.kind === 'star') return;
+    const list = w.landmarks.of(f.body);
+    if (list.length === 0) return;
+    const dir = _dir.copy(w.ship.pos).normalize();
+    for (const l of list) {
+      if (l.discovered) continue;
+      const horizontal = surfaceDistance(dir, l.dir, f.body.radius);
+      if (!withinDiscovery(horizontal, w.env.altitude, w.ship.landed)) continue;
+      l.discovered = true;
+      markDiscovered(l.key, this.storage);
+      this.onDiscovered?.(l);
+    }
+  }
+}
+
+const _dir = new Vector3();
 
 /**
  * Counts sim seconds spent inside a body's near zone (the rotating frame) and fires once per

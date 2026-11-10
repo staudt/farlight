@@ -1,5 +1,6 @@
 import { Simplex3, billow, fbm, ridged, warp3 } from '../core/noise';
 import type { BodyDef, CraterDef, FeatureDef, NoiseLayer } from '../data/types';
+import { landmarkStamps } from '../data/landmarks';
 import { type HeightSampler, dirToLatLon } from './api';
 import { getMap, sampleMap } from './maps';
 
@@ -166,7 +167,10 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
   }));
   const craterOcts = t?.craters ? compileCraters(t.craters) : [];
   const craterDef = t?.craters;
-  const features = (t?.features ?? []).map((f, i) => compileFeature(f, def.seed * 31 + i));
+  // Landmark stamps come after the authored features, so those keep their seeds.
+  const featureDefs: FeatureDef[] = [...(t?.features ?? [])];
+  if (t) for (const lm of def.landmarks ?? []) featureDefs.push(...landmarkStamps(lm, t));
+  const features = featureDefs.map((f, i) => compileFeature(f, def.seed * 31 + i));
   const w = { x: 0, y: 0, z: 0 };
   const seedMix = def.seed | 0;
 
@@ -340,6 +344,25 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
           const k = 0.45 / rad;
           const r = ridged(detail, x * k + f.seed, y * k, z * k, 2);
           sum += ht * fade * Math.pow(Math.max(0, r - 0.45) * 1.8, 1.6);
+          break;
+        }
+        case 'crater': {
+          const depth = Math.abs(ht);
+          const bowl = -depth * (1 - smoothstep(0.35, 1.0, tt));
+          const rd = (tt - 1) / 0.22;
+          sum += bowl + depth * 0.22 * Math.exp(-rd * rd);
+          break;
+        }
+        case 'cliff': {
+          // A step along the east axis: raised ground to the south, a sheer face at b = 0.
+          const a = x * f.ex + y * f.ey + z * f.ez;
+          const b = x * f.nx + y * f.ny + z * f.nz;
+          const along = Math.abs(a / rad);
+          if (along > 1) break;
+          const w = rad * 0.02;
+          const step = smoothstep(w, -w, b);
+          const fadeB = b < 0 ? smoothstep(1.0, 0.45, -b / rad) : 1;
+          sum += ht * step * fadeB * smoothstep(1.0, 0.6, along);
           break;
         }
         case 'canyon': {
