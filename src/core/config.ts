@@ -64,7 +64,8 @@ export const config = {
     horizonUpBlend: 0.85,
     cockpitOffset: [0, 1.1, -3.2] as [number, number, number],
     /** Cockpit overlay: glass reflection strength and HDR strength of the instrument lights. */
-    cockpit: { glass: 1, instrumentGlow: 1 },
+    /** First person: only the dash with its light bars by default; the canopy frame, nose and glass are optional. */
+    cockpit: { glass: 1, instrumentGlow: 1, frame: false },
     /** Look mode: radians per mouse pixel, pitch limit (85 deg), orbit zoom range as a multiple of the chase distance. */
     lookSensitivity: 0.004,
     lookPitchMax: 1.4835,

@@ -10,6 +10,7 @@ import {
   Float32BufferAttribute,
   Group,
   Mesh,
+  type Object3D,
   MeshBasicMaterial,
   MeshStandardMaterial,
   ShaderMaterial,
@@ -116,6 +117,8 @@ function noseGeometry(): BufferGeometry {
 export class Cockpit {
   readonly object = new Group();
   private readonly eye = new Group();
+  /** Canopy frame, nose and glass: hidden unless config.camera.cockpit.frame is on. */
+  private readonly frameParts: Object3D[] = [];
   private readonly glassMat: ShaderMaterial;
   private readonly dash: Group;
   private readonly bar: MeshBasicMaterial[] = [];
@@ -148,6 +151,7 @@ export class Cockpit {
     }
     for (let i = 0; i < bow.length - 1; i++) frame.add(strut(bow[i]!, bow[i + 1]!, 0.007, dark));
     this.eye.add(frame);
+    this.frameParts.push(frame);
 
     // Nose of the ship, ahead and below the horizon.
     const nose = new Mesh(
@@ -155,6 +159,7 @@ export class Cockpit {
       new MeshStandardMaterial({ vertexColors: true, flatShading: true, metalness: 0.15, roughness: 0.55, side: DoubleSide }),
     );
     this.eye.add(nose);
+    this.frameParts.push(nose);
 
     // Dash: a slim tilted slab with instrument strips on its top face.
     this.dash = new Group();
@@ -218,6 +223,7 @@ export class Cockpit {
     glass.position.set(0, -0.2, 1.0);
     glass.renderOrder = 5;
     this.eye.add(glass);
+    this.frameParts.push(glass);
     this.eye.traverse((o) => {
       o.frustumCulled = false;
     });
@@ -227,6 +233,7 @@ export class Cockpit {
     const w = ctx.world;
     const ship = w.ship;
     const c = config.camera.cockpit;
+    for (const p of this.frameParts) p.visible = c.frame;
     placeRelative(this.object, w.shipWorldPos, ctx.cameraWorld);
     this.object.quaternion.copy(w.shipWorldQuat);
     const o = config.camera.cockpitOffset;

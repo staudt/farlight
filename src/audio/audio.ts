@@ -250,6 +250,14 @@ export class AudioEngine {
     window.addEventListener('keydown', (e) => {
       if (e.code === 'KeyN' && !e.repeat) this.setMuted(!this.muted);
     });
+    // Silence everything while the page is hidden (another tab, phone app switch or lock screen).
+    const onVisibility = (): void => {
+      if (!this.ctx) return;
+      if (document.hidden) void this.ctx.suspend();
+      else void this.ctx.resume();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', () => void this.ctx?.suspend());
     // After a jump the page is new but the player already interacted: try to start right away.
     if (typeof navigator !== 'undefined' && navigator.userActivation?.hasBeenActive) this.start();
   }
@@ -278,7 +286,7 @@ export class AudioEngine {
 
   private start(): void {
     if (this.ctx) {
-      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      if (this.ctx.state === 'suspended' && !document.hidden) void this.ctx.resume();
       return;
     }
     const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -290,7 +298,8 @@ export class AudioEngine {
   }
 
   private makeNoise(ctx: AudioContext): AudioBuffer {
-    const len = ctx.sampleRate * 5;
+    // Long enough that the loop is not heard as a repeating swell.
+    const len = ctx.sampleRate * 23;
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = buf.getChannelData(0);
     let last = 0;
@@ -299,7 +308,7 @@ export class AudioEngine {
       d[i] = last * 3.5;
     }
     // Crossfade the loop seam.
-    const f = 2000;
+    const f = Math.floor(ctx.sampleRate * 0.5);
     for (let i = 0; i < f; i++) {
       const k = i / f;
       d[len - f + i] = d[len - f + i]! * (1 - k) + d[i]! * k;
@@ -365,7 +374,9 @@ export class AudioEngine {
     const src = ctx.createBufferSource();
     src.buffer = this.noiseBuf;
     src.loop = true;
-    src.start(0, Math.random() * 2);
+    // Each layer reads the loop at its own rate and offset, so seams never coincide.
+    src.playbackRate.value = 0.93 + Math.random() * 0.14;
+    src.start(0, Math.random() * 20);
     return src;
   }
 
@@ -602,10 +613,6 @@ export class AudioEngine {
     this.cabinHum.gain.value = 0;
     this.tone(ctx, 'sine', 118, 0.5, this.cabinHum);
     this.tone(ctx, 'sine', 177.3, 0.15, this.cabinHum);
-    const hl = ctx.createBiquadFilter();
-    hl.type = 'lowpass';
-    hl.frequency.value = 320;
-    this.noiseSource(ctx).connect(hl).connect(this.cabinHum);
     this.cabinHum.connect(this.master);
     this.cabinRush = ctx.createGain();
     this.cabinRush.gain.value = 0;

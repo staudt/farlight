@@ -152,6 +152,8 @@ describe('cockpit versus chase', () => {
     expect(c.humGain).toBeGreaterThan(0);
     expect(o.humGain).toBe(0);
     expect(cabinTargets(true, 190, 200, 1).rushGain).toBeGreaterThan(cabinTargets(true, 10, 200, 1).rushGain);
+    // Vacuum flight is quiet: no air rush in space.
+    expect(cabinTargets(true, 3000, 3000, 0).rushGain).toBe(0);
   });
 });
 

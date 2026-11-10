@@ -143,7 +143,8 @@ export function cabinTargets(cockpit: boolean, speed: number, speedCap: number, 
     outsideGain: 0.6,
     engineBoost: 1.3,
     humGain: 0.03,
-    rushGain: 0.07 * Math.sqrt(sp) * (0.35 + 0.65 * air),
+    // Air rushes past only when there is air: vacuum flight is quiet.
+    rushGain: 0.07 * Math.sqrt(sp) * air,
   };
 }
 

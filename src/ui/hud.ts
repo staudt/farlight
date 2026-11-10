@@ -3,6 +3,7 @@ import '@fontsource/rajdhani/600.css';
 import { Vector3 } from 'three';
 import { config } from '../core/config';
 import type { Input } from '../input/input';
+import { AimCycler } from '../sim/targeting';
 import type { GameRenderer } from '../render/renderer';
 import { hudZoom } from './settingsStore';
 import { DEFAULT_SCALE } from '../data/scale';
@@ -198,18 +199,15 @@ export class Hud {
     this.age = Math.max(this.age, HINT_SECONDS - 5);
   }
 
+  private readonly aim = new AimCycler<Targetable>();
+
   private cycleTarget(): void {
     const w = this.world;
     const frameBody = w.ship.frame.body;
-    // Bodies and the landmarks of the body we are at, nearest first.
+    // Bodies, the landmarks of the body we are at, and comets: nearest the crosshair first.
     const pool: Targetable[] = [...w.universe.bodies.filter((b) => b !== frameBody), ...w.landmarks.of(frameBody), ...w.comets];
-    const list = pool
-      .map((b) => ({ b, d: b.position.distanceTo(w.shipWorldPos) }))
-      .sort((a, b) => a.d - b.d)
-      .map((e) => e.b);
-    if (list.length === 0) return;
-    const idx = w.target ? list.indexOf(w.target) : -1;
-    w.target = list[(idx + 1) % list.length] ?? null;
+    _fwd.set(0, 0, -1).applyQuaternion(this.gfx.camera.quaternion);
+    w.target = this.aim.next(performance.now() / 1000, pool, this.gfx.shipCamera.worldPos, _fwd, w.target);
   }
 
   update(realDt: number): void {
