@@ -49,6 +49,8 @@ const samplers = new Map<string, TerrainSampler>();
 function samplerFor(req: ChunkRequest): TerrainSampler {
   let s = samplers.get(req.bodyId);
   if (!s) {
+    // Keep the worker small: samplers hold noise tables, so drop the oldest beyond a handful of bodies.
+    if (samplers.size >= 6) samplers.delete(samplers.keys().next().value!);
     s = createHeightSampler(req.def, req.radius);
     samplers.set(req.bodyId, s);
   }

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Long flight soak test: stability, leaks, frame spikes.
- *   node scripts/soak.mjs [--no-build] [--minutes=11] [--sample=10]
+ *   node scripts/soak.mjs [--no-build] [--minutes=11] [--sample=10] [--profile=phone] [--quality=low|medium|high]
+ * --profile=phone: 844x390 at deviceScaleFactor 3, touch, ?touch&quality=low (or --quality), CPU throttled 4x via CDP.
  * Flies a scripted route (low flight, climb, warp, belt, Jupiter, UI toggling, quality cycling,
  * three hyperspace jumps) and samples heap, renderer.info, chunk and object counts every 10 s.
  * Writes artifacts/soak/report.json and samples.csv. Exit code 1 when growth or errors are flagged.
@@ -20,7 +21,14 @@ const num = (n, d) => {
 };
 const MINUTES = num('minutes', 11);
 const SAMPLE_S = num('sample', 10);
-const OUT = 'artifacts/soak';
+const strArg = (n, d) => {
+  const a = args.find((x) => x.startsWith(`--${n}=`));
+  return a ? a.split('=')[1] : d;
+};
+const PHONE = strArg('profile', '') === 'phone';
+const QUALITY = strArg('quality', PHONE ? 'low' : '');
+const URL_QS = `${PHONE ? '&touch' : ''}${QUALITY ? `&quality=${QUALITY}` : ''}`;
+const OUT = PHONE ? `artifacts/soak-phone-${QUALITY}` : 'artifacts/soak';
 const BROWSER = process.env.CHROMIUM_PATH ?? ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome'].find(existsSync);
 const PORT = await new Promise((resolve) => {
   const srv = createServer();
@@ -49,7 +57,15 @@ const browser = await chromium.launch({
   headless: true,
   args: ['--use-angle=vulkan', '--enable-features=Vulkan', '--ignore-gpu-blocklist', '--enable-precise-memory-info', '--enable-unsafe-swiftshader'],
 });
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const page = await browser.newPage(
+  PHONE
+    ? { viewport: { width: 844, height: 390 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true }
+    : { viewport: { width: 1280, height: 720 } },
+);
+if (PHONE) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+}
 const messages = [];
 const t0 = Date.now();
 let phase = 'boot';
@@ -61,10 +77,12 @@ page.on('pageerror', (e) => messages.push({ t: (Date.now() - t0) / 1000, phase, 
 // Frame time spike logger, reinstalled on every navigation.
 await page.addInitScript(() => {
   window.__spikes = [];
+  window.__dts = [];
   let last = performance.now();
   const tick = (now) => {
     const dt = now - last;
     last = now;
+    if (window.__game?.getState().frames > 60 && window.__dts.length < 200000) window.__dts.push(dt);
     if (dt > 100 && window.__game?.getState().frames > 60) window.__spikes.push({ at: Math.round(now), dt: Math.round(dt), phase: window.__phase ?? '' });
     requestAnimationFrame(tick);
   };
@@ -73,6 +91,7 @@ await page.addInitScript(() => {
 
 const samples = [];
 const spikes = [];
+const allDts = [];
 
 async function sample() {
   try {
@@ -106,6 +125,8 @@ async function sample() {
     });
     if (!s) return;
     samples.push({ t: Math.round((Date.now() - t0) / 100) / 10, segment, phase, ...s });
+    const dts = await page.evaluate(() => window.__dts.splice(0));
+    for (const d of dts) allDts.push(d);
     const sp = await page.evaluate(() => window.__spikes.splice(0));
     for (const x of sp) spikes.push({ segment, ...x });
   } catch {
@@ -175,7 +196,7 @@ const ui = (on, cycleQuality = false) =>
         if (cq && n % 8 === 2) g.quality.setLevel(levels[(n >> 3) % 3]);
       }, 700);
     },
-    [on, cycleQuality],
+    [on, cycleQuality && !QUALITY],
   );
 
 /** Phase plan: [label, seconds weight, action]. Scaled to MINUTES. */
@@ -216,7 +237,7 @@ const solSeconds = MINUTES * 60 - 3 * (JUMP_S + 25);
 const totalW = plan.reduce((a, p) => a + p[1], 0);
 
 try {
-  await page.goto(`http://localhost:${PORT}/?scenario=earth-low-morning`);
+  await page.goto(`http://localhost:${PORT}/?scenario=earth-low-morning${URL_QS}`);
   await waitReady();
   await sleep(3);
   await sample();
@@ -315,6 +336,10 @@ for (const [seg, all] of bySeg) {
   if (last > first * 1.3) flags.push(`segment ${seg}: heap floor ${first.toFixed(0)} MB -> ${last.toFixed(0)} MB (+${Math.round((last / first - 1) * 100)}%)`);
 }
 const afterWarm = spikes.filter((s) => s.at > 20000);
+// Frame time distribution over the whole run (fps percentiles: p5 is the slow tail).
+allDts.sort((a, b) => a - b);
+const pct = (p) => allDts[Math.min(allDts.length - 1, Math.floor(allDts.length * p))] ?? 0;
+const fpsDist = { frames: allDts.length, p50: +(1000 / pct(0.5)).toFixed(1), p5: +(1000 / pct(0.95)).toFixed(1), p1: +(1000 / pct(0.99)).toFixed(1), over50ms: allDts.filter((d) => d > 50).length };
 const errs = messages.filter((m) => m.type !== 'warning');
 const report = {
   minutes: MINUTES,
@@ -322,6 +347,9 @@ const report = {
   segments: bySeg.size,
   growthFlags: flags,
   frameSpikes: { count: afterWarm.length, worst: afterWarm.sort((a, b) => b.dt - a.dt).slice(0, 15) },
+  profile: PHONE ? `phone-${QUALITY}` : 'desktop',
+  fps: fpsDist,
+  peakHeapMB: Math.round(Math.max(...samples.map((r) => r.heapMB), 0)),
   consoleErrors: errs.length,
   messages: messages.slice(0, 60),
   summary: [...bySeg].map(([seg, rows]) => ({
@@ -339,6 +367,7 @@ writeFileSync(
   `${OUT}/samples.csv`,
   [cols.join(','), ...samples.map((s) => cols.map((c) => (typeof s[c] === 'number' ? +s[c].toFixed(1) : JSON.stringify(s[c] ?? ''))).join(','))].join('\n'),
 );
+console.log(`fps p50 ${fpsDist.p50} p5 ${fpsDist.p5} p1 ${fpsDist.p1}, frames >50ms ${fpsDist.over50ms}, peak heap ${report.peakHeapMB} MB, programs ${samples.at(-1)?.programs}`);
 console.log(`samples ${samples.length}, segments ${bySeg.size}, spikes>100ms ${afterWarm.length}, console problems ${messages.length}`);
 for (const f of flags) console.log(`FLAG ${f}`);
 for (const m of messages.slice(0, 10)) console.log(`${m.type} [${m.phase}] ${m.text}`);

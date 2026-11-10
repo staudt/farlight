@@ -90,12 +90,17 @@ export const config = {
     upSecs: 10,
     /** Auto: after a step down, wait at least this long before stepping up (doubles on a bounce). */
     upCooldown: 30,
+    /**
+     * Terrain budget per preset: maxChunks caps live chunk nodes per planet (splits are granted by
+     * screen space error until it is full), maxInFlight caps queued worker builds (0 = 4 per worker),
+     * propRange scales the prop fade distances and propLevels is how many of the finest levels carry props.
+     */
     /** Seconds ignored after load before auto adapts. */
     warmup: 4,
     presets: {
-      low: { pixelRatioMax: 1, msaa: 0, volScale: 0.4, cloudSteps: 14, cloudLight: 2, atmoSteps: 8, atmoLight: 3, cloudShadows: false, bloom: false, bloomLevels: 3, splitFactor: 0.7, gasOctaves: 2, shimmer: false, fxScale: 0.35 },
-      medium: { pixelRatioMax: 1.25, msaa: 2, volScale: 0.5, cloudSteps: 22, cloudLight: 3, atmoSteps: 10, atmoLight: 4, cloudShadows: true, bloom: true, bloomLevels: 5, splitFactor: 0.85, gasOctaves: 3, shimmer: true, fxScale: 0.65 },
-      high: { pixelRatioMax: 1.5, msaa: 4, volScale: 0.67, cloudSteps: 30, cloudLight: 3, atmoSteps: 14, atmoLight: 5, cloudShadows: true, bloom: true, bloomLevels: 8, splitFactor: 1, gasOctaves: 4, shimmer: true, fxScale: 1 },
+      low: { pixelRatioMax: 1, msaa: 0, volScale: 0.4, cloudSteps: 14, cloudLight: 2, atmoSteps: 8, atmoLight: 3, cloudShadows: false, bloom: false, bloomLevels: 3, splitFactor: 0.7, gasOctaves: 2, shimmer: false, fxScale: 0.35, maxChunks: 700, maxInFlight: 6, propRange: 0.55, propLevels: 1 },
+      medium: { pixelRatioMax: 1.25, msaa: 2, volScale: 0.5, cloudSteps: 22, cloudLight: 3, atmoSteps: 10, atmoLight: 4, cloudShadows: true, bloom: true, bloomLevels: 5, splitFactor: 0.85, gasOctaves: 3, shimmer: true, fxScale: 0.65, maxChunks: 1400, maxInFlight: 8, propRange: 0.75, propLevels: 1 },
+      high: { pixelRatioMax: 1.5, msaa: 4, volScale: 0.67, cloudSteps: 30, cloudLight: 3, atmoSteps: 14, atmoLight: 5, cloudShadows: true, bloom: true, bloomLevels: 8, splitFactor: 1, gasOctaves: 4, shimmer: true, fxScale: 1, maxChunks: 4500, maxInFlight: 0, propRange: 1, propLevels: 2 },
     },
   },
   /** Touch controls (phones). */

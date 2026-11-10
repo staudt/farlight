@@ -42,6 +42,7 @@ class ChunkNode {
   readonly estCenter = new Vector3();
   readonly dir = new Vector3();
   boundR = 0;
+  sortKey = 0;
   minR = 0;
   maxR = 0;
   readonly edge: number;
@@ -61,6 +62,11 @@ class ChunkNode {
     this.dir.set(d.x, d.y, d.z);
     this.estCenter.copy(this.dir).multiplyScalar(radius);
   }
+}
+
+/** onUpload callback: drops the CPU array of an attribute after its GPU upload. */
+function releaseArray(this: BufferAttribute): void {
+  (this as unknown as { array: null }).array = null;
 }
 
 const _q = new Quaternion();
@@ -83,7 +89,10 @@ export class PlanetView implements BodyView {
   private readonly pool: ChunkWorkerPool;
   private readonly roots: ChunkNode[] = [];
   private readonly maxLevel: number;
-  private readonly maxInFlight: number;
+  /** Live chunk nodes (queued, building or ready), checked against the quality budget. */
+  private live = 0;
+  private readonly dispatchList: ChunkNode[] = [];
+  private readonly splitWish: { n: ChunkNode; err: number }[] = [];
   private readonly queued = new Set<ChunkNode>();
   private readonly requests = new Map<number, ChunkNode>();
   private inFlight = 0;
@@ -103,7 +112,6 @@ export class PlanetView implements BodyView {
     this.propMaterial = createPropMaterial(this.material.uniforms);
     this.hasProps = (body.def.terrain?.props?.length ?? 0) > 0;
     this.pool = getWorkerPool();
-    this.maxInFlight = Math.max(6, this.pool.size * 4);
     this.maxLevel = maxLevelFor(body.radius, 400);
     this.minHorizonR = body.radius - body.terrainAmplitude * 1.6;
     this.rings = body.def.rings ? new RingMesh(body.def.rings, makeRingUniforms(body.def.rings, body.def.seed)) : null;
@@ -114,6 +122,7 @@ export class PlanetView implements BodyView {
     }
     for (let f = 0; f < FACE_COUNT; f++) {
       const n = new ChunkNode(null, f, 0, 0, 0, body.radius);
+      this.live++;
       this.roots.push(n);
       this.enqueue(n);
     }
@@ -162,13 +171,17 @@ export class PlanetView implements BodyView {
   }
 
   private dispatch(cam: Vector3): void {
-    if (this.inFlight >= this.maxInFlight || this.queued.size === 0) return;
-    const list = [...this.queued];
-    const dist = new Map<ChunkNode, number>();
-    for (const n of list) dist.set(n, n.estCenter.distanceToSquared(cam));
-    list.sort((a, b) => dist.get(a)! - dist.get(b)!);
+    const maxInFlight = quality.settings.maxInFlight || Math.max(6, this.pool.size * 4);
+    if (this.inFlight >= maxInFlight || this.queued.size === 0) return;
+    const list = this.dispatchList;
+    list.length = 0;
+    for (const n of this.queued) {
+      n.sortKey = n.estCenter.distanceToSquared(cam);
+      list.push(n);
+    }
+    list.sort((a, b) => a.sortKey - b.sortKey);
     for (const n of list) {
-      if (this.inFlight >= this.maxInFlight) break;
+      if (this.inFlight >= maxInFlight) break;
       this.queued.delete(n);
       n.state = State.Building;
       this.inFlight++;
@@ -185,7 +198,7 @@ export class PlanetView implements BodyView {
         y: n.y,
         grid: CHUNK_GRID,
         // Props only on the two finest levels: they matter within a few km.
-        props: this.hasProps ? { minLevel: Math.max(0, this.maxLevel - 1), gridLevel: this.maxLevel + PROP_GRID_EXTRA } : undefined,
+        props: this.hasProps ? { minLevel: Math.max(0, this.maxLevel + 1 - quality.settings.propLevels), gridLevel: this.maxLevel + PROP_GRID_EXTRA } : undefined,
       };
       this.pool.request(req, (r) => this.onResult(r));
     }
@@ -203,11 +216,12 @@ export class PlanetView implements BodyView {
     if (r.emit) g.setAttribute('aEmit', new BufferAttribute(r.emit, 4));
     if (r.dir) g.setAttribute('aDir', new BufferAttribute(r.dir, 4));
     g.boundingSphere = new Sphere(new Vector3(0, 0, 0), r.boundRadius);
+    // The CPU copy is dead weight once uploaded: free it (a few KB per chunk, thousands of chunks).
+    for (const a of Object.values(g.attributes)) (a as BufferAttribute).onUpload(releaseArray);
     const mesh = new Mesh(g, this.material);
     mesh.position.set(r.center[0], r.center[1], r.center[2]);
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();
-    mesh.visible = false;
     n.center.set(r.center[0], r.center[1], r.center[2]);
     n.boundR = r.boundRadius;
     n.minR = r.minR;
@@ -218,11 +232,11 @@ export class PlanetView implements BodyView {
       n.props = createPropMeshes(r.props, (b) => this.propMaterialFor(b.glow));
       for (const p of n.props) mesh.add(p);
     }
-    this.object.add(mesh);
   }
 
   private disposeNode(n: ChunkNode): void {
     n.disposed = true;
+    this.live--;
     this.queued.delete(n);
     if (n.mesh) {
       disposePropMeshes(n.props);
@@ -249,6 +263,7 @@ export class PlanetView implements BodyView {
       for (let i = 0; i < 2; i++) {
         const c = new ChunkNode(n, n.face, n.level + 1, n.x * 2 + i, n.y * 2 + j, R);
         n.children.push(c);
+        this.live++;
         this.enqueue(c);
       }
     }
@@ -281,8 +296,9 @@ export class PlanetView implements BodyView {
     const pc = config.props;
     for (const m of [this.propMaterial, ...this.glowMaterials.values()]) {
       const pu = m.uniforms;
-      pu.uFadeNear!.value = pc.enabled ? pc.fadeNear : 0;
-      pu.uFadeFar!.value = pc.enabled ? Math.max(pc.fadeFar, pc.fadeNear + 1) : 1e-3;
+      const range = quality.settings.propRange;
+      pu.uFadeNear!.value = pc.enabled ? pc.fadeNear * range : 0;
+      pu.uFadeFar!.value = pc.enabled ? Math.max(pc.fadeFar * range, pc.fadeNear * range + 1) : 1e-3;
       pu.uEmissive!.value = pc.emissive;
       pu.uNightGlow!.value = pc.nightGlow;
     }
@@ -296,10 +312,13 @@ export class PlanetView implements BodyView {
     }
 
     this.visibleNow.clear();
+    this.splitWish.length = 0;
     for (const root of this.roots) this.traverse(root, _cam, camLen, cull);
+    this.grantSplits();
 
-    for (const n of this.visiblePrev) if (!this.visibleNow.has(n) && n.mesh) n.mesh.visible = false;
-    for (const n of this.visibleNow) if (n.mesh) n.mesh.visible = true;
+    // Hidden chunks leave the scene graph: no matrix walk or traversal for the thousands that are not drawn.
+    for (const n of this.visiblePrev) if (!this.visibleNow.has(n) && n.mesh) this.object.remove(n.mesh);
+    for (const n of this.visibleNow) if (n.mesh && n.mesh.parent !== this.object) this.object.add(n.mesh);
     const t = this.visiblePrev;
     this.visiblePrev = this.visibleNow;
     this.visibleNow = t;
@@ -307,18 +326,36 @@ export class PlanetView implements BodyView {
     this.dispatch(_cam);
   }
 
+  /** Splits wanted this frame, granted by screen space error (edge over distance) while the budget lasts. */
+  private grantSplits(): void {
+    const w = this.splitWish;
+    if (w.length === 0) return;
+    const cap = quality.settings.maxChunks;
+    if (this.live + 4 <= cap && this.live + 4 * w.length <= cap) {
+      for (const s of w) this.split(s.n);
+      return;
+    }
+    w.sort((a, b) => b.err - a.err);
+    for (const s of w) {
+      if (this.live + 4 > cap) break;
+      this.split(s.n);
+    }
+  }
+
   private traverse(n: ChunkNode, cam: Vector3, camLen: number, cull: boolean): void {
     if (n.state !== State.Ready) return;
     const dist = distanceToSphere(cam.x, cam.y, cam.z, n.center.x, n.center.y, n.center.z, n.boundR);
     if (n.children) {
-      if (shouldMerge(dist, n.edge, SPLIT_FACTOR * quality.settings.splitFactor)) {
+      // Over budget: merge a little earlier so detail follows the camera.
+      const mf = this.live >= quality.settings.maxChunks ? 0.85 : 1;
+      if (shouldMerge(dist, n.edge, SPLIT_FACTOR * quality.settings.splitFactor * mf)) {
         this.disposeChildren(n);
       } else if (n.children.every((c) => c.state === State.Ready)) {
         for (const c of n.children) this.traverse(c, cam, camLen, cull);
         return;
       }
     } else if (shouldSplit(dist, n.edge, n.level, this.maxLevel, SPLIT_FACTOR * quality.settings.splitFactor)) {
-      this.split(n);
+      this.splitWish.push({ n, err: n.edge / Math.max(dist, 1) });
     }
     // Show this node (children, if any, are still building).
     if (cull) {
