@@ -56,9 +56,11 @@ const GLASS_FRAG = /* glsl */ `
     vec3 v = normalize(-vV);
     float face = abs(dot(normalize(vN), v));
     float fres = pow(1.0 - face, 2.2);
-    // Soft diagonal glint, only in daylight.
-    float band = smoothstep(0.05, 0.0, abs(fract(vV.x * 0.35 - vV.y * 0.55 + 0.3) - 0.5) - 0.44);
-    vec3 col = uTint * (0.35 + 1.8 * fres) * uLit + vec3(0.55, 0.75, 1.0) * band * 0.08 * uLit;
+    // A thin, soft diagonal glint stripe (only near the stripe centre), in daylight only.
+    float d = abs(fract(vV.x * 0.35 - vV.y * 0.55 + 0.3) - 0.5);
+    float band = smoothstep(0.035, 0.0, d);
+    // Glass only shows at grazing angles: no tint across the open view, so space stays black.
+    vec3 col = uTint * 1.6 * fres * fres * uLit + vec3(0.55, 0.75, 1.0) * band * 0.025 * uLit;
     col *= uStrength;
     // Re-entry plasma licks the edges of the glass.
     float edge = pow(1.0 - face, 1.4);
