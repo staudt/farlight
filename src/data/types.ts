@@ -212,6 +212,19 @@ export interface AuroraDef {
   intensity: number;
 }
 
+export interface WaterWavesDef {
+  /** Wave steepness 0..2 (1 default). Scales the facet normal tilt. */
+  amplitude?: number;
+  /** Wave speed multiplier (1 default). */
+  speed?: number;
+  /** Shore and wake foam amount 0..2 (1 default, 0 none). */
+  foam?: number;
+  /** Wind heading in radians in the body fixed frame. Omitted: derived from the body id. */
+  windDir?: number;
+  /** Foam colour, linear RGB. Omitted: a pale tint of the water colour. */
+  foamColor?: RGB;
+}
+
 export interface TerrainDef {
   /** Max relief as a fraction of the game radius. */
   amplitude: number;
@@ -222,7 +235,14 @@ export interface TerrainDef {
   features?: FeatureDef[];
   /** Ordered rules. The first matching biome colors the vertex; blending happens at edges. */
   biomes: BiomeDef[];
-  water?: { color: RGB; deepColor: RGB; /** Glowing seas (bioluminescence). */ emissive?: BiomeEmissiveDef };
+  water?: {
+    color: RGB;
+    deepColor: RGB;
+    /** Glowing seas (bioluminescence). */
+    emissive?: BiomeEmissiveDef;
+    /** Animated surface. Every field is optional: any ocean world gets calm default waves and shore foam. */
+    waves?: WaterWavesDef;
+  };
   polarCaps?: { latitude: number; color: RGB };
   props?: PropDef[];
   /** Optional equirectangular data maps (see terrain/maps.ts). Any body may use them. */

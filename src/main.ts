@@ -32,7 +32,7 @@ import { clearPendingJump, Hyperspace, playArrival, readPendingJump } from './re
 import { buildTravelUrl } from './ui/galaxyMath';
 import { SkyLabels } from './ui/skyLabels';
 import { FpsCounter } from './ui/fpsCounter';
-import { PhotoMode, saveFrame } from './ui/photoMode';
+import { PhotoMode, photoEvents, saveFrame } from './ui/photoMode';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
@@ -88,6 +88,8 @@ const resumed = resumeFlight !== null && resumeFlight.systemId === system.id && 
 if (!resumed) scenario.apply(world);
 
 const audio = new AudioEngine(world);
+if (arriving) audio.arrival();
+photoEvents.onShutter = () => audio.shutter();
 const gfx = new GameRenderer(canvas, world, [createPlanetView, createGasGiantView]); // terrain: chunked planets; gas giants + rings
 installShipFx(gfx);
 installLandmarks(gfx);
@@ -158,6 +160,8 @@ const padMode = (): PadMode => (photo.active ? 'photo' : overlay.isOpen || setti
 const gamepad = new GamepadControls(input, { mode: padMode, notify: (a, b) => hud.notify(a, b) });
 const systemMap = new SystemMap(overlay.pane('system'), world);
 const hyper = new Hyperspace(gfx, input);
+hyper.onStart = (seconds) => audio.hyperspaceStart(seconds);
+hud.onNotify = (a, b) => audio.onNotify(a, b);
 const galaxyMap = new GalaxyMap(overlay.pane('galaxy'), galaxy, {
   currentId: system.id,
   onTravel: (star, _factor, seconds) => {
@@ -249,6 +253,8 @@ function frame(now: number): void {
 
   photo.tick(realDt, gamepad.frame);
   if (!photo.active) world.step(realDt, flight);
+  audio.cockpit = gfx.shipCamera.mode === 'cockpit' && !photo.active;
+  audio.setUiOpen(overlay.isOpen || settingsScreen.isOpen);
   audio.update(realDt);
   gfx.render(world, realDt);
   debug.update();

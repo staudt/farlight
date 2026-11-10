@@ -326,6 +326,9 @@ export function flashScreen(): void {
   flashEl.classList.add('go');
 }
 
+/** Hook for the shutter sound, set from main. */
+export const photoEvents: { onShutter: (() => void) | null } = { onShutter: null };
+
 /** Saves the current canvas frame as a PNG download: farlight-system-body-stamp.png. */
 export function saveFrame(gfx: GameRenderer, world: World, systemId: string): void {
   const canvas = gfx.renderer.domElement;
@@ -333,6 +336,7 @@ export function saveFrame(gfx: GameRenderer, world: World, systemId: string): vo
   const stamp = new Date().toISOString().replace(/[:.]/g, '').replace('T', '-').slice(0, 17);
   const name = `farlight-${systemId}-${body}-${stamp}.png`;
   flashScreen();
+  photoEvents.onShutter?.();
   canvas.toBlob((blob) => {
     if (!blob) return;
     const url = URL.createObjectURL(blob);

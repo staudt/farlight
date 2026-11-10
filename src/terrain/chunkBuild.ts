@@ -28,7 +28,7 @@ export interface ChunkResult {
   /** Non indexed triangles, relative to `center`. */
   positions: Float32Array;
   colors: Float32Array;
-  /** Per vertex (isWater, facetRandom). */
+  /** Per vertex (isWater, facetRandom, shore): shore is the signed distance to the coast in foam band widths, negative on land. */
   water: Float32Array;
   /** Per vertex (r, g, b, dayShare) HDR self light. Absent when the body has none. */
   emit?: Float32Array;
@@ -56,6 +56,9 @@ function samplerFor(req: ChunkRequest): TerrainSampler {
 }
 
 const SKIRT = 0.06;
+
+/** Foam band width in meters (the shader scales it with `uFoamWidth`). */
+const SHORE_BAND = 110;
 
 /** Share of lamps that are whitened (the rest keep the warm lamp colour). */
 const WHITE_LAMP_SHARE = 0.3;
@@ -177,7 +180,40 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
   const tris = cells * 2 + 4 * G * 2;
   const positions = new Float32Array(tris * 9);
   const colors = new Float32Array(tris * 9);
-  const water = new Float32Array(tris * 6);
+  const water = new Float32Array(tris * 9);
+  // Signed distance to the coast in foam band widths (water positive), from the vertex lattice: the foam
+  // shader needs it, and depth alone says nothing about where the shore is. Far from any coast it
+  // is a large number. Coasts across a chunk border are not seen (the lattice stops at the edge).
+  const shoreN = new Float32Array(V * V);
+  {
+    // The foam band is SHORE_BAND meters wide, or two facets on coarse chunks; stored in band widths.
+    const cellM = Math.hypot(px[V + 1]! - px[0]!, py[V + 1]! - py[0]!, pz[V + 1]! - pz[0]!) / Math.SQRT2 || cell;
+    const band = Math.max(SHORE_BAND, 3 * cellM);
+    const reach = Math.min(9, Math.ceil(band / Math.max(cellM, 1)) + 1);
+    for (let j = 0; j < V; j++) {
+      for (let i = 0; i < V; i++) {
+        const k = i + j * V;
+        const w = samples[k]!.water;
+        let best = Infinity;
+        for (let dj = -reach; dj <= reach; dj++) {
+          const jj = j + dj;
+          if (jj < 0 || jj >= V) continue;
+          for (let di = -reach; di <= reach; di++) {
+            const ii = i + di;
+            if (ii < 0 || ii >= V) continue;
+            const k2 = ii + jj * V;
+            if (samples[k2]!.water === w) continue;
+            const d = Math.hypot(px[k2]! - px[k]!, py[k2]! - py[k]!, pz[k2]! - pz[k]!);
+            if (d < best) best = d;
+          }
+        }
+        const sign = w ? 1 : -1;
+        // Nothing within reach: a lower bound just past the band, so it interpolates smoothly.
+        const dist = best === Infinity ? (reach + 0.5) * cellM : Math.min(best, (reach + 0.5) * cellM);
+        shoreN[k] = (sign * Math.max(0, dist - 0.5 * cellM)) / band;
+      }
+    }
+  }
   const triColor = new Float32Array(cells * 18); // two triangles per cell, 3 vertices, rgb
   const triWater = new Float32Array(cells * 2);
   const triRnd = new Float32Array(cells * 2);
@@ -207,8 +243,9 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
       colors[o + q * 3] = triColor[co]!;
       colors[o + q * 3 + 1] = triColor[co + 1]!;
       colors[o + q * 3 + 2] = triColor[co + 2]!;
-      water[t * 6 + q * 2] = triWater[cell * 2 + which]!;
-      water[t * 6 + q * 2 + 1] = triRnd[cell * 2 + which]!;
+      water[t * 9 + q * 3] = triWater[cell * 2 + which]!;
+      water[t * 9 + q * 3 + 1] = triRnd[cell * 2 + which]!;
+      water[t * 9 + q * 3 + 2] = shoreN[k]!;
       if (dirAttr) {
         dirAttr[t * 12 + q * 4] = dx[k]!;
         dirAttr[t * 12 + q * 4 + 1] = dy[k]!;
@@ -386,8 +423,9 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
         colors[tri * 9 + q * 3] = triColor[(cell * 2 + which) * 9]!;
         colors[tri * 9 + q * 3 + 1] = triColor[(cell * 2 + which) * 9 + 1]!;
         colors[tri * 9 + q * 3 + 2] = triColor[(cell * 2 + which) * 9 + 2]!;
-        water[tri * 6 + q * 2] = triWater[cell * 2 + which]! + 2;
-        water[tri * 6 + q * 2 + 1] = triRnd[cell * 2 + which]!;
+        water[tri * 9 + q * 3] = triWater[cell * 2 + which]! + 2;
+        water[tri * 9 + q * 3 + 1] = triRnd[cell * 2 + which]!;
+        water[tri * 9 + q * 3 + 2] = 100; // skirts: far from any coast
       }
     };
     // tri 1: a, b, b-down. tri 2: a, b-down, a-down. Reuse `write` per slot.
