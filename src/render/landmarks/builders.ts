@@ -381,7 +381,7 @@ const geyserField: Builder = (s, f, { r, h, ground }, color, seed) => {
       const pr = mr * (0.4 + v * 1.5);
       const py = g + mr * 0.5 + v * steamH;
       // The plume leans downwind a little.
-      blob(f, x + v * v * steamH * 0.12 * (ph - 0.5) * 2, py, z + v * v * steamH * 0.1 * (ph2 - 0.5) * 2, pr, pr * 0.9, pr, seed + i * 31 + k, mixc(color, [1, 1, 1], 0.3), { mode: Mode.Steam, jitter: 0.3, detail: 1 });
+      blob(f, x + v * v * steamH * 0.12 * (ph - 0.5) * 2, py, z + v * v * steamH * 0.1 * (ph2 - 0.5) * 2, pr, pr * 0.9, pr, seed + i * 31 + k, mixc(color, [1, 1, 1], 0.3), { mode: Mode.Steam, jitter: 0.3, detail: 2 });
     }
   }
 };

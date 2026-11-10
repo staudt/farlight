@@ -105,11 +105,14 @@ export function createLandmarkMaterial(fx: boolean): ShaderMaterial {
           float hh = fract(sin(colId * 91.7) * 437.5);
           float n = fract(vUv.y * (2.0 + 3.0 * hh) - uTime * (0.7 + 1.1 * hh) + hh * 7.0);
           float streak = smoothstep(0.05, 0.45, n) * smoothstep(1.0, 0.6, n);
+          // Seen from afar the column streaks only alias into blocks: settle on a soft, steady curtain.
+          streak = mix(streak, 0.6, smoothstep(250.0, 1800.0, length(vViewPos)));
           float edge = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
           alpha = mix(0.16, 0.78, streak) * edge * (0.55 + 0.45 * smoothstep(0.0, 0.12, vUv.y)) * (1.0 - 0.35 * smoothstep(0.7, 1.0, vUv.y));
           col = vColor * (0.32 + 0.5 * day) * vec3(0.82, 0.93, 1.0) + uStarColor * 0.05;
         } else if (vFx > 1.5 && vFx < 2.5) {
           float pulse = 0.75 + 0.25 * sin(uTime * 1.4 - vUv.y * 7.0 + vUv.x * 12.0);
+          pulse = mix(pulse, 0.85, smoothstep(300.0, 2000.0, length(vViewPos)));
           alpha = 0.2 * pulse * (1.0 - 0.8 * vUv.y);
           col = vColor * (0.45 + 0.75 * day) + uStarColor * 0.05;
         }
