@@ -118,6 +118,10 @@ export class DebugPanel {
       p.add(s, 'bloomLevels', 1, 8, 1).onChange(apply);
       p.add(s, 'splitFactor', 0.4, 1.5).onChange(apply);
       p.add(s, 'gasOctaves', 1, 4, 1).onChange(apply);
+      p.add(s, 'maxChunks', 200, 6000, 50).onChange(apply);
+      p.add(s, 'maxInFlight', 0, 24, 1).onChange(apply);
+      p.add(s, 'propRange', 0.2, 1.5).onChange(apply);
+      p.add(s, 'propLevels', 1, 3, 1).onChange(apply);
       p.add(s, 'shimmer').onChange(apply);
       p.add(s, 'fxScale', 0, 1).onChange(apply);
     }

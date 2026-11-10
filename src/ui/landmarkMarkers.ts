@@ -74,7 +74,11 @@ export class LandmarkMarkers {
     return m;
   }
 
+  private frame = 0;
+
   update(): void {
+    // Phones: half rate is plenty for DOM labels and saves main thread time.
+    if (document.body.classList.contains('touch') && this.frame++ % 2 === 1) return;
     const w = this.world;
     const cam = this.gfx.camera;
     const body = w.ship.frame.body;

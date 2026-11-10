@@ -307,6 +307,10 @@ export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0
 }
 
 /** Builds the instanced meshes for one chunk's prop batches (children of the chunk mesh). */
+function releaseArray(this: InstancedBufferAttribute): void {
+  (this as unknown as { array: null }).array = null;
+}
+
 export function createPropMeshes(batches: readonly PropBatch[], materialFor: (batch: PropBatch) => ShaderMaterial): InstancedMesh[] {
   const out: InstancedMesh[] = [];
   for (const b of batches) {
@@ -316,6 +320,9 @@ export function createPropMeshes(batches: readonly PropBatch[], materialFor: (ba
     m.instanceColor = new InstancedBufferAttribute(b.colors, 3);
     m.matrixAutoUpdate = false;
     m.name = `props:${b.kind}`;
+    m.computeBoundingSphere(); // frustum culling needs it, and the arrays go after upload
+    m.instanceMatrix.onUpload(releaseArray);
+    m.instanceColor.onUpload(releaseArray);
     out.push(m);
   }
   return out;

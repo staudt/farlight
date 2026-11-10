@@ -7,6 +7,7 @@ import { GamepadControls, type PadMode } from './input/gamepad';
 import { detectTouch, TouchControls } from './input/touch';
 import { PostStack } from './render/post';
 import { quality } from './render/quality';
+import { warmUp } from './render/warmup';
 import { createGasGiantView } from './render/bodies';
 import { GameRenderer } from './render/renderer';
 import { getShake, installShipFx } from './render/fx';
@@ -272,6 +273,7 @@ function frame(now: number): void {
   fpsFrames++;
   frameCount++;
   if (frameCount === 12) releaseArrival?.();
+  if (frameCount === 4) void warmUp(gfx, post); // shader warm-up while the title card is up
   if (fpsAcc > 0.5) {
     fps = fpsFrames / fpsAcc;
     fpsAcc = 0;

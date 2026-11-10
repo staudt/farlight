@@ -294,11 +294,15 @@ export class Hud {
     this.headingValid = true;
   }
 
+  private compassShown = NaN;
+
   private updateCompass(): void {
     const show = this.world.ship.frame.rotating && this.world.ship.frame.body.kind !== 'star';
     this.compass.style.opacity = show ? '1' : '0';
     this.compassDeg.style.opacity = show ? '1' : '0';
     if (!show) return;
+    if (Math.abs(this.heading - this.compassShown) < 0.15) return; // nothing moved: skip the DOM writes
+    this.compassShown = this.heading;
     const half = 180;
     for (const it of this.compassItems) {
       let d = it.deg - this.heading;

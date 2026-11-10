@@ -112,6 +112,17 @@ export class PostStack {
     }
   }
 
+  /** Renders one frame with the bloom variant that is not active, so a later quality switch does not stall on a compile. */
+  warmVariants(): void {
+    const keep = this.finalPass;
+    const other = keep === this.passWithBloom ? this.passNoBloom : this.passWithBloom;
+    this.composer.removePass(keep);
+    this.composer.addPass(other);
+    this.composer.render(0);
+    this.composer.removePass(other);
+    this.composer.addPass(keep);
+  }
+
   /** Cheap CPU estimate of how bright the sky around the camera is. */
   private estimateSky(gfx: GameRenderer): number {
     const world = gfx.ctx.world;
