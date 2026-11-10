@@ -115,7 +115,9 @@ export class Nebula {
       side: BackSide,
       blending: AdditiveBlending,
       depthWrite: false,
-      depthTest: false,
+      // Transparent objects draw after the opaque scene, so without a depth test the nebula
+      // would paint over terrain and planets. The sphere sits inside the far plane, like stars.
+      depthTest: true,
       transparent: true,
     });
     this.object = new Mesh(new SphereGeometry(RADIUS, 48, 24), this.material);
