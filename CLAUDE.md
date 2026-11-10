@@ -15,6 +15,7 @@ Farlight is a relaxed solar system glider (working title was Space Glider 3D). L
   - `--wait=ms`: settle time after the game reports ready (default 2500).
   - Example: `npm run smoke -- earth-orbit --no-build --wait=4000`
   - Output: `artifacts/smoke/<scenario>.png` and `artifacts/smoke/summary.json`. Exit code 1 on failure.
+- `node scripts/soak.mjs [--no-build] [--minutes=11] [--sample=10]`: long flight soak test (low flight, climb, warp, belt, Jupiter, UI and quality toggling, 3 hyperspace jumps). Samples heap, `renderer.info`, chunk, DOM and life counts every 10 s into `artifacts/soak/report.json` and `samples.csv`. Flags monotonic growth, heap floor growth above 30%, frame spikes above 100 ms and console warnings. Exit code 1 on flags or errors. Drives the game through `window.__game` (`applyScenario`, `galaxy`, `input.external`).
   - Checks: no console or page errors, frame not black and not uniform, loop running (more than 20 frames), no pending async content after 20 s, and any `expect` problems the game reports.
 - URL params: `?scenario=name` starts from a preset in `src/scenarios.ts`. `?debug` is the debug mode. **F3** toggles the debug panel (lil-gui).
 - Scenarios: `earth-low-morning` (default), `earth-surface-day`, `earth-surface-night`, `earth-sunset`, `atmo-entry`, `earth-orbit`, `moon-surface-earthrise`, `deep-space-warp`.

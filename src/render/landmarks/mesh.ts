@@ -144,7 +144,7 @@ export function box(c: Channel, cx: number, cz: number, y0: number, y1: number, 
 
 /** Lumpy squashed icosphere. `bands` tints by height (dark at the foot to bright at the top). */
 export function blob(c: Channel, cx: number, cy: number, cz: number, rx: number, ry: number, rz: number, seed: number, color: V3, o: { emit?: number; jitter?: number; detail?: number; shade?: number; bands?: number; mode?: Mode } = {}): void {
-  const g = new IcosahedronGeometry(1, o.detail ?? 1).toNonIndexed();
+  const g = new IcosahedronGeometry(1, o.detail ?? 1);
   const p = g.getAttribute('position');
   const v: V3[] = [];
   const jit = o.jitter ?? 0.3;

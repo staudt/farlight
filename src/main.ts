@@ -308,6 +308,9 @@ window.__game = {
   galaxyMap,
   hyper,
   scenarios: Object.keys(SCENARIOS),
+  /** Soak test hook: applies a named scenario in place. */
+  applyScenario: (name: string) => SCENARIOS[name]?.apply(world),
+  galaxy,
   getState: () => ({
     contextLost: gfx.contextLost,
     scenario: resumed ? 'resume' : scenarioName,

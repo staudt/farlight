@@ -102,7 +102,7 @@ function conifer(): BufferGeometry {
 }
 
 function icoBlob(b: Builder, cx: number, cy: number, cz: number, r: number, squashY: number, seed: number, mix: number, jitter: number, color: V3 = WHITE): void {
-  const g = new IcosahedronGeometry(1, 1).toNonIndexed();
+  const g = new IcosahedronGeometry(1, 1);
   const p = g.getAttribute('position');
   const vtx: V3[] = [];
   for (let i = 0; i < p.count; i++) {
