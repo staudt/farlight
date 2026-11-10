@@ -54,7 +54,7 @@ const GLASS_FRAG = /* glsl */ `
   void main() {
     #include <logdepthbuf_fragment>
     vec3 v = normalize(-vV);
-    float face = abs(dot(normalize(vN), v));
+    float face = clamp(abs(dot(normalize(vN), v)), 0.0, 1.0); // face can round above 1: pow of a negative is NaN, and one NaN pixel blacks out the frame through bloom
     float fres = pow(1.0 - face, 2.2);
     // A thin, soft diagonal glint stripe (only near the stripe centre), in daylight only.
     float d = abs(fract(vV.x * 0.35 - vV.y * 0.55 + 0.3) - 0.5);

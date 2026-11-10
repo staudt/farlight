@@ -53,7 +53,7 @@ function shellMaterial(): ShaderMaterial {
       ${RAMP_GLSL}
       void main() {
         #include <logdepthbuf_fragment>
-        float face = abs(dot(normalize(vN), normalize(-vV)));
+        float face = clamp(abs(dot(normalize(vN), normalize(-vV))), 0.0, 1.0);
         float fres = pow(1.0 - face, 1.8);
         // Local z of the unit sphere: -1 at the nose, +1 at the tail.
         float front = smoothstep(0.7, -0.8, vL.z);
@@ -100,7 +100,7 @@ function trailMaterial(): ShaderMaterial {
       void main() {
         #include <logdepthbuf_fragment>
         float t = vL.z; // 0 at the ship, 1 at the end of the trail
-        float face = abs(dot(normalize(vN), normalize(-vV)));
+        float face = clamp(abs(dot(normalize(vN), normalize(-vV))), 0.0, 1.0);
         float z = t * uLen;
         float n = fxNoise(vec2(vL.x * 1.4 + vL.y * 1.1, z * 0.12 - uTime * 6.0)) * 0.55
                 + fxNoise(vec2(vL.y * 2.1 - vL.x * 0.9, z * 0.3 - uTime * 9.0)) * 0.45;
