@@ -17,6 +17,7 @@ export type Action =
   | 'look'
   | 'snapshot'
   | 'info'
+  | 'settings'
   | 'back';
 
 /** Seconds a throttle key must be held before it sweeps instead of stepping one notch. */
@@ -41,6 +42,8 @@ export class Input {
   sensitivity = 0.0022;
   recenterTime = 0.9;
   invertY = false;
+  /** Multiplier on look deltas (settings). */
+  lookScale = 1;
   rightMouse = false;
   /** True on touch devices; the HUD adapts. */
   touchMode = false;
@@ -249,7 +252,7 @@ export class Input {
   }
 
   consumeLook(): { x: number; y: number } {
-    const l = { x: this.look.x, y: this.look.y };
+    const l = { x: this.look.x * this.lookScale, y: this.look.y * this.lookScale };
     this.look.x = 0;
     this.look.y = 0;
     return l;
@@ -275,6 +278,7 @@ const KEY_ACTIONS: Record<string, Action> = {
   KeyV: 'look',
   KeyK: 'snapshot',
   KeyI: 'info',
+  KeyO: 'settings',
   F3: 'debug',
   KeyX: 'stop',
 };

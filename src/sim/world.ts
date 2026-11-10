@@ -272,6 +272,39 @@ export class World {
     this.updateSnapshot();
   }
 
+  /**
+   * Puts the ship back exactly where a saved state says, in its saved frame. Returns false
+   * (and changes nothing) when the frame body is unknown.
+   */
+  restore(s: {
+    frameBodyId: string;
+    rotating: boolean;
+    pos: readonly number[];
+    vel: readonly number[];
+    quat: readonly number[];
+    throttle: number;
+    simTime: number;
+    landed: boolean;
+  }): boolean {
+    const body = this.universe.byId.get(s.frameBodyId);
+    if (!body) return false;
+    this.clock.time = s.simTime;
+    this.universe.update(this.clock.time);
+    const ship = this.ship;
+    ship.frame = { body, rotating: s.rotating };
+    ship.pos.set(s.pos[0]!, s.pos[1]!, s.pos[2]!);
+    ship.vel.set(s.vel[0]!, s.vel[1]!, s.vel[2]!);
+    ship.quat.set(s.quat[0]!, s.quat[1]!, s.quat[2]!, s.quat[3]!).normalize();
+    ship.angVel.set(0, 0, 0);
+    ship.throttle = s.throttle;
+    ship.landed = s.landed;
+    this.updateFrame();
+    this.computeEnv();
+    this.updatePhase();
+    this.updateSnapshot();
+    return true;
+  }
+
   /** Puts the ship in space at `distance` from a body's center, looking at it. */
   placeInSpace(bodyId: string, distance: number, fromDir = new Vector3(0.3, 0.2, 1)): void {
     this.universe.update(this.clock.time);

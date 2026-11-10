@@ -1,0 +1,200 @@
+.settings-layer {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+  font-family: 'Rajdhani', system-ui, sans-serif;
+  color: var(--hud-text, #d9fbff);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: pan-y;
+}
+.settings-layer.open {
+  display: block;
+}
+.settings-layer * {
+  box-sizing: border-box;
+}
+.st-back {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 14, 0.6);
+}
+.st-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(760px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  display: flex;
+  flex-direction: column;
+  background: rgba(6, 14, 28, 0.88);
+  border: 1px solid var(--hud-faint, rgba(95, 242, 255, 0.22));
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.st-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 10px 20px;
+  border-bottom: 1px solid var(--hud-faint, rgba(95, 242, 255, 0.22));
+}
+.st-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.5em;
+  color: var(--hud-line, #5ff2ff);
+  text-shadow: 0 0 14px rgba(95, 242, 255, 0.5);
+}
+.st-close {
+  appearance: none;
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(95, 242, 255, 0.4);
+  background: rgba(6, 14, 28, 0.55);
+  color: var(--hud-line, #5ff2ff);
+  cursor: pointer;
+}
+.st-body {
+  overflow-y: auto;
+  padding: 6px 20px 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 32px;
+  align-items: start;
+}
+.st-sec h3 {
+  margin: 14px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4em;
+  color: var(--hud-dim, rgba(95, 242, 255, 0.55));
+}
+.st-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 38px;
+  border-bottom: 1px solid rgba(95, 242, 255, 0.1);
+}
+.st-label {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: var(--hud-text, #d9fbff);
+  flex: 1 1 auto;
+}
+.st-ctl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.st-ctl input[type='range'] {
+  width: 130px;
+  accent-color: #5ff2ff;
+  height: 28px;
+}
+.st-val {
+  min-width: 46px;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--hud-line, #5ff2ff);
+}
+.st-seg,
+.st-toggle,
+.st-btn {
+  appearance: none;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--hud-dim, rgba(95, 242, 255, 0.55));
+  background: rgba(95, 242, 255, 0.05);
+  border: 1px solid rgba(95, 242, 255, 0.28);
+  padding: 0 10px;
+  height: 30px;
+  min-width: 44px;
+  cursor: pointer;
+}
+.st-seg {
+  margin-left: -9px;
+  padding: 0 8px;
+}
+.st-seg:first-child {
+  margin-left: 0;
+}
+.st-seg.on,
+.st-toggle.on {
+  color: #fff;
+  background: rgba(95, 242, 255, 0.2);
+  border-color: var(--hud-line, #5ff2ff);
+  text-shadow: 0 0 10px rgba(95, 242, 255, 0.7);
+}
+.st-btn.danger {
+  color: #ffb3a8;
+  border-color: rgba(255, 140, 120, 0.5);
+}
+.st-btn[data-armed='1'] {
+  background: rgba(255, 120, 100, 0.25);
+}
+.st-btn[hidden] {
+  display: none;
+}
+@media (max-width: 700px) {
+  .st-body {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-height: 500px) {
+  .st-panel {
+    width: min(760px, calc(100vw - 16px));
+    max-height: calc(100dvh - 12px);
+  }
+  .st-head {
+    padding: 4px 8px 4px 14px;
+  }
+  .st-close {
+    width: 30px;
+    height: 30px;
+    padding: 6px;
+  }
+  .st-row {
+    min-height: 34px;
+  }
+  .st-sec h3 {
+    margin-top: 8px;
+  }
+  .st-body {
+    padding: 2px 14px 10px;
+    column-gap: 22px;
+  }
+  .st-ctl input[type='range'] {
+    width: 100px;
+  }
+  .st-seg {
+    padding: 0 6px;
+    min-width: 40px;
+  }
+}
+/* Landscape phones are wide enough for two columns even under 700px. */
+@media (max-width: 700px) and (min-aspect-ratio: 3/2) {
+  .st-body {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+body.no-fps .fps-counter {
+  display: none !important;
+}
+.hud-layer {
+  zoom: var(--hud-scale, 1);
+}

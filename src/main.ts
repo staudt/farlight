@@ -20,7 +20,11 @@ import { SystemMap } from './ui/map';
 import { GalaxyMap } from './ui/galaxyMap';
 import { Journal } from './ui/journal';
 import { MapOverlay } from './ui/mapOverlay';
-import { markVisited, SurveyTracker } from './sim/survey';
+import { clearProgress, markVisited, SurveyTracker } from './sim/survey';
+import { captureResume, clearResume, loadResume, saveResume } from './sim/resume';
+import { SettingsScreen } from './ui/settings';
+import { applyConfigSettings, applyDomSettings, settings } from './ui/settingsStore';
+import { registerServiceWorker } from './pwa';
 import { clearPendingJump, Hyperspace, playArrival, readPendingJump } from './render/fx/hyperspace';
 import { buildTravelUrl } from './ui/galaxyMath';
 import { SkyLabels } from './ui/skyLabels';
@@ -30,13 +34,18 @@ import { PhotoMode, saveFrame } from './ui/photoMode';
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const params = new URLSearchParams(location.search);
 
+// Saved settings first: they feed the renderer, input and audio created below.
+applyConfigSettings(settings.value);
+applyDomSettings(settings.value);
+registerServiceWorker();
+
 const touchOn = detectTouch(params);
 if (touchOn) {
   document.body.classList.add('touch');
   config.render.pixelRatioMax = Math.min(config.render.pixelRatioMax, config.touch.pixelRatioMax); // before GameRenderer
 }
 
-quality.init(params.get('quality'), touchOn); // before GameRenderer and PostStack
+quality.init(params.get('quality') ?? settings.value.quality, touchOn); // before GameRenderer and PostStack
 
 // A reload during a jump lands at the destination.
 const pendingJump = readPendingJump();
@@ -44,6 +53,7 @@ if (pendingJump && params.get('system') !== pendingJump) {
   location.replace(buildTravelUrl(location.search, pendingJump, location.pathname));
   await new Promise<never>(() => undefined);
 }
+const arriving = params.has('arrive');
 const releaseArrival = params.has('arrive') ? playArrival() : null;
 if (params.has('arrive')) {
   clearPendingJump();
@@ -54,7 +64,11 @@ if (params.has('arrive')) {
 
 // ?system=<id> picks a star from the galaxy; unknown ids fall back to Sol.
 const galaxy = createGalaxy();
-const galaxyStar = galaxy.stars.find((s) => s.id === params.get('system')) ?? galaxy.stars.find((s) => s.id === galaxy.homeId)!;
+// Resume the last flight unless the URL asks for somewhere (a scenario, a jump arrival, another system).
+const savedFlight = settings.value.resume && !arriving && !pendingJump && !params.has('scenario') ? loadResume() : null;
+const resumeFlight = savedFlight && (!params.has('system') || params.get('system') === savedFlight.systemId) ? savedFlight : null;
+const galaxyStar =
+  galaxy.stars.find((s) => s.id === (params.get('system') ?? resumeFlight?.systemId)) ?? galaxy.stars.find((s) => s.id === galaxy.homeId)!;
 const system = generateSystem(galaxyStar);
 const inSol = system.id === 'sol';
 const world = new World(system, 0);
@@ -67,11 +81,13 @@ markVisited(system.id);
 if (!params.has('arrive') && pendingJump === system.id) clearPendingJump();
 world.setHeightProvider((b) => createHeightSamplerForBody(b)); // terrain: before placement queries ground height
 await loadTerrainData(world.universe.bodies); // terrain data maps before ground height queries
-scenario.apply(world);
+const resumed = resumeFlight !== null && resumeFlight.systemId === system.id && world.restore(resumeFlight);
+if (!resumed) scenario.apply(world);
 
 const audio = new AudioEngine(world);
 const gfx = new GameRenderer(canvas, world, [createPlanetView, createGasGiantView]); // terrain: chunked planets; gas giants + rings
 installShipFx(gfx);
+if (resumed) gfx.shipCamera.mode = resumeFlight.cameraMode;
 gfx.cameraShake = getShake;
 const post = new PostStack(gfx);
 const weather = installWeather(gfx, post);
@@ -127,7 +143,7 @@ input.on('snapshot', () => {
 });
 const overlay = new MapOverlay(document.getElementById('map')!, input);
 input.on('back', () => overlay.close());
-const padMode = (): PadMode => (photo.active ? 'photo' : overlay.isOpen ? 'overlay' : 'flight');
+const padMode = (): PadMode => (photo.active ? 'photo' : overlay.isOpen || settingsScreen.isOpen ? 'overlay' : 'flight');
 const gamepad = new GamepadControls(input, { mode: padMode, notify: (a, b) => hud.notify(a, b) });
 const systemMap = new SystemMap(overlay.pane('system'), world);
 const hyper = new Hyperspace(gfx, input);
@@ -157,6 +173,27 @@ survey.onSurveyed = (body) => {
   hud.notify(body.name, 'SURVEYED');
   journal.refresh();
 };
+const settingsScreen = new SettingsScreen({
+  input,
+  audio,
+  touchOn,
+  onResetProgress: () => {
+    clearProgress();
+    clearResume();
+    survey.reset();
+    journal.refresh();
+  },
+});
+// Remember where the ship is: every 5 s, and when the page goes away.
+const saveFlight = (): void => {
+  if (!settings.value.resume || hyper.active || overlay.locked || photo.active) return;
+  saveResume(captureResume(world, system.id, gfx.shipCamera.mode));
+};
+setInterval(saveFlight, 5000);
+window.addEventListener('pagehide', saveFlight);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) saveFlight();
+});
 const skyLabels = new SkyLabels(document.getElementById('hud')!, world, gfx);
 const fpsCounter = new FpsCounter(document.getElementById('hud')!);
 
@@ -241,12 +278,13 @@ window.__game = {
   config,
   system: { id: system.id, name: system.name },
   overlay,
+  settings: settingsScreen,
   galaxyMap,
   hyper,
   scenarios: Object.keys(SCENARIOS),
   getState: () => ({
     contextLost: gfx.contextLost,
-    scenario: scenarioName,
+    scenario: resumed ? 'resume' : scenarioName,
     frames: frameCount,
     fps,
     body: world.ship.frame.body.name,

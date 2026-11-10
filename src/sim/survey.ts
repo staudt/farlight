@@ -47,6 +47,11 @@ export function saveProgress(progress: PlayerProgress, storage: StorageLike | nu
   }
 }
 
+/** Forgets every visited and surveyed entry. */
+export function clearProgress(storage: StorageLike | null = defaultStorage()): void {
+  saveProgress(emptyProgress(), storage);
+}
+
 /** Returns true when the id was new. */
 export function markVisited(systemId: string, storage: StorageLike | null = defaultStorage()): boolean {
   const p = loadProgress(storage);
@@ -100,6 +105,12 @@ export class SurveyTracker {
   ) {
     this.lastSim = world.clock.time;
     this.done = new Set(loadProgress(storage).surveyed);
+  }
+
+  /** Forgets what was surveyed, after the stored progress was cleared. */
+  reset(): void {
+    this.done.clear();
+    this.time.clear();
   }
 
   update(): void {
