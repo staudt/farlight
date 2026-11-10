@@ -1,4 +1,4 @@
-import { mulberry32 } from '../core/rng';
+import { hashInts, mulberry32 } from '../core/rng';
 import type { GalaxyDef, GalaxyStar, StarClass } from './galaxy';
 import { makeName, makeUniqueNames, moonName, slug } from './names';
 import { SOLAR_SYSTEM } from './solarSystem';
@@ -519,6 +519,36 @@ function livingProps(f: Flora, rng: Rng, alien: boolean): PropDef[] {
   ];
 }
 
+/** Brightest channel to 1, so a dark palette colour becomes a usable glow colour. */
+function glowOf(c: RGB): RGB {
+  const m = Math.max(c[0], c[1], c[2], 1e-3);
+  return [round(c[0] / m, 2), round(c[1] / m, 2), round(c[2] / m, 2)];
+}
+
+/**
+ * Some alien worlds glow at night: forests, crystal fields or seas. Decided by a hash of values the
+ * world already has (flora trunk colour, sea level), so it draws nothing from the system rng and
+ * every existing world keeps its look. Returns true when the world glows.
+ */
+function addBioluminescence(terrain: TerrainDef, f: Flora, waterColor: RGB): boolean {
+  const h = hashInts(Math.round(f.trunk[0] * 1000), Math.round(f.trunk[1] * 1000), Math.round(f.trunk[2] * 1000), Math.round((terrain.seaLevel ?? 0) * 10000));
+  if (h % 100 >= 70) return false;
+  const mode = (h >>> 8) % 3;
+  const palette: RGB[] = [f.trunk, f.crystal ?? f.trunk, waterColor];
+  const glow = glowOf(palette[(h >>> 16) % 3]!);
+  const treeGlow = [0.75, 0.3, 0.4][mode]!;
+  for (const pd of terrain.props ?? []) {
+    if (pd.kind === 'tree') pd.glow = treeGlow;
+    else if (pd.kind === 'crystal') pd.glow = mode === 1 ? 1.2 : 0.5;
+  }
+  const forest = terrain.biomes.find((b) => b.name === 'forest');
+  if (forest && mode === 0) forest.emissive = { color: glow, intensity: 0.05 };
+  const field = terrain.biomes.find((b) => b.name === 'crystal field');
+  if (field && mode === 1) field.emissive = { color: glow, intensity: 0.3 };
+  if (mode === 2 && terrain.water) terrain.water.emissive = { color: glow, intensity: 0.08 };
+  return true;
+}
+
 function skyAtmosphere(rng: Rng, theme: SkyTheme, o: { height: [number, number]; depth: [number, number]; mie: [number, number]; sun: [number, number]; coverage: [number, number]; cloudAlt?: number }): AtmosphereDef {
   const height = round(rng.range(o.height[0], o.height[1]), 3);
   return {
@@ -583,9 +613,11 @@ function buildLiving(rng: Rng, archetype: 'earthlike' | 'ocean' | 'alien'): Buil
     polarCaps: { latitude: round(rng.range(1.2, 1.4)), color: [0.88, 0.92, 0.96] },
     props: livingProps(flora, rng, archetype === 'alien'),
   };
+  const glows = archetype === 'alien' && addBioluminescence(terrain, flora, water.color);
   const landColor = mix(flora.grass, flora.forest, 0.3);
   const color = mix(water.color, landColor, ocean ? 0.12 : 0.3);
   const fts = ocean ? ['Oceans', 'Islands', 'Storms'] : archetype === 'earthlike' ? ['Oceans', 'Forests', 'Clouds'] : ['Oceans', flora.words.replace(/^./, (c) => c.toUpperCase()), 'Strange sky'];
+  if (glows) fts.push('Glowing nights');
   if (atmosphere.aurora) fts.push('Auroras');
   const skyWord = sky.name === 'blue' ? 'blue' : sky.name === 'magenta' ? 'magenta' : sky.name;
   const summaries = {
@@ -709,9 +741,9 @@ function buildLava(rng: Rng): Built {
     features: feats,
     biomes: [
       // Glow only in the lowest channels, in thin cracks and on the volcano summits. Rank order matters.
-      { name: 'lava channel', color: glow, maxHeight: lavaLevel },
-      { name: 'caldera', color: mix(glow, [1, 0.75, 0.2], 0.3), minHeight: 0.72 },
-      { name: 'glowing cracks', color: mix(glow, [0.5, 0.1, 0.02], 0.25), moisture: [0.475, 0.525], maxHeight: 0.35 },
+      { name: 'lava channel', color: glow, maxHeight: lavaLevel, emissive: { intensity: 1.1, day: 0.2 } },
+      { name: 'caldera', color: mix(glow, [1, 0.75, 0.2], 0.3), minHeight: 0.72, emissive: { intensity: 1.6, day: 0.2 } },
+      { name: 'glowing cracks', color: mix(glow, [0.5, 0.1, 0.02], 0.25), moisture: [0.475, 0.525], maxHeight: 0.35, emissive: { intensity: 1.0, day: 0.15 } },
       { name: 'cooled crust', color: jit(crust, rng, 0.08), minHeight: 0.45 },
       { name: 'ash plains', color: jit(ash, rng, 0.1), minHeight: 0.0 },
       { name: 'basalt', color: jit(basalt, rng, 0.1) },

@@ -70,7 +70,9 @@ const earth: BodyDef = {
       mountains: 'maps/earth-mountains.bin',
       deserts: 'maps/earth-deserts.bin',
       ice: 'maps/earth-ice.bin',
+      lights: 'maps/earth-lights.bin',
     },
+    nightLights: { color: [1.0, 0.42, 0.1], intensity: 2.1 },
     layers: [
       { type: 'fbm', frequency: 1.5, amplitude: 0.1, octaves: 5, warp: 0.4 },
       { type: 'ridged', frequency: 5, amplitude: 0.5, octaves: 5 },
@@ -484,6 +486,9 @@ const io: BodyDef = {
     ],
     biomes: [
       { name: 'white frost', color: [0.92, 0.9, 0.85], latitude: [1.2, 1.6] },
+      // Molten lakes in the lowest basins and glowing calderas on the volcano summits.
+      { name: 'lava lake', color: [0.5, 0.1, 0.03], maxHeight: -0.45, emissive: { color: [1.0, 0.32, 0.05], intensity: 1.4, day: 0.25 } },
+      { name: 'caldera', color: [0.6, 0.14, 0.04], minHeight: 0.85, emissive: { color: [1.0, 0.4, 0.06], intensity: 1.6, day: 0.25 } },
       { name: 'orange sulfur', color: [0.82, 0.48, 0.14], minHeight: 0.2 },
       { name: 'sulfur yellow', color: [0.95, 0.82, 0.28] },
     ],

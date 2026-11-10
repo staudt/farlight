@@ -35,6 +35,7 @@ export interface MapUrls {
   mountains?: string;
   deserts?: string;
   ice?: string;
+  lights?: string;
 }
 
 /** Loads all maps of a terrain def. `base` resolves relative urls (the document base). */
@@ -56,7 +57,7 @@ async function fetchWithRetry(url: URL, key: string, attempts = 4): Promise<Arra
 
 export async function loadTerrainMaps(maps: MapUrls | undefined, base: string): Promise<void> {
   if (!maps) return;
-  const keys = [maps.land, maps.mountains, maps.deserts, maps.ice].filter((k): k is string => !!k);
+  const keys = [maps.land, maps.mountains, maps.deserts, maps.ice, maps.lights].filter((k): k is string => !!k);
   await Promise.all(
     keys.map((key) => {
       if (cache.has(key)) return Promise.resolve();

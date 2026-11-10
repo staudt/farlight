@@ -217,7 +217,7 @@ export function propGeometry(kind: PropKind, variant: number): BufferGeometry {
  * Flat shaded prop material. `shared` carries the terrain material uniforms (sun, body center,
  * sky ambient) by reference, so the planet view updates both with one write.
  */
-export function createPropMaterial(shared: Record<string, IUniform>): ShaderMaterial {
+export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0): ShaderMaterial {
   return new ShaderMaterial({
     side: 2,
     uniforms: {
@@ -229,6 +229,9 @@ export function createPropMaterial(shared: Record<string, IUniform>): ShaderMate
       uFadeNear: { value: 900 },
       uFadeFar: { value: 1900 },
       uEmissive: { value: 2.2 },
+      /** Night glow weight of the instance colour (bioluminescence), per material. */
+      uBioGlow: { value: bioGlow },
+      uNightGlow: { value: 1 },
     },
     vertexShader: /* glsl */ `
       #include <common>
@@ -241,6 +244,7 @@ export function createPropMaterial(shared: Record<string, IUniform>): ShaderMate
       varying vec3 vColor;
       varying vec3 vViewPos;
       varying float vEmit;
+      varying float vMix;
       varying vec3 vInst;
       void main() {
         mat4 mvi = modelViewMatrix * instanceMatrix;
@@ -254,6 +258,7 @@ export function createPropMaterial(shared: Record<string, IUniform>): ShaderMate
         vInst = inst;
         vColor = aColor * mix(vec3(1.0), inst, aMix);
         vEmit = aEmit;
+        vMix = aMix;
         vec4 mv = mvi * vec4(position * fade, 1.0);
         vViewPos = mv.xyz;
         gl_Position = projectionMatrix * mv;
@@ -268,9 +273,12 @@ export function createPropMaterial(shared: Record<string, IUniform>): ShaderMate
       uniform float uSunIntensity;
       uniform vec3 uStarColor;
       uniform float uEmissive;
+      uniform float uBioGlow;
+      uniform float uNightGlow;
       varying vec3 vColor;
       varying vec3 vViewPos;
       varying float vEmit;
+      varying float vMix;
       varying vec3 vInst;
       void main() {
         #include <logdepthbuf_fragment>
@@ -287,7 +295,10 @@ export function createPropMaterial(shared: Record<string, IUniform>): ShaderMate
         vec3 amb = (vec3(0.05) + uSkyAmbient * skyTerm * (0.25 + 0.75 * term)) * mix(vec3(1.0), uStarColor, 0.6);
         vec3 col = vColor * (sunCol * uStarColor * uSunIntensity * diffuse + amb);
         // Crystal glow: brighter at night, still readable by day.
-        col += vInst * vEmit * uEmissive * (0.35 + 0.65 * (1.0 - term));
+        col += vInst * vEmit * uEmissive * (0.35 + 0.65 * (1.0 - term)) * uNightGlow;
+        // Bioluminescence: the tinted parts (foliage, not bark) glow once the sun is down.
+        float night = 1.0 - smoothstep(-0.14, 0.04, sunR);
+        col += vInst * vMix * uBioGlow * night * uNightGlow;
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -296,11 +307,11 @@ export function createPropMaterial(shared: Record<string, IUniform>): ShaderMate
 }
 
 /** Builds the instanced meshes for one chunk's prop batches (children of the chunk mesh). */
-export function createPropMeshes(batches: readonly PropBatch[], material: ShaderMaterial): InstancedMesh[] {
+export function createPropMeshes(batches: readonly PropBatch[], materialFor: (batch: PropBatch) => ShaderMaterial): InstancedMesh[] {
   const out: InstancedMesh[] = [];
   for (const b of batches) {
     if (b.count === 0) continue;
-    const m = new InstancedMesh(propGeometry(b.kind, b.variant), material, b.count);
+    const m = new InstancedMesh(propGeometry(b.kind, b.variant), materialFor(b), b.count);
     m.instanceMatrix = new InstancedBufferAttribute(b.matrices, 16);
     m.instanceColor = new InstancedBufferAttribute(b.colors, 3);
     m.matrixAutoUpdate = false;

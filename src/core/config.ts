@@ -151,6 +151,8 @@ export const config = {
     fadeFar: 1900,
     /** HDR strength of crystal glow. */
     emissive: 2.2,
+    /** Global scale of night glow: city lights, lava, bioluminescence. */
+    nightGlow: 1,
   },
   debug: {
     showPanel: false,

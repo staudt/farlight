@@ -1,4 +1,5 @@
-import { BufferAttribute, BufferGeometry, Group, type InstancedMesh, Mesh, Quaternion, Sphere, Vector3, type ShaderMaterial } from 'three';
+import { BufferAttribute, BufferGeometry, ClampToEdgeWrapping, DataTexture, Group, type InstancedMesh, LinearFilter, Mesh, Quaternion, RedFormat, RepeatWrapping, Sphere, UnsignedByteType, Vector3, type ShaderMaterial } from 'three';
+import { getMap } from '../../terrain/maps';
 import type { Body } from '../../sim/universe';
 import type { ChunkRequest, ChunkResult } from '../../terrain/chunkBuild';
 import {
@@ -71,6 +72,8 @@ export class PlanetView implements BodyView {
   readonly object = new Group();
   private readonly material: ShaderMaterial;
   private readonly propMaterial: ShaderMaterial;
+  private lightsTexture: DataTexture | null = null;
+  private readonly glowMaterials = new Map<number, ShaderMaterial>();
   private readonly hasProps: boolean;
   private readonly pool: ChunkWorkerPool;
   private readonly roots: ChunkNode[] = [];
@@ -88,6 +91,7 @@ export class PlanetView implements BodyView {
     this.body = body;
     this.object.name = `planet:${body.id}`;
     this.material = createTerrainMaterial();
+    this.setupLights();
     this.propMaterial = createPropMaterial(this.material.uniforms);
     this.hasProps = (body.def.terrain?.props?.length ?? 0) > 0;
     this.pool = getWorkerPool();
@@ -99,6 +103,38 @@ export class PlanetView implements BodyView {
       this.roots.push(n);
       this.enqueue(n);
     }
+  }
+
+  /** Uploads the settlement lights map (when the def has one) for the shader's coarse chunk lights. */
+  private setupLights(): void {
+    const t = this.body.def.terrain;
+    const map = getMap(t?.maps?.lights);
+    if (!t?.nightLights || !map) return;
+    // The map view may sit inside a larger buffer: copy the pixels out.
+    const tex = new DataTexture(new Uint8Array(map.data), map.w, map.h, RedFormat, UnsignedByteType);
+    tex.wrapS = RepeatWrapping;
+    tex.wrapT = ClampToEdgeWrapping;
+    tex.magFilter = LinearFilter;
+    tex.minFilter = LinearFilter;
+    tex.unpackAlignment = 1;
+    tex.needsUpdate = true;
+    this.lightsTexture = tex;
+    const u = this.material.uniforms;
+    u.uLights!.value = tex;
+    // Mean brightness of a facet sparkle field (probability times brightness) keeps the two paths even.
+    const nl = t.nightLights;
+    (u.uLampColor!.value as Vector3).set(nl.color[0], nl.color[1], nl.color[2]).multiplyScalar(nl.intensity * (nl.density ?? 1) * 0.3);
+  }
+
+  /** Prop material for a glow weight; glowing batches get their own material sharing the uniforms. */
+  private propMaterialFor(glow: number): ShaderMaterial {
+    if (glow <= 0) return this.propMaterial;
+    let m = this.glowMaterials.get(glow);
+    if (!m) {
+      m = createPropMaterial(this.material.uniforms, glow);
+      this.glowMaterials.set(glow, m);
+    }
+    return m;
   }
 
   /** Chunks queued or being built. */
@@ -150,6 +186,8 @@ export class PlanetView implements BodyView {
     g.setAttribute('position', new BufferAttribute(r.positions, 3));
     g.setAttribute('aColor', new BufferAttribute(r.colors, 3));
     g.setAttribute('aWater', new BufferAttribute(r.water, 2));
+    if (r.emit) g.setAttribute('aEmit', new BufferAttribute(r.emit, 4));
+    if (r.dir) g.setAttribute('aDir', new BufferAttribute(r.dir, 4));
     g.boundingSphere = new Sphere(new Vector3(0, 0, 0), r.boundRadius);
     const mesh = new Mesh(g, this.material);
     mesh.position.set(r.center[0], r.center[1], r.center[2]);
@@ -163,7 +201,7 @@ export class PlanetView implements BodyView {
     n.mesh = mesh;
     n.state = State.Ready;
     if (r.props.length > 0) {
-      n.props = createPropMeshes(r.props, this.propMaterial);
+      n.props = createPropMeshes(r.props, (b) => this.propMaterialFor(b.glow));
       for (const p of n.props) mesh.add(p);
     }
     this.object.add(mesh);
@@ -224,11 +262,15 @@ export class PlanetView implements BodyView {
     sunView.copy(ctx.world.universe.root.position).sub(b.position).normalize().transformDirection(ctx.camera.matrixWorldInverse);
     (u.uBodyCenterView!.value as Vector3).copy(b.position).sub(ctx.cameraWorld).applyMatrix4(ctx.camera.matrixWorldInverse);
     u.uTime!.value = ctx.realTime;
-    const pu = this.propMaterial.uniforms;
+    u.uGlow!.value = config.props.nightGlow;
     const pc = config.props;
-    pu.uFadeNear!.value = pc.enabled ? pc.fadeNear : 0;
-    pu.uFadeFar!.value = pc.enabled ? Math.max(pc.fadeFar, pc.fadeNear + 1) : 1e-3;
-    pu.uEmissive!.value = pc.emissive;
+    for (const m of [this.propMaterial, ...this.glowMaterials.values()]) {
+      const pu = m.uniforms;
+      pu.uFadeNear!.value = pc.enabled ? pc.fadeNear : 0;
+      pu.uFadeFar!.value = pc.enabled ? Math.max(pc.fadeFar, pc.fadeNear + 1) : 1e-3;
+      pu.uEmissive!.value = pc.emissive;
+      pu.uNightGlow!.value = pc.nightGlow;
+    }
 
     this.visibleNow.clear();
     for (const root of this.roots) this.traverse(root, _cam, camLen, cull);
@@ -268,6 +310,8 @@ export class PlanetView implements BodyView {
     for (const r of this.roots) this.disposeNode(r);
     this.material.dispose();
     this.propMaterial.dispose();
+    for (const m of this.glowMaterials.values()) m.dispose();
+    this.lightsTexture?.dispose();
   }
 }
 
