@@ -7,7 +7,15 @@ import {
   Matrix3,
   Matrix4,
   Mesh,
+  OrthographicCamera,
+  LinearMipmapLinearFilter,
+  LinearFilter,
   PlaneGeometry,
+  RepeatWrapping,
+  ClampToEdgeWrapping,
+  RGFormat,
+  Texture,
+  WebGLRenderTarget,
   Quaternion,
   ShaderMaterial,
   Vector3,
@@ -34,29 +42,12 @@ const PUFF_RANGE = 22000;
 const GAS_GLSL = /* glsl */ `
 uniform vec3 uBands[${MAX_BANDS}];
 uniform float uBandCount, uBandFreq, uTurb, uSeed, uPhase, uStormN, uHasRing;
-uniform int uGasOct; // quality: noise octaves, <= 4
+uniform sampler2D uFlowTex; // baked flow noise: r = broad warp, g = fine detail, equirect, wraps in longitude
 uniform vec4 uStorm[${MAX_STORMS}];
 uniform vec3 uStormCol[${MAX_STORMS}];
 ${RING_GLSL}
 
 float gHash(float n) { return fract(sin(n * 91.3458) * 47453.5453); }
-float gH31(vec3 p) {
-  p = fract(p * 0.3183099 + 0.1);
-  p *= 17.0;
-  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
-}
-float gNoise(vec3 x) {
-  vec3 i = floor(x);
-  vec3 f = fract(x);
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(mix(gH31(i), gH31(i + vec3(1, 0, 0)), f.x), mix(gH31(i + vec3(0, 1, 0)), gH31(i + vec3(1, 1, 0)), f.x), f.y),
-             mix(mix(gH31(i + vec3(0, 0, 1)), gH31(i + vec3(1, 0, 1)), f.x), mix(gH31(i + vec3(0, 1, 1)), gH31(i + vec3(1, 1, 1)), f.x), f.y), f.z);
-}
-float gFbm(vec3 p) {
-  float a = 0.5, s = 0.0;
-  for (int i = 0; i < 4; i++) { if (i >= uGasOct) break; s += a * gNoise(p); p = p * 2.03 + 11.7; a *= 0.5; }
-  return s / (1.0 - a * 2.0); // a has halved once per octave: normalizes any octave count
-}
 vec3 palette(float i) {
   int n = int(uBandCount);
   int idx = int(floor(gHash(i + uSeed) * float(n)));
@@ -70,13 +61,17 @@ float zonalJet(float lat) {
   float b = lat / 3.14159265 * uBandFreq;
   return (sin(b * 3.14159265) * 0.6 + 0.5 * exp(-lat * lat * 10.0)) * 2.4e-5;
 }
-vec2 flowSample(vec3 d, float off) {
-  float cs = cos(off), sn = sin(off);
-  vec3 q = vec3(cs * d.x + sn * d.z, d.y, -sn * d.x + cs * d.z);
-  float w = gFbm(q * vec3(2.2, 4.5, 2.2) + uSeed);
-  float v = gFbm(q * vec3(5.5, 24.0, 5.5) + vec3(w * 1.7, 0.0, w * 1.7) * (0.4 + uTurb) + 7.0);
-  return vec2(w, v);
+/** Baked noise at longitude u (0..1, wraps) and latitude v. Picks the seam-free u for mip derivatives. */
+vec2 flowTap(float lon, float lat, float off) {
+  float u = (lon + off) * 0.15915494 + 0.5;
+  float v = lat * 0.31830989 + 0.5;
+  float u2 = fract(u + 0.5);
+  vec2 dx = vec2(dFdx(fract(u)), dFdy(fract(u)));
+  vec2 dx2 = vec2(dFdx(u2), dFdy(u2));
+  vec2 g = dot(dx, dx) < dot(dx2, dx2) ? dx : dx2;
+  return textureGrad(uFlowTex, vec2(u, v), vec2(g.x, dFdx(v)), vec2(g.y, dFdy(v))).rg;
 }
+vec2 flowSample(float lon, float lat, float off) { return flowTap(lon, lat, off); }
 
 /** Albedo of the cloud deck seen in direction d (unit, body fixed). depth: 0 tops .. 1 floor. */
 vec3 deckColor(vec3 d, float depth) {
@@ -86,8 +81,8 @@ vec3 deckColor(vec3 d, float depth) {
   float ph0 = uPhase;
   float ph1 = fract(uPhase + 0.5);
   float w0 = 1.0 - abs(2.0 * ph0 - 1.0);
-  vec2 s0 = flowSample(d, jt * ${FLOW_PERIOD.toFixed(1)} * (ph0 - 0.5));
-  vec2 s1 = flowSample(d, jt * ${FLOW_PERIOD.toFixed(1)} * (ph1 - 0.5));
+  vec2 s0 = flowSample(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph0 - 0.5));
+  vec2 s1 = flowSample(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph1 - 0.5));
   vec2 s = mix(s1, s0, w0);
 
   float b0 = lat / 3.14159265 * uBandFreq + 0.37;
@@ -142,6 +137,38 @@ vec3 deckColor(vec3 d, float depth) {
 }
 `;
 
+const BAKE_FRAG = /* glsl */ `
+precision highp float;
+uniform float uSeed, uTurb;
+uniform int uGasOct;
+varying vec2 vNdc;
+float gH31(vec3 p) {
+  p = fract(p * 0.3183099 + 0.1);
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float gNoise(vec3 x) {
+  vec3 i = floor(x);
+  vec3 f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(gH31(i), gH31(i + vec3(1, 0, 0)), f.x), mix(gH31(i + vec3(0, 1, 0)), gH31(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(gH31(i + vec3(0, 0, 1)), gH31(i + vec3(1, 0, 1)), f.x), mix(gH31(i + vec3(0, 1, 1)), gH31(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+float gFbm(vec3 p) {
+  float a = 0.5, s = 0.0;
+  for (int i = 0; i < 4; i++) { if (i >= uGasOct) break; s += a * gNoise(p); p = p * 2.03 + 11.7; a *= 0.5; }
+  return s / (1.0 - a * 2.0); // a has halved once per octave: normalizes any octave count
+}
+
+void main() {
+  float lon = vNdc.x * 3.14159265;
+  float lat = vNdc.y * 1.5707963;
+  vec3 q = vec3(cos(lat) * cos(lon), sin(lat), -cos(lat) * sin(lon));
+  float w = gFbm(q * vec3(2.2, 4.5, 2.2) + uSeed);
+  float v = gFbm(q * vec3(5.5, 24.0, 5.5) + vec3(w * 1.7, 0.0, w * 1.7) * (0.4 + uTurb) + 7.0);
+  gl_FragColor = vec4(w, v, 0.0, 1.0);
+}`;
+
 const FULLSCREEN_VERT = /* glsl */ `
 varying vec2 vNdc;
 void main() {
@@ -191,21 +218,24 @@ void main() {
   vec3 p = ro + rd * t;
   vec3 N = p / uShellR;
 
-  float lam = dot(N, uSunLocal);
-  float term = smoothstep(-0.14, 0.4, lam);
-  float diff = mix(term * term, max(lam, 0.0), 0.55);
-  float rs = uHasRing > 0.5 ? ringShadowAt(N * uShellR, uSunLocal) : 0.0;
-  diff *= 1.0 - 0.92 * rs;
-  vec3 sunCol = mix(vec3(1.0, 0.5, 0.28), vec3(1.0, 0.95, 0.86), smoothstep(0.0, 0.5, lam));
-  vec3 alb = deckColor(N, uDepth);
-  float mu = abs(dot(N, rd));
-  float limb = mix(0.55, 1.0, pow(mu, 0.3));
-  vec3 night = vec3(0.012, 0.014, 0.022) + vec3(0.02, 0.016, 0.014) * smoothstep(-0.5, 0.0, lam);
-  vec3 col = alb * (sunCol * uStarColor * uSunI * diff * limb + night);
-
   float dist = t * uScale;
   float fog = uInside * (1.0 - exp(-dist / uFogLen));
-  col = mix(col, uFogColor, fog);
+  vec3 col = uFogColor;
+  // Fully fogged pixels (the deep decks seen from the cloud sea) skip the shading entirely.
+  if (fog < 0.995) {
+    float lam = dot(N, uSunLocal);
+    float term = smoothstep(-0.14, 0.4, lam);
+    float diff = mix(term * term, max(lam, 0.0), 0.55);
+    float rs = uHasRing > 0.5 ? ringShadowAt(N * uShellR, uSunLocal) : 0.0;
+    diff *= 1.0 - 0.92 * rs;
+    vec3 sunCol = mix(vec3(1.0, 0.5, 0.28), vec3(1.0, 0.95, 0.86), smoothstep(0.0, 0.5, lam));
+    vec3 alb = deckColor(N, uDepth);
+    float mu = abs(dot(N, rd));
+    float limb = mix(0.55, 1.0, pow(mu, 0.3));
+    vec3 night = vec3(0.012, 0.014, 0.022) + vec3(0.02, 0.016, 0.014) * smoothstep(-0.5, 0.0, lam);
+    col = alb * (sunCol * uStarColor * uSunI * diff * limb + night);
+    col = mix(col, uFogColor, fog);
+  }
 
   float wView = -vd.z * dist;
   gl_FragDepth = log2(1.0 + wView) * logDepthBufFC * 0.5;
@@ -299,13 +329,14 @@ type SharedUniforms = {
   uBandFreq: U<number>;
   uTurb: U<number>;
   uSeed: U<number>;
-  uGasOct: U<number>;
+  uFlowTex: U<Texture | null>;
   uStormN: U<number>;
   uStorm: U<Vector4[]>;
   uStormCol: U<Vector3[]>;
   uHasRing: U<number>;
 } & ReturnType<typeof makeRingUniforms>;
 
+const BAKE_CAM = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const _q = new Quaternion();
 const _inv = new Quaternion();
 const _camRel = new Vector3();
@@ -339,6 +370,8 @@ export class GasGiantView implements BodyView {
   private readonly chartE1 = new Vector3();
   private readonly chartE2 = new Vector3();
   private chartValid = false;
+  private flowRT: WebGLRenderTarget | null = null;
+  private flowSize = 0;
 
   constructor(body: Body) {
     this.body = body;
@@ -383,7 +416,7 @@ export class GasGiantView implements BodyView {
       uBandFreq: { value: gas.bandFrequency },
       uTurb: { value: gas.turbulence },
       uSeed: { value: (body.def.seed % 53) * 1.37 },
-      uGasOct: { value: 4 },
+      uFlowTex: { value: null },
       uStormN: { value: storms.length },
       uStorm: { value: stormVec },
       uStormCol: { value: stormCol },
@@ -493,7 +526,7 @@ export class GasGiantView implements BodyView {
     const fov = (cam.fov * Math.PI) / 180;
     sh.uPixAng.value = (2 * Math.tan(fov / 2)) / (ctx.viewportHeight * ctx.renderer.getPixelRatio());
     sh.uPhase.value = (ctx.simTime / FLOW_PERIOD) % 1;
-    sh.uGasOct.value = quality.settings.gasOctaves;
+    this.ensureFlowTexture(ctx);
 
     const sun = ctx.world.universe.root;
     _sunW.copy(sun.position).sub(b.position).normalize();
@@ -537,6 +570,47 @@ export class GasGiantView implements BodyView {
     }
   }
 
+  /** Bakes the band warp and turbulence noise once per body (and again if the quality size changes). */
+  private ensureFlowTexture(ctx: FrameContext): void {
+    const w = quality.settings.gasOctaves >= 3 ? 4096 : 2048;
+    if (this.flowRT && this.flowSize === w) return;
+    this.flowRT?.dispose();
+    const rt = new WebGLRenderTarget(w, w / 2, {
+      format: RGFormat,
+      depthBuffer: false,
+      generateMipmaps: true,
+      minFilter: LinearMipmapLinearFilter,
+      magFilter: LinearFilter,
+      wrapS: RepeatWrapping,
+      wrapT: ClampToEdgeWrapping,
+    });
+    rt.texture.anisotropy = 4;
+    const gas = this.body.def.gas!;
+    const mat = new ShaderMaterial({
+      uniforms: {
+        uSeed: this.shared.uSeed,
+        uTurb: { value: gas.turbulence },
+        uGasOct: { value: 4 },
+      },
+      vertexShader: FULLSCREEN_VERT,
+      fragmentShader: BAKE_FRAG,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const mesh = new Mesh(new PlaneGeometry(2, 2), mat);
+    mesh.frustumCulled = false;
+    const r = ctx.renderer;
+    const prev = r.getRenderTarget();
+    r.setRenderTarget(rt);
+    r.render(mesh, BAKE_CAM);
+    r.setRenderTarget(prev);
+    mat.dispose();
+    mesh.geometry.dispose();
+    this.flowRT = rt;
+    this.flowSize = w;
+    this.shared.uFlowTex.value = rt.texture;
+  }
+
   private updatePuffs(camM: Vector3, camR: number, up: Vector3, sunTerm: number, D: number, R: number, rot: Quaternion, viewInv: Matrix4): void {
     if (!this.chartValid || up.dot(this.chartUp) < 0.9992) {
       this.chartUp.copy(up);
@@ -572,6 +646,7 @@ export class GasGiantView implements BodyView {
     this.puffs.geometry.dispose();
     this.puffMat.dispose();
     this.rings?.dispose();
+    this.flowRT?.dispose();
   }
 }
 

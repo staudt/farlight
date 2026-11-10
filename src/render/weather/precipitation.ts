@@ -135,7 +135,7 @@ function makeSnow(round: boolean, seed = 9): { object: Points; material: ShaderM
       uColor: { value: new Vector3(1, 1, 1) },
       uSwirl: { value: round ? 0.12 : 1 },
       uRound: { value: round ? 1 : 0 },
-      uGain: { value: round ? 1.3 : 1 },
+      uGain: { value: round ? 0.75 : 1 },
     },
     vertexShader: /* glsl */ `${COMMON_VERT_HEAD}
       attribute float aRand;
@@ -174,7 +174,7 @@ function makeSnow(round: boolean, seed = 9): { object: Points; material: ShaderM
           soft = 1.0 - smoothstep(0.78, 1.0, d);
           float glint = smoothstep(0.55, 0.0, length(q - vec2(-0.3, 0.3)));
           float rim = smoothstep(0.55, 0.95, d);
-          col = mix(uColor * 1.25, uColor * 0.3, rim) + vec3(1.0, 0.92, 0.75) * glint;
+          col = mix(uColor * 1.0, uColor * 0.25, rim) + vec3(1.0, 0.92, 0.75) * glint * 0.3;
           if (soft < 0.4) discard;
           soft = 0.95;
         }
@@ -331,7 +331,7 @@ export class Precipitation {
           (u.uColor!.value as Vector3).set(s, s * 1.0, s * 1.03);
         } else {
           u.uFlake!.value = 0.55 * methaneRainSettings.dropSize;
-          const s = Math.min(1.2, Math.max(0.3, light * flash) * 1.1);
+          const s = Math.min(0.8, Math.max(0.25, light * flash) * 0.8);
           (u.uColor!.value as Vector3).copy(this.methaneColor).multiplyScalar(s);
         }
       }

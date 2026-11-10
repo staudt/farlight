@@ -168,6 +168,7 @@ export class GameRenderer {
     // Planetshine from the dominant body.
     const body = world.ship.frame.body;
     if (body.kind === 'star') {
+      this.fill.intensity = FILL_BASE;
       this.hemi.intensity = 0;
       return;
     }
@@ -182,6 +183,9 @@ export class GameRenderer {
     const near = Math.min(1, (body.radius * 3) / dist);
     this.hemi.groundColor.setRGB(c[0] * day, c[1] * day, c[2] * day);
     const a = body.def.atmosphere ? world.atmosphereDepth : 0;
+    // Under a night sky the camera fill would light the ship like a lamp: fade it with the day factor.
+    const dayF = Math.min(1, Math.max(0, (_up2.dot(sunDir) + 0.15) / 0.4));
+    this.fill.intensity = FILL_BASE * (1 - a * 0.92 * (1 - dayF * dayF * (3 - 2 * dayF)));
     this.hemi.color.setRGB(0.08 + 0.45 * a * day, 0.1 + 0.55 * a * day, 0.16 + 0.75 * a * day);
     this.hemi.intensity = 1.6 * near;
   }
@@ -226,6 +230,7 @@ export class GameRenderer {
 
 const _sunDir = new Vector3();
 const _shake = new Vector3();
+const FILL_BASE = 0.55;
 const _fillDir = new Vector3();
 const _up2 = new Vector3();
 const _sunDir2 = new Vector3();
