@@ -180,6 +180,8 @@ export const config = {
     emissive: 2.2,
     /** Global scale of night glow: city lights, lava, bioluminescence. */
     nightGlow: 1,
+    /** Moonlight and starlight on the night side of a body: cool ambient so terrain still reads. */
+    nightAmbient: 0.08,
   },
   /** Space scenery: asteroid belts, comets and the nebula backdrop. */
   space: {

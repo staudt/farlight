@@ -378,7 +378,7 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
         const white = ((hashInts(baseSeed, cell, which + 53) & 0xff) / 255) < WHITE_LAMP_SHARE;
         const warm = white ? WHITE_LAMP : nl.color;
         const bright = 0.55 + 0.45 * (((hashInts(baseSeed, cell, which + 71) & 0xff) / 255));
-        lit = rnd2 < dTri * clumpF * 0.26 ? bright : 0;
+        lit = rnd2 < dTri * clumpF * 0.5 ? bright : 0;
         lampR = warm[0];
         lampG = warm[1];
         lampB = warm[2];
@@ -405,7 +405,10 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
         if (lampK > 0) {
           // Coarse chunks use the smooth density at half brightness (the average of lit and dark facets).
           // Coarse chunks show the lights map in the shader instead (see `dir`).
-          cityK = lit * sparkle * lampK;
+          // A lamp is a point, not a lit facet: only one corner carries it and it fades across the
+          // triangle, so close up the lights read as many small soft dots.
+          const corner = (hashInts(baseSeed, cell, which + 97) % 3) === q ? 3.0 : 0;
+          cityK = lit * sparkle * lampK * corner;
           e0 += lampR * cityK;
           e1 += lampG * cityK;
           e2 += lampB * cityK;

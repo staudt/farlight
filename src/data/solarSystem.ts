@@ -84,8 +84,8 @@ const earth: BodyDef = {
       { type: 'fbm', frequency: 5000, amplitude: 0.004, octaves: 3 },
     ],
     biomes: [
-      { name: 'snow', color: [0.9, 0.94, 0.98], minHeight: 1.12 },
-      { name: 'ice', color: [0.8, 0.87, 0.94], latitude: [1.3, 1.6] },
+      { name: 'snow', color: [0.5, 0.54, 0.6], minHeight: 1.12 },
+      { name: 'ice', color: [0.46, 0.52, 0.6], latitude: [1.3, 1.6] },
       { name: 'rock', color: [0.34, 0.29, 0.24], minHeight: 0.85 },
       { name: 'beach', color: [0.78, 0.68, 0.4], maxHeight: 0.225 },
       { name: 'desert', color: [0.8, 0.52, 0.2], moisture: [0, 0.2], latitude: [0, 0.8] },
@@ -95,7 +95,7 @@ const earth: BodyDef = {
       { name: 'grass', color: [0.12, 0.4, 0.06] },
     ],
     water: { color: [0.04, 0.46, 0.58], deepColor: [0.01, 0.1, 0.34] },
-    polarCaps: { latitude: 1.32, color: [0.92, 0.95, 0.98] },
+    polarCaps: { latitude: 1.32, color: [0.7, 0.75, 0.82] },
     props: [
       { kind: 'tree', density: 750, color: [0.1, 0.3, 0.12], minSize: 14, maxSize: 32, biomes: ['forest'], maxSlope: 0.75 },
       { kind: 'tree', density: 110, color: [0.2, 0.45, 0.1], minSize: 9, maxSize: 22, biomes: ['grass', 'meadow'], maxSlope: 0.6 },

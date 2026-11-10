@@ -293,6 +293,7 @@ export class PlanetView implements BodyView {
     u.uTime!.value = ctx.realTime;
     updateWaveUniforms(u as unknown as WaveUniforms, this.waterLook, ctx, b.rotation, _cam);
     u.uGlow!.value = config.props.nightGlow;
+    u.uNightAmb!.value = config.props.nightAmbient;
     const pc = config.props;
     for (const m of [this.propMaterial, ...this.glowMaterials.values()]) {
       const pu = m.uniforms;

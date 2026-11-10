@@ -2,7 +2,7 @@ import { Simplex3, billow, fbm, ridged, warp3 } from '../core/noise';
 import type { BodyDef, CraterDef, FeatureDef, NoiseLayer } from '../data/types';
 import { landmarkStamps } from '../data/landmarks';
 import { type HeightSampler, dirToLatLon } from './api';
-import { getMap, sampleMap } from './maps';
+import { getMap, sampleMap, sampleMapSmooth } from './maps';
 
 /** Everything a consumer may want to know about one surface point. */
 export interface TerrainSample {
@@ -201,7 +201,7 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
   /** Heightfield when a land map is present: the map gives continents, noise gives local relief. */
   function mapsHeight(x: number, y: number, z: number): number {
     const ll = dirToLatLon(x, y, z);
-    let sd = (sampleMap(landMap!, ll.lat, ll.lon) * 2 - 1) * rangeKm;
+    let sd = (sampleMapSmooth(landMap!, ll.lat, ll.lon) * 2 - 1) * rangeKm;
     // A small wiggle so coasts are not pixelated close up, a few km only.
     if (sd > -90 && sd < 90) {
       sd += detail.noise(x * 60 + 5, y * 60, z * 60 + 9) * 12 + detail.noise(x * 230, y * 230 + 3, z * 230) * 4;
@@ -209,7 +209,7 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
     const base = coastBase(sd);
     // Local relief only inland; it fades out to the coast so the SDF decides where the shore is.
     const lf = smoothstep(-20, 70, sd);
-    const mtn = mtnMap ? sampleMap(mtnMap, ll.lat, ll.lon) : 0;
+    const mtn = mtnMap ? sampleMapSmooth(mtnMap, ll.lat, ll.lon) : 0;
     let sum = 0;
     if (lf > 0) {
       for (let i = 0; i < layers.length; i++) {

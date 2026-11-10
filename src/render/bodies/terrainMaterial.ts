@@ -16,6 +16,7 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
       uSunIntensity: { value: 1.25 },
       uStarColor: starLight.uniform,
       uGlow: { value: 1 },
+      uNightAmb: { value: 0.08 },
       // Settlement lights map (night side), used by coarse chunks; uLampColor is zero without one.
       uLights: { value: null as Texture | null },
       uLampColor: { value: new Vector3(0, 0, 0) },
@@ -49,6 +50,7 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
       uniform vec3 uSunDirView;
       uniform vec3 uBodyCenterView;
       uniform vec3 uSkyAmbient;
+      uniform float uNightAmb;
       uniform float uTime;
       uniform float uSunIntensity;
       uniform vec3 uStarColor;
@@ -139,6 +141,9 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
         vec3 sunCol = mix(vec3(1.0, 0.5, 0.25), vec3(1.0, 0.96, 0.88), smoothstep(0.0, 0.45, sunR));
         float skyTerm = 0.35 + 0.65 * clamp(dot(N, R), 0.0, 1.0);
         vec3 amb = (vec3(0.025) + uSkyAmbient * skyTerm * (0.25 + 0.75 * term)) * mix(vec3(1.0), uStarColor, 0.6);
+        // Moonlight and starlight: a cool, faint light from a tilted direction so facets still shade.
+        vec3 Mn = normalize(R * 0.6 + normalize(cross(R, L) + vec3(1e-5)) * 0.6);
+        amb += vec3(0.35, 0.5, 1.0) * uNightAmb * (1.0 - term) * (0.3 + 0.7 * clamp(dot(N, Mn), 0.0, 1.0));
         vec3 lightIn = sunCol * uStarColor * uSunIntensity * diffuse + amb;
         vec3 albedo = mix(vColor, uFoamColor, foam * 0.92);
         vec3 col = albedo * lightIn;
@@ -165,7 +170,10 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
         // Self light (settlements, lava): fades in through twilight by the local sun elevation.
         // The atmosphere pass multiplies scene colour by transmittance and adds no night inscatter.
         float night = 1.0 - smoothstep(-0.14, 0.04, sunR);
-        col += vEmit.rgb * (vEmit.a + (1.0 - vEmit.a) * night) * uGlow;
+        vec3 emitC = vEmit.rgb;
+        // Settlement lamps fall off across their triangle; sharpen so they read as small points.
+        if (dot(uLampColor, uLampColor) > 0.0) emitC *= smoothstep(0.25, 2.2, max(max(emitC.r, emitC.g), emitC.b));
+        col += emitC * (vEmit.a + (1.0 - vEmit.a) * night) * uGlow;
         if (vDir.w > 0.0 && dot(vDir.xyz, vDir.xyz) > 0.25 && isWater < 0.5 && dot(uLampColor, uLampColor) > 0.0) {
           // Coarse chunks: the settlement map straight from the body fixed direction.
           vec3 bd = normalize(vDir.xyz);

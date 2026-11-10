@@ -55,6 +55,8 @@ export class DebugPanel {
     props.add(config.props, 'fadeNear', 100, 5000);
     props.add(config.props, 'fadeFar', 200, 8000);
     props.add(config.props, 'emissive', 0, 8);
+    props.add(config.props, 'nightAmbient', 0, 0.3);
+    props.add(config.props, 'nightGlow', 0, 4);
     const lm = this.gui.addFolder('Landmarks').close();
     lm.add(config.landmarks, 'enabled');
     lm.add(config.landmarks, 'discoverRadius', 100, 20000);

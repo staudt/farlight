@@ -90,3 +90,37 @@ export function sampleMap(m: GridMap, lat: number, lon: number): number {
   const b = d[yb * m.w + xa]! * (1 - tx) + d[yb * m.w + xb]! * tx;
   return (a * (1 - ty) + b * ty) / 255;
 }
+
+/** Catmull-Rom weights for a fraction t. */
+function cr(t: number, w: Float64Array): void {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  w[0] = -0.5 * t3 + t2 - 0.5 * t;
+  w[1] = 1.5 * t3 - 2.5 * t2 + 1;
+  w[2] = -1.5 * t3 + 2 * t2 + 0.5 * t;
+  w[3] = 0.5 * t3 - 0.5 * t2;
+}
+const _wx = new Float64Array(4);
+const _wy = new Float64Array(4);
+
+/**
+ * Bicubic (Catmull-Rom) sample as 0..1. Smooth contours for signed distance and mountain maps, so
+ * coasts and ranges stay round when a texel covers several screen pixels. Clamped to 0..1.
+ */
+export function sampleMapSmooth(m: GridMap, lat: number, lon: number): number {
+  const fx = (lon / (2 * Math.PI) + 0.5) * m.w - 0.5;
+  const fy = (0.5 - lat / Math.PI) * m.h - 0.5;
+  const x0 = Math.floor(fx);
+  const y0 = Math.floor(fy);
+  cr(fx - x0, _wx);
+  cr(fy - y0, _wy);
+  const d = m.data;
+  let sum = 0;
+  for (let j = 0; j < 4; j++) {
+    const yy = Math.min(m.h - 1, Math.max(0, y0 - 1 + j));
+    let row = 0;
+    for (let i = 0; i < 4; i++) row += d[yy * m.w + ((((x0 - 1 + i) % m.w) + m.w) % m.w)]! * _wx[i]!;
+    sum += row * _wy[j]!;
+  }
+  return Math.min(1, Math.max(0, sum / 255));
+}
