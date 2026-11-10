@@ -1,6 +1,7 @@
 import type { GameRenderer } from '../renderer';
 import { Contrails } from './contrails';
 import { Reentry } from './reentry';
+import { OceanWake } from './wake';
 import { SpaceDust } from './spaceDust';
 
 export { getShake } from './reentry';
@@ -10,10 +11,12 @@ export function installShipFx(gfx: GameRenderer): void {
   const dust = new SpaceDust();
   const reentry = new Reentry();
   const contrails = new Contrails();
-  gfx.scene.add(dust.object, reentry.object, contrails.object);
+  const wake = new OceanWake();
+  gfx.scene.add(dust.object, reentry.object, contrails.object, wake.object);
   gfx.updaters.push(
     (ctx) => dust.update(ctx),
     (ctx) => reentry.update(ctx),
     (ctx) => contrails.update(ctx),
+    (ctx) => wake.update(ctx),
   );
 }
