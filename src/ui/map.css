@@ -117,3 +117,7 @@ body.touch .map-sub.touch {
     display: none;
   }
 }
+
+.map-card .card-row.dim .v {
+  opacity: 0.5;
+}

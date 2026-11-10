@@ -1,6 +1,8 @@
 import type { GalaxyDef } from '../data/galaxy';
 import { generateSystem } from '../data/generate';
-import { loadProgress, surveyKey, surveyProgress } from '../sim/survey';
+import { landmarkKey, landmarksOf } from '../data/landmarks';
+import type { BodyDef } from '../data/types';
+import { discoveredKeys, loadProgress, surveyKey, systemExploration } from '../sim/survey';
 import type { World } from '../sim/world';
 import { escapeHtml, noDashes } from './format';
 import { STAR_COLORS } from './galaxyPaint';
@@ -54,16 +56,30 @@ export class Journal {
       const star = this.galaxy.stars.find((s) => s.id === id);
       if (!star) continue;
       const here = id === cur;
-      const bodies = here ? this.world.universe.bodies.filter((b) => b.kind !== 'star').map((b) => ({ id: b.id, name: b.name })) : generateSystem(star).bodies.filter((b) => b.kind !== 'star').map((b) => ({ id: b.id, name: b.name }));
-      const prog = surveyProgress(progress, id, bodies.map((b) => b.id));
+      const defs: BodyDef[] = (here ? this.world.universe.bodies.map((b) => b.def) : generateSystem(star).bodies).filter((d) => d.kind !== 'star');
+      const bodies = defs.map((d) => ({ id: d.id, name: d.name }));
+      const prog = systemExploration(progress, id, defs);
       const pct = Math.round(prog.fraction * 100);
       const done = new Set(progress.surveyed);
+      const found = discoveredKeys(progress);
+      const lmHtml = defs
+        .filter((d) => landmarksOf(d).length > 0)
+        .map((d) => {
+          const lms = landmarksOf(d);
+          const seen = lms.filter((l) => found.has(landmarkKey(id, d.id, l.id)));
+          const items = seen
+            .map((l) => `<div class="jr-lm"><b>${escapeHtml(noDashes(l.name))}</b><span>${escapeHtml(noDashes(l.description))}</span></div>`)
+            .join('');
+          const more = lms.length - seen.length;
+          return `<div class="jr-lmbody"><div class="jr-lmhead">${escapeHtml(noDashes(d.name).toUpperCase())} <em>${seen.length}/${lms.length}</em></div>${items}${more > 0 ? `<div class="jr-lm dim">${more} MORE TO FIND</div>` : ''}</div>`;
+        })
+        .join('');
       parts.push(`
         <section class="jr-sys${here ? ' here' : ''}" data-sys="${escapeHtml(id)}">
           <div class="jr-head" data-sys-head="${escapeHtml(id)}">
             <span class="jr-dot" style="background:${STAR_COLORS[star.starClass]};box-shadow:0 0 10px ${STAR_COLORS[star.starClass]}"></span>
             <div class="jr-title"><b>${escapeHtml(noDashes(star.name).toUpperCase())}</b><span>${here ? 'YOU ARE HERE · ' : ''}CLASS ${star.starClass} · ${star.planetCount} PLANETS</span></div>
-            <div class="jr-prog"><div>SURVEYED <b>${prog.done}/${prog.total}</b></div><div class="gm-bar"><i style="width:${pct}%"></i></div></div>
+            <div class="jr-prog"><div>EXPLORED <b>${prog.done}/${prog.total}</b></div><div class="gm-bar"><i style="width:${pct}%"></i></div></div>
           </div>
           <div class="jr-bodies">${bodies
             .map((b) => {
@@ -71,6 +87,7 @@ export class Journal {
               return `<button type="button" class="jr-body${ok ? ' done' : ''}${here ? ' tap' : ''}" ${here ? `data-body="${escapeHtml(b.id)}"` : 'tabindex="-1"'}>${ok ? CHECK : '<i class="box"></i>'}<span>${escapeHtml(noDashes(b.name))}</span></button>`;
             })
             .join('')}</div>
+          ${lmHtml ? `<div class="jr-lms">${lmHtml}</div>` : ''}
         </section>`);
     }
     col.innerHTML = parts.length ? parts.join('') : `<div class="jr-empty">NOTHING LOGGED YET</div>`;

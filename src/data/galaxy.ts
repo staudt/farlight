@@ -43,4 +43,6 @@ export interface PlayerProgress {
   visited: string[];
   /** Body ids (`<systemId>/<bodyId>`) the player has flown close to or landed on. */
   surveyed: string[];
+  /** Discovered landmarks (`<systemId>/<bodyId>/<landmarkId>`). Absent in old saves. */
+  landmarks?: string[];
 }

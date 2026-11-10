@@ -55,6 +55,15 @@ export class DebugPanel {
     props.add(config.props, 'fadeNear', 100, 5000);
     props.add(config.props, 'fadeFar', 200, 8000);
     props.add(config.props, 'emissive', 0, 8);
+    const lm = this.gui.addFolder('Landmarks').close();
+    lm.add(config.landmarks, 'enabled');
+    lm.add(config.landmarks, 'discoverRadius', 100, 20000);
+    lm.add(config.landmarks, 'discoverAltitude', 100, 50000);
+    lm.add(config.landmarks, 'landedRadius', 100, 30000);
+    lm.add(config.landmarks, 'markerRange', 10000, 2000000);
+    lm.add(config.landmarks, 'buildRange', 5000, 500000);
+    lm.add(config.landmarks, 'drawRange', 5000, 600000);
+    lm.add(config.landmarks, 'glow', 0, 5);
 
     const touch = this.gui.addFolder('Touch').close();
     touch.add(config.touch, 'stickRadius', 30, 120);

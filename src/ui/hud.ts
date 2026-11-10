@@ -4,6 +4,7 @@ import { Vector3 } from 'three';
 import { config } from '../core/config';
 import type { Input } from '../input/input';
 import type { GameRenderer } from '../render/renderer';
+import { LandmarkTarget, type Targetable } from '../sim/landmarks';
 import type { Body } from '../sim/universe';
 import type { FlightPhase } from '../sim/warp';
 import type { World } from '../sim/world';
@@ -54,6 +55,7 @@ export class Hud {
   private readonly toast: HTMLElement;
   private readonly toastBig: HTMLElement;
   private readonly toastSmall: HTMLElement;
+  private readonly toastFine: HTMLElement;
   private readonly hints: HTMLElement;
   private readonly prompt: HTMLElement;
 
@@ -94,7 +96,7 @@ export class Hud {
         <div class="crosshair"><i class="h" style="left:-14px"></i><i class="h" style="left:6px"></i><i class="v" style="top:-14px"></i><i class="v" style="top:6px"></i><i class="ring"></i><div class="stickdot" data-k="stick"></div></div>
         <div class="target" data-k="target"><div class="box" data-k="tbox"><i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i><div class="info" data-k="tinfo"></div></div></div>
         <div class="edgearrow" data-k="edge"><i></i><em data-k="elabel"></em></div>
-        <div class="toast" data-k="toast"><div class="big" data-k="tbig"></div><div class="small" data-k="tsmall"></div></div>
+        <div class="toast" data-k="toast"><div class="big" data-k="tbig"></div><div class="small" data-k="tsmall"></div><div class="fine" data-k="tfine"></div></div>
         <div class="hints hud-panel" data-k="hints">LEFT THUMB STEER · RIGHT SLIDER THROTTLE · HOLD BOOST</div>
         <div class="helptag" data-k="helptag"><b>H</b> HELP</div>
         <div class="helppanel hud-panel" data-k="help"><div class="help-row"><b>CLICK</b><span>FLY (CAPTURE MOUSE)</span></div><div class="help-row"><b>MOUSE</b><span>STEER</span></div><div class="help-row"><b>W  S</b><span>THROTTLE LEVER</span></div><div class="help-row"><b>A  D</b><span>ROLL</span></div><div class="help-row"><b>Q  E</b><span>YAW</span></div><div class="help-row"><b>SHIFT</b><span>BOOST</span></div><div class="help-row"><b>X</b><span>BRAKE</span></div><div class="help-row"><b>,  .</b><span>TIME SLOWER OR FASTER</span></div><div class="help-row"><b>C</b><span>FIRST PERSON OR CHASE</span></div><div class="help-row"><b>V</b><span>LOOK AROUND</span></div><div class="help-row"><b>K</b><span>SNAPSHOT</span></div><div class="help-row"><b>P</b><span>PHOTO MODE</span></div><div class="help-row"><b>T</b><span>NEXT TARGET</span></div><div class="help-row"><b>F</b><span>ALIGN TO TARGET</span></div><div class="help-row"><b>M</b><span>SYSTEM MAP</span></div><div class="help-row"><b>G</b><span>GALAXY MAP</span></div><div class="help-row"><b>J</b><span>JOURNAL</span></div><div class="help-row"><b>I</b><span>PLANET INFO</span></div><div class="help-row"><b>O</b><span>SETTINGS</span></div><div class="help-row"><b>U</b><span>HIDE HUD</span></div><div class="help-row"><b>H</b><span>CLOSE HELP</span></div></div>
@@ -127,6 +129,7 @@ export class Hud {
     this.toast = q('toast');
     this.toastBig = q('tbig');
     this.toastSmall = q('tsmall');
+    this.toastFine = q('tfine');
     this.hints = q('hints');
     this.prompt = q('prompt');
 
@@ -187,8 +190,9 @@ export class Hud {
   private cycleTarget(): void {
     const w = this.world;
     const frameBody = w.ship.frame.body;
-    const list = w.universe.bodies
-      .filter((b) => b !== frameBody)
+    // Bodies and the landmarks of the body we are at, nearest first.
+    const pool: Targetable[] = [...w.universe.bodies.filter((b) => b !== frameBody), ...w.landmarks.of(frameBody)];
+    const list = pool
       .map((b) => ({ b, d: b.position.distanceTo(w.shipWorldPos) }))
       .sort((a, b) => a.d - b.d)
       .map((e) => e.b);
@@ -225,16 +229,17 @@ export class Hud {
 
   // Events and toasts
 
-  /** Gentle message from other systems (survey, travel). */
-  notify(big: string, small: string): void {
-    this.showToast(big, small);
+  /** Gentle message from other systems (survey, travel). `fine` is an optional small line under it. */
+  notify(big: string, small: string, fine = ''): void {
+    this.showToast(big, small, fine);
   }
 
-  private showToast(big: string, small: string): void {
+  private showToast(big: string, small: string, fine = ''): void {
     this.toastBig.textContent = noDashes(big);
     this.toastSmall.textContent = noDashes(small);
+    this.toastFine.textContent = noDashes(fine);
     this.toast.classList.add('on');
-    this.toastTimer = TOAST_SECONDS;
+    this.toastTimer = fine ? TOAST_SECONDS * 1.8 : TOAST_SECONDS;
   }
 
   private detectEvents(): void {
@@ -242,6 +247,8 @@ export class Hud {
     const body = w.ship.frame.body;
     const phase = w.phase;
     if (body !== this.lastBody) {
+      // A landmark target only makes sense on its own body.
+      if (w.target instanceof LandmarkTarget && w.target.body !== body) w.target = null;
       this.showToast(body.name, 'SPHERE OF INFLUENCE');
       this.lastBody = body;
       if (body.kind !== 'star') this.showCard();

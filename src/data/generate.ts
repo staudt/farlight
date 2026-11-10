@@ -1,5 +1,6 @@
 import { hashInts, mulberry32 } from '../core/rng';
 import type { GalaxyDef, GalaxyStar, StarClass } from './galaxy';
+import { generateLandmarks, type LandmarkWorld } from './landmarkGen';
 import { makeName, makeUniqueNames, moonName, slug } from './names';
 import { SOLAR_SYSTEM } from './solarSystem';
 import type {
@@ -1354,6 +1355,11 @@ export function generateSystem(star: GalaxyStar): StarSystemDef {
       },
     };
     if (living) hasLiving = true;
+    // Landmarks use their own PRNG stream, so they never shift the draws above or below.
+    if (def.kind === 'rocky' && def.terrain) {
+      const lw: LandmarkWorld = living ? 'living' : (built.archetype as LandmarkWorld);
+      def.landmarks = generateLandmarks(def, lw, radius * GAME_RADIUS_SCALE);
+    }
     planets.push({ def, built });
     bodies.push(def);
 
@@ -1368,6 +1374,7 @@ export function generateSystem(star: GalaxyStar): StarSystemDef {
       const moon = buildMoon(rng, mk, moonName(name, m, style), def, moonRatio, mass);
       const dm = living ? 10 : tEq;
       moon.info.temperature = celsiusText(mk === 'volcanic' ? dm + 60 : dm - 15);
+      moon.landmarks = generateLandmarks(moon, mk === 'ice' ? 'moonIce' : mk === 'volcanic' ? 'moonVolcanic' : 'cratered', moon.physical.radius * GAME_RADIUS_SCALE);
       bodies.push(moon);
       moonRatio *= rng.range(1.45, 2.0);
     }

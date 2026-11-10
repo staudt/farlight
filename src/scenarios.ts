@@ -275,6 +275,31 @@ export const SCENARIOS: Record<string, Scenario> = {
       w.placeInSpace('saturn', saturn.radius * 3.2, flat.clone().multiplyScalar(0.85).addScaledVector(side, 0.25).addScaledVector(pole, -0.4 * sign));
     },
   },
+  'landmark-falls': {
+    description: 'Gliding low toward Victoria Falls, the river stepping off the land into mist',
+    apply: (w) => landmarkApproach(w, 'earth', 'victoria_falls', { distance: 3200, altitude: 420, heading: 180, hour: 10.5, lookLift: 90, throttle: 0.1 }),
+  },
+  'landmark-olympus': {
+    description: 'Over the slopes of Olympus Mons, the summit caldera ahead',
+    apply: (w) => landmarkApproach(w, 'mars', 'olympus_caldera', { distance: 22000, altitude: 3500, heading: 90, hour: 10, lookLift: 200 }),
+  },
+  'landmark-tranquility': {
+    description: 'Low over the Sea of Tranquility, the lander and flag just ahead',
+    apply: (w) => landmarkApproach(w, 'moon', 'tranquility', { distance: 90, altitude: 14, heading: 270, hour: 9, lookLift: 3, throttle: 0.05 }),
+  },
+  'landmark-generated': {
+    description: 'Approaching an arch (or the first landmark) on a generated world',
+    generic: true,
+    apply: (w) => {
+      const wanted = focusBody(w).id;
+      const pool = w.landmarks.all.filter((l) => l.body.id === wanted);
+      const all = pool.length > 0 ? pool : w.landmarks.all;
+      const lm = all.find((l) => l.def.kind === 'arch') ?? all[0];
+      if (!lm) return w.placeInSpace(wanted, w.universe.get(wanted).radius * 3);
+      const r = lm.footprint;
+      landmarkApproach(w, lm.body.id, lm.def.id, { distance: Math.max(700, r * 9), altitude: Math.max(90, r * 1.2), heading: 20, hour: 10, lookLift: lm.footprint * 0.5, throttle: 0.06 });
+    },
+  },
   arrival: {
     description: 'Arriving in a system: the most interesting planet from 6 radii, day side, star off to the side',
     generic: true,
@@ -731,6 +756,32 @@ function findLocalHourTime(w: World, bodyId: string, lonDeg: number, hour: numbe
     }
   }
   return best;
+}
+
+/**
+ * Starts `distance` meters from a landmark and flies toward it on `heading` (degrees from north),
+ * `altitude` meters over the ground there, looking at a point `lookLift` meters above the landmark.
+ */
+function landmarkApproach(
+  w: World,
+  bodyId: string,
+  landmarkId: string,
+  o: { distance: number; altitude: number; heading: number; hour: number; lookLift: number; throttle?: number },
+): void {
+  const lm = w.landmarks.all.find((l) => l.body.id === bodyId && l.def.id === landmarkId);
+  if (!lm) throw new Error(`Unknown landmark ${bodyId}/${landmarkId}`);
+  const body = lm.body;
+  const lon = lm.def.lon;
+  const east = new Vector3(-Math.sin(lon), 0, -Math.cos(lon));
+  const north = new Vector3().crossVectors(lm.dir, east).normalize();
+  const az = o.heading * DEG2RAD;
+  const fwd = north.multiplyScalar(Math.cos(az)).addScaledVector(east, Math.sin(az));
+  const start = lm.dir.clone().multiplyScalar(body.radius).addScaledVector(fwd, -o.distance).normalize();
+  const ll = dirToLatLon(start.x, start.y, start.z);
+  const time = findLocalHourTime(w, bodyId, lon / DEG2RAD, o.hour);
+  w.place({ body: bodyId, lat: ll.lat / DEG2RAD, lon: ll.lon / DEG2RAD, altitude: o.altitude, heading: o.heading, pitch: 0, throttle: o.throttle ?? 0.22, time });
+  const ground = w.groundHeight(body, lm.dir);
+  aimAt(w, () => lm.dir, ground + o.lookLift);
 }
 
 const _dir = new Vector3();

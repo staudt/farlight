@@ -40,6 +40,8 @@ export interface BodyDef {
    */
   effects?: WeatherDef[];
   terrain?: TerrainDef;
+  /** Named places worth finding (see LandmarkDef). Rocky bodies with terrain only. */
+  landmarks?: LandmarkDef[];
   gas?: GasDef;
   rings?: RingDef;
   star?: StarDef;
@@ -232,7 +234,7 @@ export interface CraterDef {
   rimHeight: number;
 }
 
-export type FeatureKind = 'volcano' | 'canyon' | 'spires' | 'mesa';
+export type FeatureKind = 'volcano' | 'canyon' | 'spires' | 'mesa' | 'crater' | 'cliff';
 
 export interface FeatureDef {
   kind: FeatureKind;
@@ -244,6 +246,47 @@ export interface FeatureDef {
   radius: number;
   /** Normalized height contribution. */
   height: number;
+}
+
+export type LandmarkKind =
+  | 'arch'
+  | 'monolith'
+  | 'crystalCanyon'
+  | 'waterfall'
+  | 'craterLake'
+  | 'ruins'
+  | 'giantTree'
+  | 'iceSpire'
+  | 'geyserField'
+  | 'glowingPool'
+  | 'canyon'
+  | 'summit'
+  | 'mesa'
+  | 'crater'
+  | 'lander';
+
+/**
+ * A named place to discover. Terrain shaping goes through the feature stamps (heightfield),
+ * object meshes sit on the shared height sampler (render/landmarks).
+ */
+export interface LandmarkDef {
+  /** Unique within the body. */
+  id: string;
+  name: string;
+  kind: LandmarkKind;
+  /** Radians, east is +lon (terrain/api.ts). */
+  lat: number;
+  lon: number;
+  /** Footprint radius as a fraction of the body's game radius. */
+  radius: number;
+  /** Main vertical size (mesh height or terrain relief) as a fraction of the game radius. */
+  height?: number;
+  /** One short evocative line, no dashes. */
+  description: string;
+  /** Tint of crystals, water, stones or glow, linear RGB. Per kind default when omitted. */
+  color?: RGB;
+  /** The terrain already has the shape (a volcano, a canyon): add the meshes only. */
+  noStamp?: boolean;
 }
 
 export interface BiomeDef {
