@@ -145,7 +145,9 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
         if (isWater > 0.5) {
           vec3 H = normalize(L + V);
           float nh = max(dot(N, H), 0.0);
-          float sparkle = 0.55 + 0.45 * sin(uTime * 2.3 + crest * 5.0 + dot(uWaveK[0], vViewPos) * 0.5);
+          float sparkleRaw = 0.55 + 0.45 * sin(uTime * 2.3 + crest * 5.0 + dot(uWaveK[0], vViewPos) * 0.5);
+          // Far away the phase term is huge and aliases into concentric rings on the glint: settle on the mean.
+          float sparkle = mix(sparkleRaw, 0.8, smoothstep(2000.0, 20000.0, dist));
           float sparkleFar = 1.0 - 0.55 * smoothstep(3000.0, 60000.0, dist);
           // The glitter path: tight highlights where wave facets mirror the sun, a soft sheen around them.
           float spec = (pow(nh, 220.0) * 3.2 * sparkle * sparkleFar + pow(nh, 40.0) * 0.18 + pow(nh, 8.0) * 0.05) * term * (1.0 - foam);
