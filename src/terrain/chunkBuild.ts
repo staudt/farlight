@@ -208,8 +208,11 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
           }
         }
         const sign = w ? 1 : -1;
-        // Nothing within reach: a lower bound just past the band, so it interpolates smoothly.
-        const dist = best === Infinity ? (reach + 0.5) * cellM : Math.min(best, (reach + 0.5) * cellM);
+        // Nothing within reach: well past the band.
+        // Fine chunks only look 9 facets around, which is far less than a band: without a floor they would read as
+        // "near the coast" everywhere and show foam and shallows as a disc of the finest chunks.
+        const far = Math.max((reach + 0.5) * cellM, 4 * band);
+        const dist = best === Infinity ? far : Math.min(best, far);
         shoreN[k] = (sign * Math.max(0, dist - 0.5 * cellM)) / band;
       }
     }
@@ -258,6 +261,40 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
       }
     }
   };
+
+  // Water depth colour is smoothed over a few facets: fine relief in shallows would otherwise tint every
+  // facet differently, which only the finest chunks resolve (a disc of zigzag around the ship).
+  {
+    const src = vcol.slice();
+    const R = 3;
+    for (let j = 0; j < V; j++) {
+      for (let i = 0; i < V; i++) {
+        const k = i + j * V;
+        if (!samples[k]!.water) continue;
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        let n = 0;
+        for (let dj = -R; dj <= R; dj++) {
+          const jj = j + dj;
+          if (jj < 0 || jj >= V) continue;
+          for (let di = -R; di <= R; di++) {
+            const ii = i + di;
+            if (ii < 0 || ii >= V) continue;
+            const k2 = ii + jj * V;
+            if (!samples[k2]!.water) continue;
+            r += src[k2 * 3]!;
+            g += src[k2 * 3 + 1]!;
+            b += src[k2 * 3 + 2]!;
+            n++;
+          }
+        }
+        vcol[k * 3] = r / n;
+        vcol[k * 3 + 1] = g / n;
+        vcol[k * 3 + 2] = b / n;
+      }
+    }
+  }
 
   // Pass 1: colors per triangle.
   const classify = (a: number, b: number, c: number, cell: number, which: number): void => {

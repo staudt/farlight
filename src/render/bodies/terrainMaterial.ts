@@ -115,7 +115,7 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
             wsum += L0 * fade;
           }
           wTilt = (wTilt - R * dot(wTilt, R)) * uWaveAmp;
-          N = normalize(N - wTilt * 1.0 + vec3(sin(uTime * 1.3 + vWater.y * 91.0), sin(uTime * 0.9 + vWater.y * 40.0), sin(uTime * 0.7 + vWater.y * 17.0)) * 0.012);
+          N = normalize(N - wTilt); // no per facet noise: finest chunks would show it as a zigzag disc
           crest = smoothstep(0.15, 0.85, hsum / max(wsum, 1.0));
           // Lapping shore bands travelling toward the coast, broken up by the swell.
           float W = max(uFoamWidth, 1e-3);
@@ -145,7 +145,7 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
         if (isWater > 0.5) {
           vec3 H = normalize(L + V);
           float nh = max(dot(N, H), 0.0);
-          float sparkle = 0.55 + 0.45 * sin(uTime * 2.3 + vWater.y * 300.0 + crest * 5.0);
+          float sparkle = 0.55 + 0.45 * sin(uTime * 2.3 + crest * 5.0 + dot(uWaveK[0], vViewPos) * 0.5);
           float sparkleFar = 1.0 - 0.55 * smoothstep(3000.0, 60000.0, dist);
           // The glitter path: tight highlights where wave facets mirror the sun, a soft sheen around them.
           float spec = (pow(nh, 220.0) * 3.2 * sparkle * sparkleFar + pow(nh, 40.0) * 0.18 + pow(nh, 8.0) * 0.05) * term * (1.0 - foam);
@@ -155,7 +155,9 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
           // Light through the crests: turquoise glow, stronger in shallows and looking toward the sun.
           float shallow = 1.0 - smoothstep(0.0, 3.5, shore);
           float toSun = clamp(dot(-V, L) * 0.5 + 0.5, 0.0, 1.0);
-          float sssK = crest * (0.35 + 0.65 * toSun) * (0.7 + 0.8 * shallow) * term * (1.0 - foam);
+          // Crest light is a close range effect: far away the chevrons of the fine swells alias into a hard edged zigzag disc.
+          float sssNear = 1.0 - smoothstep(120.0, 700.0, dist);
+          float sssK = mix(0.32, crest, sssNear) * (0.35 + 0.65 * toSun) * (0.7 + 0.8 * shallow) * term * (1.0 - foam);
           col += uSssColor * sunCol * uStarColor * uSunIntensity * sssK * 0.2;
         }
         // Self light (settlements, lava): fades in through twilight by the local sun elevation.
