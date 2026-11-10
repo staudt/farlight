@@ -1,5 +1,6 @@
 import { config } from '../core/config';
 import type { Action, Input } from './input';
+import { settings } from '../ui/settingsStore';
 import { shapeAxis } from './touchMath';
 
 /** The subset of the Gamepad API the mapping reads, so tests can pass plain objects. */
@@ -169,28 +170,20 @@ export class GamepadControls {
   private index = -1;
   private backHeld = 0;
   private backFired = false;
+  private startHeld = 0;
+  private startFired = false;
 
   constructor(
     private readonly input: Input,
     private readonly ctx: PadContext,
   ) {
-    try {
-      if (localStorage.getItem('farlight.padInvertPitch') === '1') config.gamepad.invertPitch = true;
-    } catch {
-      /* storage may be blocked */
-    }
     window.addEventListener('gamepaddisconnected', (e) => {
       if (e.gamepad.index === this.index) this.drop();
     });
   }
 
   setInvert(on: boolean): void {
-    config.gamepad.invertPitch = on;
-    try {
-      localStorage.setItem('farlight.padInvertPitch', on ? '1' : '0');
-    } catch {
-      /* ignore */
-    }
+    settings.set('invertPad', on); // persisted; applied to config by the settings listener
   }
 
   private onConnect(pad: Gamepad): void {
@@ -268,8 +261,26 @@ export class GamepadControls {
       this.backFired = false;
     }
 
+    // Start: a tap opens the galaxy map on release, a 0.6 s hold opens settings.
+    const start = pad.buttons[BTN.START]?.pressed ?? false;
+    if (mode === 'flight') {
+      if (start) {
+        this.startHeld += realDt;
+        if (!this.startFired && this.startHeld >= config.gamepad.snapshotHold) {
+          this.startFired = true;
+          this.input.emit('settings');
+        }
+      } else if (this.prev[BTN.START] && !this.startFired) {
+        this.input.emit('galaxy');
+      }
+    }
+    if (!start) {
+      this.startHeld = 0;
+      this.startFired = false;
+    }
+
     for (const b of risingEdges(this.prev, pad)) {
-      if (b === BTN.BACK && mode === 'flight') continue;
+      if ((b === BTN.BACK || b === BTN.START) && mode === 'flight') continue;
       const action = actionFor(b, mode);
       if (action) this.input.emit(action);
       else if (mode === 'overlay' && ARROWS[b]) {

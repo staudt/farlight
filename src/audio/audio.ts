@@ -146,6 +146,8 @@ const ENGINE_MULTS = [1, 0.5, 1.007];
 export class AudioEngine {
   tuning: AudioTuning = defaultTuning();
   muted = false;
+  /** Player volume multipliers from the settings screen, 0..1. */
+  volume = { master: 1, music: 1, fx: 1 };
 
   private world: World;
   private ctx: AudioContext | null = null;
@@ -383,32 +385,33 @@ export class AudioEngine {
     this.t += dt;
     const now = ctx.currentTime;
     const tu = this.tuning;
+    const fx = this.volume.fx;
     const s = this.snapshot();
     const ramp = (p: AudioParam, v: number, tc: number): void => {
       p.setTargetAtTime(v, now, tc);
     };
 
-    ramp(this.master.gain, this.muted ? 0 : tu.master, 0.3);
+    ramp(this.master.gain, this.muted ? 0 : tu.master * this.volume.master, 0.3);
 
     const e = engineTargets(s);
-    ramp(this.engGain.gain, e.gain * tu.engine, 0.4);
+    ramp(this.engGain.gain, e.gain * tu.engine * fx, 0.4);
     ramp(this.engFilter.frequency, e.cutoff, 0.4);
     ramp(this.engBright.gain, e.boostGain, 0.3);
     this.engOscs.forEach((o, i) => ramp(o.frequency, e.freq * ENGINE_MULTS[i]!, 0.35));
 
     const w = windTargets(s);
-    ramp(this.windGain.gain, w.gain * tu.wind, 0.5);
+    ramp(this.windGain.gain, w.gain * tu.wind * fx, 0.5);
     ramp(this.windBand.frequency, w.bandFreq, 0.5);
     ramp(this.windLow.frequency, w.lowpass, 0.5);
-    ramp(this.gustLfo.gain, 0.25 * w.gain * tu.wind, 1);
-    ramp(this.roarGain.gain, w.roar * tu.wind, 0.6);
+    ramp(this.gustLfo.gain, 0.25 * w.gain * tu.wind * fx, 1);
+    ramp(this.roarGain.gain, w.roar * tu.wind * fx, 0.6);
 
-    ramp(this.droneGainNode.gain, droneGain(s) * tu.drone, 2.5);
+    ramp(this.droneGainNode.gain, droneGain(s) * tu.drone * this.volume.music, 2.5);
 
     const sf = surfaceTargets(s);
-    ramp(this.airGain.gain, sf.airGain * tu.surface, 1.5);
+    ramp(this.airGain.gain, sf.airGain * tu.surface * fx, 1.5);
     ramp(this.airFilter.frequency, sf.airCutoff, 1.5);
-    ramp(this.humGain.gain, sf.humGain * tu.surface, 1.5);
+    ramp(this.humGain.gain, sf.humGain * tu.surface * fx, 1.5);
 
     if (this.t > this.nextChord) {
       this.nextChord = this.t + 20 + Math.random() * 20;
@@ -422,7 +425,7 @@ export class AudioEngine {
     }
     if (this.t > this.nextChime) {
       this.nextChime = this.t + 8 + Math.random() * 12;
-      if (sf.chimes) this.chime(ctx, tu.surface);
+      if (sf.chimes) this.chime(ctx, tu.surface * fx);
     }
 
     if (s.phase !== this.prevPhase) {
@@ -464,7 +467,7 @@ export class AudioEngine {
     f.frequency.exponentialRampToValueAtTime(f1, t0 + dur * 0.8);
     const g = ctx.createGain();
     g.gain.setValueAtTime(0, t0);
-    g.gain.linearRampToValueAtTime(peak * this.tuning.cues, t0 + attack);
+    g.gain.linearRampToValueAtTime(peak * this.tuning.cues * this.volume.fx, t0 + attack);
     g.gain.setTargetAtTime(0, t0 + attack, (dur - attack) / 3);
     src.connect(f).connect(g);
     g.connect(this.master);
@@ -480,7 +483,7 @@ export class AudioEngine {
       o.frequency.setValueAtTime(90, t0);
       o.frequency.exponentialRampToValueAtTime(40, t0 + 0.3);
       const g = ctx.createGain();
-      g.gain.setValueAtTime(0.5 * this.tuning.cues, t0);
+      g.gain.setValueAtTime(0.5 * this.tuning.cues * this.volume.fx, t0);
       g.gain.setTargetAtTime(0, t0 + 0.02, 0.12);
       o.connect(g).connect(this.master);
       o.start(t0);
@@ -498,7 +501,7 @@ export class AudioEngine {
     o.type = 'sine';
     o.frequency.value = 1320;
     const g = ctx.createGain();
-    g.gain.setValueAtTime(0.08 * this.tuning.cues, t0);
+    g.gain.setValueAtTime(0.08 * this.tuning.cues * this.volume.fx, t0);
     g.gain.setTargetAtTime(0, t0, 0.015);
     o.connect(g).connect(this.master);
     o.start(t0);
@@ -519,7 +522,7 @@ export class AudioEngine {
     f.frequency.setValueAtTime(p.cutoff, t0);
     f.frequency.exponentialRampToValueAtTime(Math.max(50, p.cutoff * 0.3), t0 + p.duration);
     const g = ctx.createGain();
-    const peak = p.gain * this.tuning.thunder;
+    const peak = p.gain * this.tuning.thunder * this.volume.fx;
     g.gain.setValueAtTime(0, t0);
     g.gain.linearRampToValueAtTime(peak, t0 + 0.15);
     // Rolling: a few decaying swells.

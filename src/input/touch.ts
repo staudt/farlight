@@ -3,6 +3,7 @@ import type { GameRenderer } from '../render/renderer';
 import type { World } from '../sim/world';
 import type { Action, Input } from './input';
 import { clampKnob, sliderValue, stickToAxes, tiltFromOrientation, tiltToAxes, type Tilt } from './touchMath';
+import { settings } from '../ui/settingsStore';
 import './touch.css';
 
 /** Touch devices, or forced with ?touch. Touch laptops with a mouse keep desktop controls. */
@@ -31,6 +32,7 @@ const ICONS = {
   menu: I('<circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/>'),
   info: I('<circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.8" r=".7" fill="currentColor"/>'),
   look: I('<circle cx="12" cy="12" r="3.2"/><path d="M12 3a9 9 0 0 1 9 9M12 21a9 9 0 0 1-9-9"/><path d="M19 4l2 2-3 .5zM5 20l-2-2 3-.5z" fill="currentColor"/>'),
+  settings: I('<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>'),
   invert: I('<path d="M8 5v14M5 8l3-3 3 3M16 19V5M13 16l3 3 3-3"/>'),
 };
 
@@ -67,10 +69,10 @@ const MENU: MenuRow[] = [
   { key: 'hud', label: 'Hide HUD', tap: 'hud' },
   { key: 'tilt', label: 'Tilt steering', stay: true },
   { key: 'invert', label: 'Invert stick', stay: true },
+  { key: 'settings', label: 'Settings', tap: 'settings' },
   { key: 'info', label: 'Planet info', tap: 'info' },
 ];
 
-const INVERT_KEY = 'farlight.invertStick'; // new meaning: default is push up = nose up
 
 function isIos(): boolean {
   const n = navigator;
@@ -305,23 +307,14 @@ export class TouchControls {
       this.syncButtons();
     });
     this.rows.get('invert')!.addEventListener('click', () => {
-      config.touch.invertPitch = !config.touch.invertPitch;
-      try {
-        localStorage.setItem(INVERT_KEY, config.touch.invertPitch ? '1' : '0');
-      } catch {
-        /* storage may be blocked */
-      }
+      settings.set('invertStick', !settings.get('invertStick')); // applied through onChange below
       this.syncButtons();
     });
     this.rows.get('tilt')!.addEventListener('click', () => void this.toggleTilt());
     const full = this.buttons.get('full')!;
     if (!document.documentElement.requestFullscreen) full.style.display = 'none';
     full.addEventListener('click', () => void this.toggleFullscreen());
-    try {
-      if (localStorage.getItem(INVERT_KEY) === '1') config.touch.invertPitch = true;
-    } catch {
-      /* ignore */
-    }
+    settings.onChange(() => this.syncButtons());
     this.armFullscreen();
   }
 
@@ -332,7 +325,7 @@ export class TouchControls {
   }
 
   private syncButtons(): void {
-    this.rows.get('invert')!.classList.toggle('active', config.touch.invertPitch);
+    this.rows.get('invert')!.classList.toggle('active', settings.get('invertStick'));
     this.rows.get('look')!.classList.toggle('active', this.input.lookMode);
     this.rows.get('tilt')!.classList.toggle('active', this.tiltOn);
     this.rows.get('align')!.classList.toggle('active', this.alignLatched);
