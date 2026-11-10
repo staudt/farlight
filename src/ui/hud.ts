@@ -4,6 +4,8 @@ import { Vector3 } from 'three';
 import { config } from '../core/config';
 import type { Input } from '../input/input';
 import type { GameRenderer } from '../render/renderer';
+import { DEFAULT_SCALE } from '../data/scale';
+import { beltAt, scaleBelts, type ScaledBelt } from '../render/space/spaceData';
 import { LandmarkTarget, type Targetable } from '../sim/landmarks';
 import type { Body } from '../sim/universe';
 import type { FlightPhase } from '../sim/warp';
@@ -78,6 +80,7 @@ export class Hud {
     private readonly gfx: GameRenderer,
     private readonly input: Input,
   ) {
+    this.belts = scaleBelts(world.universe.system, DEFAULT_SCALE);
     this.lastPhase = world.phase;
     this.lastBody = world.ship.frame.body;
     root.innerHTML = `
@@ -174,6 +177,8 @@ export class Hud {
   }
 
   private hintsDismissed = false;
+  private inBelt: ScaledBelt | null = null;
+  private readonly belts: ScaledBelt[];
 
   /** Shows the body card for a few seconds, then it fades. */
   showCard(): void {
@@ -191,7 +196,7 @@ export class Hud {
     const w = this.world;
     const frameBody = w.ship.frame.body;
     // Bodies and the landmarks of the body we are at, nearest first.
-    const pool: Targetable[] = [...w.universe.bodies.filter((b) => b !== frameBody), ...w.landmarks.of(frameBody)];
+    const pool: Targetable[] = [...w.universe.bodies.filter((b) => b !== frameBody), ...w.landmarks.of(frameBody), ...w.comets];
     const list = pool
       .map((b) => ({ b, d: b.position.distanceTo(w.shipWorldPos) }))
       .sort((a, b) => a.d - b.d)
@@ -260,6 +265,20 @@ export class Hud {
       else if (was === 'atmosphere') this.showToast(body.name, 'LEAVING ATMOSPHERE');
     }
     this.lastPhase = phase;
+    this.detectBelt();
+  }
+
+  /** A calm toast when the ship drifts into or out of an asteroid belt. */
+  private detectBelt(): void {
+    const w = this.world;
+    const star = w.universe.root.position;
+    const p = w.shipWorldPos;
+    const now = beltAt(this.belts, p.x - star.x, p.y - star.y, p.z - star.z, this.inBelt);
+    if (now === this.inBelt) return;
+    const was = this.inBelt;
+    this.inBelt = now;
+    if (now) this.showToast(now.def.name.toUpperCase(), 'ENTERING');
+    else if (was) this.showToast(was.def.name.toUpperCase(), 'LEAVING');
   }
 
   // Compass

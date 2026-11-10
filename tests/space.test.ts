@@ -5,7 +5,8 @@ import { DEFAULT_SCALE } from '../src/data/scale';
 import { SOLAR_SYSTEM } from '../src/data/solarSystem';
 import { isBinaryStar } from '../src/data/spaceScenery';
 import { Universe } from '../src/sim/universe';
-import { ROCK_LEVELS, type Rock, beltDensity, cometState, cometTails, scaleBelts, scaleComets, rockInCell } from '../src/render/space/spaceData';
+import { World } from '../src/sim/world';
+import { ROCK_LEVELS, type Rock, beltAt, beltDensity, cometState, cometTails, scaleBelts, scaleComets, rockInCell } from '../src/render/space/spaceData';
 
 const galaxy = createGalaxy();
 const generated = galaxy.stars.filter((s) => s.id !== 'sol');
@@ -26,6 +27,28 @@ describe('asteroid belts', () => {
     expect(beltDensity(main, main.inner * 0.8, 0)).toBe(0);
     expect(beltDensity(main, main.outer * 1.2, 0)).toBe(0);
     expect(beltDensity(main, main.mid, main.halfThickness * 4)).toBeLessThan(0.001);
+  });
+
+  test('belt membership has hysteresis at the edge', () => {
+    expect(beltAt(belts, main.mid, 0, 0)).toBe(main);
+    expect(beltAt(belts, main.inner * 0.5, 0, 0)).toBeNull();
+    // Just inside the soft edge: not entered from outside, but kept from inside.
+    const edge = main.inner + (main.outer - main.inner) * 0.06;
+    expect(beltAt(belts, edge, 0, 0, null)).toBeNull();
+    expect(beltAt(belts, edge, 0, 0, main)).toBe(main);
+  });
+
+  test('comets are targetable like landmarks', () => {
+    const w = new World(SOLAR_SYSTEM);
+    expect(w.comets.length).toBe(SOLAR_SYSTEM.comets?.length);
+    const c = w.comets[0]!;
+    expect(c.name.length).toBeGreaterThan(0);
+    expect(c.position.length()).toBeGreaterThan(0);
+    const before = c.position.clone();
+    c.update(1e7);
+    expect(c.position.distanceTo(before)).toBeGreaterThan(0);
+    w.target = c;
+    expect(w.target.radius).toBeGreaterThan(0);
   });
 
   test('rocks are deterministic per cell and respect the belt profile', () => {

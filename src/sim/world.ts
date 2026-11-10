@@ -3,6 +3,7 @@ import { config } from '../core/config';
 import type { StarSystemDef } from '../data/types';
 import { FLAT_SAMPLER, type HeightSampler, latLonToDir } from '../terrain/api';
 import { SimClock } from './clock';
+import { makeCometTargets, type CometTarget } from './comets';
 import { LandmarkField, type Targetable } from './landmarks';
 import {
   type Frame,
@@ -65,6 +66,7 @@ export class World {
   atmosphereDepth = 0;
   target: Targetable | null = null;
   readonly landmarks: LandmarkField;
+  readonly comets: CometTarget[];
   /** Set when the auto drop lowered the warp this step. */
   warpDropped = false;
   readonly shipWorldPos = new Vector3();
@@ -81,6 +83,8 @@ export class World {
     this.ship = new Ship({ body: home, rotating: false });
     this.ship.pos.set(0, 0, home.radius * 3);
     this.landmarks = new LandmarkField(this);
+    this.comets = makeCometTargets(system);
+    for (const c of this.comets) c.update(startTime);
     this.updateSnapshot();
   }
 
@@ -230,6 +234,7 @@ export class World {
     frameToWorldVel(s.frame, s.pos, s.vel, this.shipWorldVel);
     frameToWorldQuat(s.frame, s.quat, this.shipWorldQuat);
     this.landmarks.update();
+    for (const c of this.comets) c.update(this.universe.time);
   }
 
   /** World direction -> ship frame direction (for align to target). */
