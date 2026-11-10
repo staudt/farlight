@@ -35,6 +35,7 @@ Io beneath a looming Jupiter, Saturn's rings, and a dive into Jupiter's cloud se
 | H | Show or hide the key help |
 | U | Hide the HUD |
 | N | Mute |
+| O | Settings (quality, sensitivity, invert, volumes, FOV, HUD size) |
 | F3 | Tuning panel |
 
 **On a phone** (landscape): left thumb anywhere steers with a floating stick, the right edge slider
@@ -43,6 +44,8 @@ warp, camera, map, target, hold to align, HUD, tilt steering and fullscreen.
 
 **Gamepad:** left stick steers, right stick looks, triggers throttle, bumpers roll, A boost, B brake,
 X hold to align, Y next target, D-pad for time and camera, Start for the galaxy map.
+
+Your last flight resumes when you come back. On a phone, Add to Home Screen to install it (it also works offline).
 
 Fly slowly near the ground to land. Once landed, you can warp time to watch sunsets and moonrises.
 
