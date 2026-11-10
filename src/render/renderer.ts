@@ -20,6 +20,7 @@ import { quality } from './quality';
 import { starLight } from './starLight';
 import { Starfield } from './sky/starfield';
 import { ShipView } from './ship/shipView';
+import { Cockpit } from './ship/cockpit';
 
 const BASE_SUN_LIGHT = 3;
 
@@ -36,6 +37,7 @@ export class GameRenderer {
   readonly shipCamera = new ShipCamera();
   readonly starfield = new Starfield();
   readonly shipView = new ShipView();
+  readonly cockpit = new Cockpit();
   readonly bodyViews: BodyView[] = [];
   readonly sunLight = new DirectionalLight(0xffffff, BASE_SUN_LIGHT);
   readonly ambient = new AmbientLight(0x223344, 0.18);
@@ -65,7 +67,7 @@ export class GameRenderer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, config.render.pixelRatioMax, quality.settings.pixelRatioMax));
 
     this.camera = new PerspectiveCamera(config.camera.fov, 1, config.render.near, config.render.far);
-    this.scene.add(this.camera, this.starfield.object, this.shipView.object, this.sunLight, this.sunLight.target);
+    this.scene.add(this.camera, this.starfield.object, this.shipView.object, this.cockpit.object, this.sunLight, this.sunLight.target);
     this.scene.add(this.ambient, this.hemi, this.fill, this.fill.target);
 
     for (const body of world.universe.bodies) {
@@ -207,6 +209,9 @@ export class GameRenderer {
     for (const v of this.bodyViews) v.update(ctx);
     this.shipView.update(ctx);
     this.shipView.object.visible = this.shipCamera.override ? this.shipCamera.override.shipVisible : this.shipCamera.showsShip;
+    const inside = !this.shipCamera.override && !this.shipCamera.showsShip;
+    this.cockpit.object.visible = inside;
+    if (inside) this.cockpit.update(ctx, this.camera.aspect);
     for (const u of this.updaters) u(ctx);
 
     this.renderFn(ctx);

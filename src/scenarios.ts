@@ -58,6 +58,14 @@ export const SCENARIOS: Record<string, Scenario> = {
     description: 'Low along the green coast of Portugal in the morning',
     apply: (w) => w.place({ body: 'earth', lat: 39.4, lon: -8.6, altitude: 1500, heading: 330, pitch: 2, throttle: 0.6, time: findLocalHourTime(w, 'earth', -8.6, 8.5) }),
   },
+  'cockpit-earth': {
+    description: 'Cockpit view low over the Portuguese coast in the morning',
+    apply: (w) => w.place({ body: 'earth', lat: 38.7, lon: -9.4, altitude: 700, heading: 20, pitch: 0, throttle: 0.55, time: findLocalHourTime(w, 'earth', -9.4, 8.5) }),
+  },
+  'cockpit-night': {
+    description: 'Cockpit view low over dark land at night',
+    apply: (w) => w.place({ body: 'earth', lat: 39.5, lon: -104, altitude: 800, heading: 90, pitch: 0, throttle: 0.5, time: findLocalHourTime(w, 'earth', -104, 23.5) }),
+  },
   'earth-surface-day': {
     description: 'Landed in the Kenyan highlands at noon',
     apply: (w) => w.place({ body: 'earth', lat: -0.5, lon: 36.5, altitude: 0, heading: 0, landed: true, time: findLocalHourTime(w, 'earth', 36.5, 13) }),
