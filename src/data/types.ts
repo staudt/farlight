@@ -21,6 +21,57 @@ export interface StarSystemDef {
   seed: number;
   /** Ordered so that parents come before children. The first body is the root star. */
   bodies: BodyDef[];
+  /** Asteroid belts around the root star (real AU, scaled like orbits). */
+  belts?: BeltDef[];
+  /** Comets on eccentric rails around the root star. A separate list: nothing iterates these as bodies. */
+  comets?: CometDef[];
+  /** Backdrop painted into the sky sphere (nebula and galactic band). */
+  sky?: SkyDef;
+}
+
+export interface BeltDef {
+  name: string;
+  /** Real AU from the root star, scaled by the ScaleProfile like planet orbits. */
+  innerAU: number;
+  outerAU: number;
+  /** Dots in the far dusty band. */
+  count: number;
+  /** Half thickness of the belt as a fraction of its mean radius. */
+  thickness: number;
+  /** Rock color (linear RGB). */
+  color: RGB;
+  /** Near rock size range, game meters. Rarer mid and km scale rocks derive from sizeMax. */
+  sizeMin: number;
+  sizeMax: number;
+  seed: number;
+}
+
+export interface CometDef {
+  id: string;
+  name: string;
+  seed: number;
+  /** Real heliocentric orbit around the root star (very eccentric). */
+  orbit: OrbitDef;
+  /** Nucleus radius, game meters. */
+  nucleusRadius: number;
+  /** Full tail length in real AU at peak activity (scaled like orbits). */
+  tailAU: number;
+  /** Tails and coma develop inside this real distance from the star, AU. */
+  activityAU: number;
+  ionColor: RGB;
+  dustColor: RGB;
+}
+
+export interface SkyDef {
+  /** Two or three nebula tints, linear RGB 0..1. */
+  colors: RGB[];
+  /** Cloud brightness, 0..1.5. */
+  intensity: number;
+  /** Galactic band glow, 0..1.5. */
+  band: number;
+  /** Cloud feature size multiplier (1 default; bigger = larger clouds). */
+  scale: number;
+  seed: number;
 }
 
 export interface BodyDef {

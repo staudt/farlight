@@ -89,6 +89,10 @@ export class Starfield {
     this.object.renderOrder = -10;
   }
 
+  get brightness(): number {
+    return this.material.uniforms.uBrightness!.value as number;
+  }
+
   set brightness(v: number) {
     this.material.uniforms.uBrightness!.value = v;
   }

@@ -1,5 +1,6 @@
 import { mulberry32 } from '../core/rng';
 import type { GalaxyDef, StarClass } from '../data/galaxy';
+import { isBinaryStar } from '../data/spaceScenery';
 import { galaxyArms, GALAXY_RADIUS, SPIRAL_PITCH, SPIRAL_R0 } from '../data/generate';
 
 /** How far past the disc radius the painted texture reaches. */
@@ -137,4 +138,13 @@ export function paintBackdrop(w: number, h: number, seed = 5): HTMLCanvasElement
     g.fillRect(Math.floor(rnd() * w), Math.floor(rnd() * h), s, s);
   }
   return c;
+}
+
+/** Binary systems get a small second dot beside the star marker. Cheap: the seed alone says whether a star is binary. */
+export function drawBinaryMark(ctx: CanvasRenderingContext2D, star: { id: string; seed: number }, x: number, y: number, r: number, color: string): void {
+  if (!isBinaryStar(star)) return;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x + r * 1.9, y - r * 0.7, Math.max(1, r * 0.55), 0, Math.PI * 2);
+  ctx.fill();
 }

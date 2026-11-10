@@ -156,6 +156,20 @@ export const config = {
     /** Global scale of night glow: city lights, lava, bioluminescence. */
     nightGlow: 1,
   },
+  /** Space scenery: asteroid belts, comets and the nebula backdrop. */
+  space: {
+    enabled: true,
+    /** Near rock density multiplier (0 hides the rocks, the far band stays). */
+    rockDensity: 1,
+    /** Far dusty band brightness. */
+    beltDust: 1,
+    /** Comet coma and tail brightness. */
+    cometGlow: 1,
+    /** Comet tail length multiplier. */
+    cometTail: 1,
+    /** Nebula backdrop brightness. */
+    nebula: 1,
+  },
   debug: {
     showPanel: false,
   },

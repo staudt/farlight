@@ -840,3 +840,31 @@ export const SOLAR_SYSTEM: StarSystemDef = {
   seed: 1977,
   bodies: [sun, mercury, venus, earth, moon, mars, phobos, deimos, jupiter, io, europa, ganymede, callisto, saturn, titan, uranus, neptune],
 };
+
+// Space scenery: belts, a bright comet inbound near Earth's orbit, and the Milky Way backdrop.
+SOLAR_SYSTEM.belts = [
+  { name: 'MAIN BELT', innerAU: 2.2, outerAU: 3.2, count: 5200, thickness: 0.07, color: [0.34, 0.29, 0.25], sizeMin: 8, sizeMax: 90, seed: 4242 },
+  { name: 'KUIPER BELT', innerAU: 32, outerAU: 50, count: 2400, thickness: 0.14, color: [0.5, 0.56, 0.64], sizeMin: 10, sizeMax: 110, seed: 9191 },
+];
+SOLAR_SYSTEM.comets = [
+  {
+    id: 'comet',
+    name: 'Comet Aurelia',
+    seed: 77,
+    orbit: {
+      semiMajorAxis: 8 * AU,
+      eccentricity: 0.92,
+      inclination: 12 * DEG,
+      ascendingNode: 40 * DEG,
+      argPeriapsis: 230 * DEG,
+      meanAnomalyAtEpoch: -0.064,
+      period: Math.pow(8, 1.5) * YEAR,
+    },
+    nucleusRadius: 7000,
+    tailAU: 0.45,
+    activityAU: 3.2,
+    ionColor: [0.35, 0.62, 1.0],
+    dustColor: [1.0, 0.95, 0.85],
+  },
+];
+SOLAR_SYSTEM.sky = { colors: [[0.35, 0.3, 0.8], [0.8, 0.35, 0.5], [0.25, 0.5, 0.9]], intensity: 0.45, band: 0.8, scale: 1.2, seed: 1977 };

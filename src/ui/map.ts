@@ -2,6 +2,8 @@ import { Vector3 } from 'three';
 import { config } from '../core/config';
 import type { Body } from '../sim/universe';
 import type { World } from '../sim/world';
+import { DEFAULT_SCALE } from '../data/scale';
+import { cometState, scaleBelts, scaleComets, type ScaledBelt, type ScaledComet } from '../render/space/spaceData';
 import { escapeHtml, formatDistance, formatDuration, noDashes, rgbCss } from './format';
 import './map.css';
 
@@ -15,6 +17,8 @@ interface P2 {
 
 const _rel = new Vector3();
 const _fwd = new Vector3();
+const _cp = new Vector3();
+const _cv = new Vector3();
 
 /**
  * Top down schematic of the system, log scaled so planets and moons fit one screen.
@@ -37,6 +41,8 @@ export class SystemMap {
   private cardBody: Body | null = null;
   private cardTimer = 0;
   private readonly planets: Body[];
+  private readonly belts: ScaledBelt[];
+  private readonly comets: ScaledComet[];
   private readonly d0: number;
   private readonly dMax: number;
   private readonly m0: number;
@@ -56,7 +62,9 @@ export class SystemMap {
     this.card = root.querySelector('.map-card') as HTMLElement;
 
     const uni = world.universe;
-    this.planets = uni.root.children;
+    this.planets = uni.root.children.filter((b) => b.kind !== 'star'); // a companion star sits far outside the scale
+    this.belts = scaleBelts(uni.system, DEFAULT_SCALE);
+    this.comets = scaleComets(uni.system, DEFAULT_SCALE);
     const pd = this.planets.map((b) => hypot2(b.localPosition));
     // Use semi major axes so layout does not wobble with eccentric orbits.
     const pa = this.planets.map((b, i) => b.orbit?.a ?? pd[i] ?? 1);
@@ -260,6 +268,9 @@ export class SystemMap {
       ctx.stroke();
     }
 
+    this.drawBelts();
+    this.drawComets();
+
     // Hover
     this.hover = this.nearest(this.mouse.x, this.mouse.y, 16);
 
@@ -311,6 +322,66 @@ export class SystemMap {
 
     this.drawShip();
     this.updateCard();
+  }
+
+  /** Belts as dotted rings around the star. */
+  private drawBelts(): void {
+    const ctx = this.ctx;
+    const c = this.toScreen({ x: 0, y: 0 }, { x: 0, y: 0 });
+    ctx.save();
+    ctx.setLineDash([1, 5]);
+    ctx.lineCap = 'round';
+    for (const b of this.belts) {
+      const [r0, r1] = [this.planetRadius(b.inner) * this.zoom, this.planetRadius(b.outer) * this.zoom];
+      const rgb = b.def.color;
+      ctx.strokeStyle = `rgba(${Math.round(Math.min(1, rgb[0] * 2 + 0.35) * 255)},${Math.round(Math.min(1, rgb[1] * 2 + 0.33) * 255)},${Math.round(Math.min(1, rgb[2] * 2 + 0.3) * 255)},0.4)`;
+      ctx.lineWidth = 1.2;
+      const rings = 4;
+      for (let i = 0; i < rings; i++) {
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, r0 + ((r1 - r0) * i) / (rings - 1), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  /** Comets as a dot with a short streak pointing away from the star. */
+  private drawComets(): void {
+    const ctx = this.ctx;
+    const star = this.toScreen({ x: 0, y: 0 }, { x: 0, y: 0 });
+    for (const c of this.comets) {
+      cometState(c, this.world.universe.time, _cp, _cv);
+      const d = Math.hypot(_cp.x, _cp.z);
+      const ang = Math.atan2(_cp.z, _cp.x);
+      const r = this.planetRadius(d);
+      const p = this.toScreen({ x: Math.cos(ang) * r, y: Math.sin(ang) * r }, { x: 0, y: 0 });
+      const dx = p.x - star.x;
+      const dy = p.y - star.y;
+      const l = Math.hypot(dx, dy) || 1;
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(150,200,255,0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x + (dx / l) * 16, p.y + (dy / l) * 16);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,245,225,0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.quadraticCurveTo(p.x + (dx / l) * 8 - (dy / l) * 3, p.y + (dy / l) * 8 + (dx / l) * 3, p.x + (dx / l) * 12 - (dy / l) * 7, p.y + (dy / l) * 12 + (dx / l) * 7);
+      ctx.stroke();
+      ctx.fillStyle = '#eaf6ff';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(217,251,255,0.7)';
+      ctx.font = '600 11px Rajdhani, sans-serif';
+      ctx.fillText(noDashes(c.def.name).toUpperCase(), p.x + 8, p.y - 9);
+      ctx.restore();
+    }
   }
 
   private drawShip(): void {
