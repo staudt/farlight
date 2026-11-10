@@ -90,7 +90,9 @@ const frag = /* glsl */ `
     col = mix(col, uC2, smoothstep(0.6, 1.0, v));
     float dist = smoothstep(1500.0, 25000.0, vDist);
     vec3 rgb = col * I * uIntensity * vNight * dist * 1.0;
-    gl_FragColor = vec4(rgb, 1.0);
+    // A single NaN pixel turns the whole frame black through bloom: drop non finite or absurd values.
+    if (!(rgb.r + rgb.g + rgb.b < 1.0e4)) discard;
+    gl_FragColor = vec4(max(rgb, 0.0), 1.0);
   }
 `;
 
