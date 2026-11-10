@@ -47,7 +47,9 @@ export const config = {
     throttleRate: 0.6,
   },
   warp: {
-    levels: [1, 2, 4, 10, 100, 1000, 10000, 100000],
+    levels: [1, 2, 3, 4, 10, 100, 1000, 10000, 100000],
+    /** Number keys 1 to 6 jump straight to these time multipliers. */
+    keyPresets: [1, 2, 3, 4, 100, 1000],
     atmosphereMax: 4,
     landedMax: 10000,
     /** Warp drops so that a boundary is never less than this many real seconds away. */
@@ -65,7 +67,7 @@ export const config = {
     cockpitOffset: [0, 1.1, -3.2] as [number, number, number],
     /** Cockpit overlay: glass reflection strength and HDR strength of the instrument lights. */
     /** First person: only the dash with its light bars by default; the canopy frame, nose and glass are optional. */
-    cockpit: { glass: 1, instrumentGlow: 1, frame: false },
+    cockpit: { glass: 1, instrumentGlow: 1, frame: false, dash: false },
     /** Look mode: radians per mouse pixel, pitch limit (85 deg), orbit zoom range as a multiple of the chase distance. */
     lookSensitivity: 0.004,
     lookPitchMax: 1.4835,

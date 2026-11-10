@@ -221,7 +221,8 @@ export class GameRenderer {
     for (const v of this.bodyViews) v.update(ctx);
     this.shipView.update(ctx);
     this.shipView.object.visible = this.shipCamera.override ? this.shipCamera.override.shipVisible : this.shipCamera.showsShip;
-    const inside = !this.shipCamera.override && !this.shipCamera.showsShip;
+    // The cockpit model (dash, and optionally frame and glass) is off unless config asks for it.
+    const inside = config.camera.cockpit.dash && !this.shipCamera.override && !this.shipCamera.showsShip;
     this.cockpit.object.visible = inside;
     if (inside) this.cockpit.update(ctx, this.camera.aspect);
     for (const u of this.updaters) u(ctx);

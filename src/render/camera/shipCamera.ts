@@ -105,7 +105,8 @@ export class ShipCamera {
         this.orbitZoom = 1;
       }
     }
-    const orbiting = this.lookMode || this.orbitYaw !== 0 || this.orbitPitch !== 0 || this.orbitZoom !== 1;
+    // First person: look mode turns the head in place (no orbit, the ship stays hidden).
+    const orbiting = this.mode === 'chase' && (this.lookMode || this.orbitYaw !== 0 || this.orbitPitch !== 0 || this.orbitZoom !== 1);
     this.showsShip = this.mode === 'chase' || orbiting;
     _look.setFromAxisAngle(_Y, this.lookYaw + this.orbitYaw);
     _look2.setFromAxisAngle(_X, this.lookPitch + this.orbitPitch);

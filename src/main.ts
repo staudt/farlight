@@ -147,6 +147,9 @@ for (const [k, v] of Object.entries(lifeSettings)) {
 const photo = new PhotoMode(world, gfx, post, input, system.id);
 input.on('warpUp', () => !photo.active && world.clock.step(1));
 input.on('warpDown', () => !photo.active && world.clock.step(-1));
+input.on('warpSet', () => {
+  if (!photo.active) world.clock.warpIndex = world.clock.indexFor(input.warpRequest);
+});
 input.on('camera', () => !photo.active && gfx.shipCamera.toggle());
 input.on('debug', () => debug.toggle());
 input.throttleNow = () => world.ship.throttle;

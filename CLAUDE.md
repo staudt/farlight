@@ -50,7 +50,7 @@ Farlight is a relaxed solar system glider (working title was Space Glider 3D). L
   - Inertial (`rotating: false`) in deep space and inside a body's sphere of influence.
   - Body-fixed rotating inside the near zone of a body, so parked ships and terrain don't slide at high warp.
   - Frame changes go through `World` frame management, which calls `transferState` in `frames.ts`. It converts velocity as `v_rot = v_inertial - ω×r`. Never change the frame without it, or the ship will jump.
-- **Time.** Rotation (turning, attitude) uses real dt, so steering feels the same at any warp. Translation uses sim dt, so warp moves you. Warp levels are `config.warp.levels` (1, 2, 4, 10, 100, 1k, 10k, 100k). Warp limits come from `allowedWarp(phase, eta)` in `warp.ts`.
+- **Time.** Rotation (turning, attitude) uses real dt, so steering feels the same at any warp. Translation uses sim dt, so warp moves you. Warp levels are `config.warp.levels` (1, 2, 3, 4, 10, 100, 1k, 10k, 100k); number keys 1 to 6 pick `config.warp.keyPresets` (1, 2, 3, 4, 100, 1000). Warp limits come from `allowedWarp(phase, eta)` in `warp.ts`.
 - **Config.** All tunables live in `src/core/config.ts`. Read them at use time (`config.x.y` inside the function), never copied into a module-level constant, so lil-gui edits apply live. Scale and speed numbers also live in `ScaleProfile`.
 - **Tuning is live.** Every new tunable should show up in the debug panel.
 

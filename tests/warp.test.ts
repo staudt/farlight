@@ -130,7 +130,7 @@ describe('SimClock', () => {
 
   test('advance returns realDt times warp and moves sim time by the same amount', () => {
     const clock = new SimClock(100);
-    clock.warpIndex = 3; // level 10
+    clock.warpIndex = clock.indexFor(10);
     const dt = clock.advance(0.5);
     expect(dt).toBeCloseTo(5, 12);
     expect(clock.time).toBeCloseTo(105, 12);

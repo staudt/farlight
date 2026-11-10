@@ -1,8 +1,10 @@
+import { config } from '../core/config';
 import { emptyInput, type FlightInput } from '../sim/ship';
 
 export type Action =
   | 'warpUp'
   | 'warpDown'
+  | 'warpSet'
   | 'camera'
   | 'map'
   | 'galaxy'
@@ -75,6 +77,8 @@ export class Input {
   private keys = new Set<string>();
   private listeners = new Map<Action, (() => void)[]>();
   private throttleSet: number | null = null;
+  /** Time multiplier picked with a number key, read by the 'warpSet' action handler. */
+  warpRequest = 1;
   private notches = 0;
   private heldSince = new Map<string, number>();
   private wheelAcc = 0;
@@ -129,9 +133,14 @@ export class Input {
         this.emit(action);
         if (e.code === 'F3') e.preventDefault();
       }
+      // Number keys pick a time multiplier (config.warp.keyPresets).
       if (e.code.startsWith('Digit')) {
         const n = Number(e.code.slice(5));
-        this.throttleSet = n === 0 ? 1 : n / 10;
+        const v = config.warp.keyPresets[n - 1];
+        if (v !== undefined) {
+          this.warpRequest = v;
+          this.emit('warpSet');
+        }
       }
       if (e.code === 'Backquote') this.throttleSet = 0;
     });
