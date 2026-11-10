@@ -131,13 +131,14 @@ export class Cockpit {
 
   constructor() {
     this.object.add(this.eye);
-    const dark = new MeshStandardMaterial({ color: 0x15181d, flatShading: true, metalness: 0.45, roughness: 0.5 });
+    // Light grey metal so the frame reads as structure in daylight, not as a black cut out.
+    const dark = new MeshStandardMaterial({ color: 0x5a6472, flatShading: true, metalness: 0.3, roughness: 0.55 });
 
     // Canopy frame: two pillars and a bow across the top.
     const frame = new Group();
     const zf = -1.45;
     for (const s of [-1, 1]) {
-      frame.add(strut(new Vector3(s * 1.5, -0.7, zf + 0.05), new Vector3(s * 0.95, 0.76, zf), 0.011, dark));
+      frame.add(strut(new Vector3(s * 1.5, -0.7, zf + 0.05), new Vector3(s * 0.95, 0.76, zf), 0.0075, dark));
     }
     const bow: Vector3[] = [];
     for (let i = 0; i <= 8; i++) {
@@ -145,7 +146,7 @@ export class Cockpit {
       const x = -0.95 + 1.9 * t;
       bow.push(new Vector3(x, 0.76 + 0.05 * (1 - Math.pow(2 * t - 1, 2)), zf));
     }
-    for (let i = 0; i < bow.length - 1; i++) frame.add(strut(bow[i]!, bow[i + 1]!, 0.01, dark));
+    for (let i = 0; i < bow.length - 1; i++) frame.add(strut(bow[i]!, bow[i + 1]!, 0.007, dark));
     this.eye.add(frame);
 
     // Nose of the ship, ahead and below the horizon.
