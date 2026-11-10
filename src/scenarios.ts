@@ -8,6 +8,18 @@ import type { Body } from './sim/universe';
 import { dirToLatLon, latLonToDir } from './terrain/api';
 import { devilSites, geyserSites } from './render/weather/plumes';
 import { pickFocusBody } from './data/generate';
+import { DEFAULT_SCALE } from './data/scale';
+import {
+  ROCK_LEVELS,
+  type Rock,
+  cometActivity,
+  cometState,
+  cometTails,
+  rockInCell,
+  scaleBelts,
+  scaleComets,
+  skyFocusDir,
+} from './render/space/spaceData';
 import type { BodyDef } from './data/types';
 
 export interface Scenario {
@@ -274,6 +286,30 @@ export const SCENARIOS: Record<string, Scenario> = {
       const spot = scenicSpot(w, focus.id);
       w.place({ body: focus.id, lat: spot.lat, lon: spot.lon, altitude: spot.altitude, heading: spot.heading, pitch: 1, throttle: 0.3, time: 0 });
     },
+  },
+  'asteroid-belt': {
+    description: 'Inside the main belt: rocks tumbling by, a big one ahead, the sun behind',
+    generic: true,
+    apply: (w) => amongRocks(w),
+  },
+  'comet-flyby': {
+    description: 'Beside a comet near the star: glowing coma, a straight blue ion tail and a curved dust tail',
+    generic: true,
+    apply: (w) => cometFlyby(w),
+  },
+  'earth-comet-sky': {
+    description: 'High over Earth at night, a bright comet with its tails among the stars',
+    apply: (w) => earthCometSky(w),
+  },
+  'binary-sunset': {
+    description: 'Low over the focus world at sunset, a second sun close to the first',
+    generic: true,
+    apply: (w) => binarySunset(w),
+  },
+  'nebula-space': {
+    description: 'Deep in space, far from the star, looking into the hero nebula',
+    generic: true,
+    apply: (w) => nebulaSpace(w),
   },
 };
 
@@ -654,3 +690,171 @@ function findLocalHourTime(w: World, bodyId: string, lonDeg: number, hour: numbe
 const _dir = new Vector3();
 
 export const DEFAULT_SCENARIO = 'earth-low-morning';
+
+// ---------------------------------------------------------------------------------------------
+// Space scenery scenarios
+
+const _up = new Vector3(0, 1, 0);
+
+/** Orientation that looks along `fwd` (ship convention: forward is -Z). */
+function lookQuat(fwd: Vector3): Quaternion {
+  const m = new Matrix4().lookAt(new Vector3(), fwd, _up);
+  return new Quaternion().setFromRotationMatrix(m);
+}
+
+/** Puts the ship at a world position in the root star's inertial frame, looking along `fwd`. */
+function placeWorld(w: World, pos: Vector3, fwd: Vector3, throttle = 0): void {
+  w.placeInSpace(w.universe.root.id, pos.length(), pos.clone().normalize());
+  w.ship.quat.copy(lookQuat(fwd));
+  w.ship.throttle = throttle;
+  w.refresh();
+}
+
+function blankRock(): Rock {
+  return { x: 0, y: 0, z: 0, size: 0, sx: 1, sy: 1, sz: 1, ax: 0, ay: 1, az: 0, spin: 0, phase: 0, tone: 1 };
+}
+
+/** In the middle of the first belt, a few hundred metres from a mid sized rock lit from the side. */
+function amongRocks(w: World): void {
+  const belt = scaleBelts(w.universe.system, DEFAULT_SCALE)[0];
+  if (!belt) return arrive(w);
+  w.clock.time = 0;
+  w.universe.update(0);
+  const L = ROCK_LEVELS[1]!;
+  const best = blankRock();
+  const r = blankRock();
+  const base = Math.floor(belt.mid / L.cell);
+  for (let ix = base - 10; ix <= base + 10; ix++) {
+    for (let iz = -6; iz <= 6; iz++) {
+      for (let iy = -1; iy <= 0; iy++) {
+        if (rockInCell(belt, 1, ix, iy, iz, 1, r) && r.size > best.size && r.size < 650) Object.assign(best, r);
+      }
+    }
+  }
+  const rock = new Vector3(best.x, best.y, best.z);
+  const toStar = rock.clone().negate().normalize();
+  const side = new Vector3().crossVectors(toStar, _up).normalize();
+  const dir = toStar.clone().multiplyScalar(Math.cos(1.1)).addScaledVector(side, Math.sin(1.1)).addScaledVector(_up, 0.12).normalize();
+  const cam = rock.clone().addScaledVector(dir, Math.max(900, best.size * 5.5));
+  const fwd = rock.clone().sub(cam).normalize();
+  // Rock a little right of centre, so the near rocks fill the left.
+  fwd.applyAxisAngle(_up, 0.12);
+  placeWorld(w, cam, fwd, 0);
+}
+
+/** Time (sim seconds) when the comet has grown its tails: scans the inbound leg until the activity is high. */
+function cometTailsTime(comet: ReturnType<typeof scaleComets>[number]): number {
+  const p = new Vector3();
+  const v = new Vector3();
+  const span = Math.abs(comet.orbit.period) / 6;
+  for (let t = 0; t < span; t += span / 800) {
+    cometState(comet, t, p, v);
+    if (cometActivity(comet, p.length()) > 0.78) return t;
+  }
+  return 0;
+}
+
+function cometFlyby(w: World): void {
+  const comet = scaleComets(w.universe.system, DEFAULT_SCALE)[0];
+  if (!comet) return arrive(w);
+  const t = cometTailsTime(comet);
+  w.clock.time = t;
+  w.universe.update(t);
+  const p = new Vector3();
+  const v = new Vector3();
+  cometState(comet, t, p, v);
+  const tails = cometTails(p, v, w.universe.root.position);
+  const L = comet.tailLength * (0.04 + 0.96 * Math.pow(cometActivity(comet, p.length()), 1.2));
+  const normal = new Vector3().crossVectors(p, v).normalize();
+  if (normal.y < 0) normal.negate();
+  const across = new Vector3().crossVectors(normal, tails.ion).normalize();
+  const cam = p.clone().addScaledVector(normal, L * 0.75).addScaledVector(across, L * 0.55).addScaledVector(tails.ion, L * 0.15);
+  const target = p.clone().addScaledVector(tails.ion, L * 0.42);
+  placeWorld(w, cam, target.sub(cam).normalize());
+}
+
+/** High over Earth on a night when the comet stands well above the horizon, looking at it. */
+function earthCometSky(w: World): void {
+  const comet = scaleComets(w.universe.system, DEFAULT_SCALE)[0];
+  if (!comet) return w.place({ body: 'earth', lat: 45, localHour: 0, altitude: 0, landed: true, pitch: 40, heading: 0 });
+  const earth = w.universe.get('earth');
+  const t0 = cometTailsTime(comet) * 0.55;
+  const p = new Vector3();
+  const v = new Vector3();
+  const d = new Vector3();
+  const sun = new Vector3();
+  const c = new Vector3();
+  let best = { score: -Infinity, t: t0, lat: 40, lon: 0 };
+  for (const lat of [30, 38, 46, 54]) {
+    for (let t = t0; t < t0 + 86164; t += 400) {
+      w.universe.update(t);
+      cometState(comet, t, p, v);
+      sun.copy(w.universe.root.position).sub(earth.position).normalize();
+      c.copy(p).sub(earth.position).normalize();
+      const lon = 0;
+      latLonToDir((lat * Math.PI) / 180, lon, d);
+      const sunElev = Math.asin(earth.worldToLocalDir(sun, _dir).dot(d));
+      const cometElev = Math.asin(earth.worldToLocalDir(c, _dir).dot(d));
+      if (sunElev > -0.3) continue;
+      const score = -Math.abs(cometElev - 0.62);
+      if (score > best.score) best = { score, t, lat, lon };
+    }
+  }
+  w.universe.update(best.t);
+  cometState(comet, best.t, p, v);
+  c.copy(p).sub(earth.position).normalize();
+  const local = earth.worldToLocalDir(c, new Vector3());
+  const up = new Vector3();
+  latLonToDir((best.lat * Math.PI) / 180, 0, up);
+  const east = new Vector3(0, 0, -1);
+  const north = new Vector3().crossVectors(up, east).normalize();
+  const heading = (Math.atan2(local.dot(east), local.dot(north)) * 180) / Math.PI;
+  const elev = (Math.asin(local.dot(up)) * 180) / Math.PI;
+  // High enough that the glider assist does not level the nose back to the horizon.
+  w.place({ body: 'earth', lat: best.lat, lon: 0, altitude: 32000, heading, pitch: Math.min(60, Math.max(8, elev + 3)), throttle: 0, time: best.t });
+}
+
+/** Sunset low over the focus world, looking between the star and its companion. */
+function binarySunset(w: World): void {
+  const focus = w.universe.get(focusBody(w).id);
+  if (focus.kind === 'gas') return arrive(w);
+  w.clock.time = 0;
+  w.universe.update(0);
+  const root = w.universe.root;
+  const companion = w.universe.bodies.find((b) => b.kind === 'star' && b !== root);
+  const sun = focus.worldToLocalDir(root.position.clone().sub(focus.position).normalize(), new Vector3());
+  const other = companion ? focus.worldToLocalDir(companion.position.clone().sub(focus.position).normalize(), new Vector3()) : sun;
+  const subSolarLon = Math.atan2(-sun.z, sun.x);
+  const up = new Vector3();
+  // Sunset (sun just on the horizon) at the latitude where the second sun stands about 20 degrees up.
+  let best = { score: Infinity, lat: 12, hour: 17.6 };
+  for (let lat = -50; lat <= 50; lat += 5) {
+    const latR = (lat * Math.PI) / 180;
+    for (let h = 16.4; h <= 19; h += 0.02) {
+      latLonToDir(latR, subSolarLon + ((h - 12) / 24) * Math.PI * 2, up);
+      const sunErr = Math.abs(Math.asin(sun.dot(up)) + 0.012);
+      if (sunErr > 0.01) continue;
+      const score = Math.abs(Math.asin(other.dot(up)) - 0.36) + Math.abs(lat - 12) * 0.001;
+      if (score < best.score) best = { score, lat, hour: h };
+    }
+  }
+  const { lat, hour: bestHour } = best;
+  const lon = subSolarLon + ((bestHour - 12) / 24) * Math.PI * 2;
+  latLonToDir((lat * Math.PI) / 180, lon, up);
+  const east = new Vector3(-Math.sin(lon), 0, -Math.cos(lon));
+  const north = new Vector3().crossVectors(up, east).normalize();
+  const mid = sun.clone().add(other).normalize();
+  const heading = (Math.atan2(mid.dot(east), mid.dot(north)) * 180) / Math.PI;
+  const pitch = (Math.asin(mid.dot(up)) * 180) / Math.PI;
+  w.place({ body: focus.id, lat, localHour: bestHour, altitude: 700, heading, pitch: Math.max(4, pitch), throttle: 0.2, time: 0 });
+}
+
+/** Far out from the star, looking into the sky's hero nebula with the star behind. */
+function nebulaSpace(w: World): void {
+  const sky = w.universe.system.sky ?? { seed: 1 };
+  const focus = skyFocusDir(sky);
+  w.clock.time = 0;
+  w.universe.update(0);
+  const outer = Math.max(...w.universe.root.children.filter((b) => b.kind !== 'star').map((b) => b.orbit?.a ?? 0), 1e8);
+  placeWorld(w, focus.clone().multiplyScalar(outer * 1.25), focus);
+}

@@ -13,7 +13,7 @@ import {
   travelMinutes,
   TRAVEL_FACTORS,
 } from './galaxyMath';
-import { paintBackdrop, paintGalaxyTexture, makeGlowSprite, STAR_COLORS, STAR_SIZE, TEXTURE_MARGIN } from './galaxyPaint';
+import { paintBackdrop, paintGalaxyTexture, makeGlowSprite, drawBinaryMark, STAR_COLORS, STAR_SIZE, TEXTURE_MARGIN } from './galaxyPaint';
 import { drawPlanetPreview } from './planetPreview';
 import './galaxyMap.css';
 
@@ -418,6 +418,7 @@ export class GalaxyMap {
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fill();
+      drawBinaryMark(ctx, s, p.x, p.y, r, STAR_COLORS[s.starClass]);
       // Orbit ring halo.
       ctx.strokeStyle = 'rgba(160,200,255,0.2)';
       ctx.lineWidth = 1;

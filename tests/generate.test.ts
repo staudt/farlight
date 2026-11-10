@@ -60,7 +60,7 @@ describe('generateSystem', () => {
     u.update(12345);
 
     // Planet count matches the map hint.
-    const planets = sys.bodies.filter((b) => b.parentId === sys.bodies[0]!.id);
+    const planets = sys.bodies.filter((b) => b.parentId === sys.bodies[0]!.id && b.kind !== 'star');
     expect(planets.length).toBe(star.planetCount);
     expect(star.planetCount).toBeGreaterThanOrEqual(2);
     expect(star.planetCount).toBeLessThanOrEqual(9);

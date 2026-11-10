@@ -2,6 +2,7 @@ import { mulberry32 } from '../core/rng';
 import type { GalaxyDef, GalaxyStar, StarClass } from './galaxy';
 import { makeName, makeUniqueNames, moonName, slug } from './names';
 import { SOLAR_SYSTEM } from './solarSystem';
+import { addSpaceScenery } from './spaceScenery';
 import type {
   AtmosphereDef,
   BiomeDef,
@@ -1346,7 +1347,7 @@ export function generateSystem(star: GalaxyStar): StarSystemDef {
     if (targetA < a * 1.4) targetA = a * 1.4;
   }
 
-  return { id: star.id, name: star.name, seed: star.seed, bodies };
+  return addSpaceScenery({ id: star.id, name: star.name, seed: star.seed, bodies }, star, spec.luminosity);
 }
 
 /** How interesting a body is as a first view: earthlike, then ocean, then ringed giants. */

@@ -97,6 +97,7 @@ atmoFolder.add(post.atmosphere, 'intensity', 0, 3).name('scatter intensity');
 atmoFolder.add(post.bloom, 'intensity', 0, 3).name('bloom');
 atmoFolder.add(post.clouds, 'coverageBias', -0.5, 0.5).name('cloud coverage');
 atmoFolder.add(post.clouds, 'sunIntensity', 0, 5).name('cloud light');
+gfx.space.addDebug(debug.folder('Space'));
 const audioFolder = debug.folder('Audio');
 for (const k of Object.keys(audio.tuning) as (keyof typeof audio.tuning)[]) audioFolder.add(audio.tuning, k, 0, 2);
 const wxFolder = debug.folder('Weather');

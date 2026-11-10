@@ -19,6 +19,7 @@ import { ShipCamera } from './camera/shipCamera';
 import { quality } from './quality';
 import { starLight } from './starLight';
 import { Starfield } from './sky/starfield';
+import { SpaceScenery } from './space';
 import { ShipView } from './ship/shipView';
 import { Cockpit } from './ship/cockpit';
 
@@ -36,6 +37,8 @@ export class GameRenderer {
   readonly camera: PerspectiveCamera;
   readonly shipCamera = new ShipCamera();
   readonly starfield = new Starfield();
+  /** Asteroid belts, comets and the nebula backdrop (all from the system data). */
+  readonly space: SpaceScenery;
   readonly shipView = new ShipView();
   readonly cockpit = new Cockpit();
   readonly bodyViews: BodyView[] = [];
@@ -69,6 +72,9 @@ export class GameRenderer {
     this.camera = new PerspectiveCamera(config.camera.fov, 1, config.render.near, config.render.far);
     this.scene.add(this.camera, this.starfield.object, this.shipView.object, this.cockpit.object, this.sunLight, this.sunLight.target);
     this.scene.add(this.ambient, this.hemi, this.fill, this.fill.target);
+    this.space = new SpaceScenery(world, this.starfield);
+    this.scene.add(this.space.object);
+    this.updaters.push((ctx) => this.space.update(ctx));
 
     for (const body of world.universe.bodies) {
       let view: BodyView | null = null;
