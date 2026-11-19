@@ -47,6 +47,8 @@ const SECTIONS: { title: string; rows: Row[] }[] = [
       },
       { kind: 'range', key: 'fov', label: 'Field of view', min: FOV_RANGE.min, max: FOV_RANGE.max, step: 1, fmt: (v) => `${Math.round(v)}°` },
       { kind: 'toggle', key: 'showFps', label: 'Show FPS' },
+      { kind: 'toggle', key: 'godRays', label: 'God rays' },
+      { kind: 'toggle', key: 'lensFlare', label: 'Lens flare' },
       {
         kind: 'seg',
         key: 'hudScale',

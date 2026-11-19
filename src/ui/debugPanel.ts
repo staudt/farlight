@@ -125,6 +125,9 @@ export class DebugPanel {
       p.add(s, 'propRange', 0.2, 1.5).onChange(apply);
       p.add(s, 'propLevels', 1, 3, 1).onChange(apply);
       p.add(s, 'shimmer').onChange(apply);
+      p.add(s, 'godRaySamples', 0, 48, 1).onChange(apply);
+      p.add(s, 'godRayScale', 0.15, 0.6).onChange(apply);
+      p.add(s, 'lensFlare').onChange(apply);
       p.add(s, 'fxScale', 0, 1).onChange(apply);
     }
     const perf = this.gui.addFolder('Perf').close();

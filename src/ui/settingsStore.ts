@@ -22,6 +22,8 @@ export interface Settings {
   /** Degrees. */
   fov: number;
   showFps: boolean;
+  godRays: boolean;
+  lensFlare: boolean;
   hudScale: HudScale;
   resume: boolean;
   showTips: boolean;
@@ -41,6 +43,8 @@ export const DEFAULT_SETTINGS: Settings = {
   volFx: 1,
   fov: 62,
   showFps: true,
+  godRays: true,
+  lensFlare: true,
   hudScale: 'normal',
   resume: true,
   showTips: true,
@@ -85,6 +89,8 @@ export function sanitize(raw: unknown): Settings {
     volFx: num(r.volFx, 0, 1, d.volFx),
     fov: num(r.fov, FOV_RANGE.min, FOV_RANGE.max, d.fov),
     showFps: bool(r.showFps, d.showFps),
+    godRays: bool(r.godRays, d.godRays),
+    lensFlare: bool(r.lensFlare, d.lensFlare),
     hudScale: r.hudScale === 'small' || r.hudScale === 'normal' || r.hudScale === 'large' ? r.hudScale : d.hudScale,
     resume: bool(r.resume, d.resume),
     showTips: bool(r.showTips, d.showTips),
@@ -161,6 +167,8 @@ export function applyConfigSettings(s: Settings): void {
   config.touch.invertPitch = s.invertStick;
   config.gamepad.invertPitch = s.invertPad;
   config.camera.fov = s.fov;
+  config.godRays.user = s.godRays;
+  config.lensFlare.user = s.lensFlare;
 }
 
 /** HUD scale and the FPS toggle are CSS only. */

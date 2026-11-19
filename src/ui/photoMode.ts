@@ -152,6 +152,7 @@ export class PhotoMode {
     this.savedDarkness = this.post.vignette.darkness;
     this.quat.copy(this.gfx.camera.quaternion);
     this.gfx.shipCamera.override = this.rig;
+    this.post.flare.suppressed = true;
     this.input.lockEnabled = false;
     this.input.rightMouse = false;
     if (document.pointerLockElement) document.exitPointerLock();
@@ -169,6 +170,7 @@ export class PhotoMode {
     this.active = false;
     this.pointers.clear();
     this.gfx.shipCamera.override = null;
+    this.post.flare.suppressed = false;
     this.post.clouds.coverageBias = this.savedBias;
     this.post.vignette.darkness = this.savedDarkness;
     if (this.appliedHours !== 0) {

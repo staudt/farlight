@@ -101,10 +101,56 @@ export const config = {
     /** Seconds ignored after load before auto adapts. */
     warmup: 4,
     presets: {
-      low: { pixelRatioMax: 1, msaa: 0, volScale: 0.4, cloudSteps: 14, cloudLight: 2, atmoSteps: 8, atmoLight: 3, cloudShadows: false, bloom: false, bloomLevels: 3, splitFactor: 0.7, gasOctaves: 2, shimmer: false, fxScale: 0.35, maxChunks: 700, maxInFlight: 6, propRange: 0.55, propLevels: 1 },
-      medium: { pixelRatioMax: 1.25, msaa: 2, volScale: 0.5, cloudSteps: 22, cloudLight: 3, atmoSteps: 10, atmoLight: 4, cloudShadows: true, bloom: true, bloomLevels: 5, splitFactor: 0.85, gasOctaves: 3, shimmer: true, fxScale: 0.65, maxChunks: 1400, maxInFlight: 8, propRange: 0.75, propLevels: 1 },
-      high: { pixelRatioMax: 1.5, msaa: 4, volScale: 0.67, cloudSteps: 30, cloudLight: 3, atmoSteps: 14, atmoLight: 5, cloudShadows: true, bloom: true, bloomLevels: 8, splitFactor: 1, gasOctaves: 4, shimmer: true, fxScale: 1, maxChunks: 4500, maxInFlight: 0, propRange: 1, propLevels: 2 },
+      low: { pixelRatioMax: 1, msaa: 0, volScale: 0.4, cloudSteps: 14, cloudLight: 2, atmoSteps: 8, atmoLight: 3, cloudShadows: false, bloom: false, bloomLevels: 3, splitFactor: 0.7, gasOctaves: 2, shimmer: false, godRaySamples: 0, godRayScale: 0.25, lensFlare: true, fxScale: 0.35, maxChunks: 700, maxInFlight: 6, propRange: 0.55, propLevels: 1 },
+      medium: { pixelRatioMax: 1.25, msaa: 2, volScale: 0.5, cloudSteps: 22, cloudLight: 3, atmoSteps: 10, atmoLight: 4, cloudShadows: true, bloom: true, bloomLevels: 5, splitFactor: 0.85, gasOctaves: 3, shimmer: true, godRaySamples: 20, godRayScale: 0.25, lensFlare: true, fxScale: 0.65, maxChunks: 1400, maxInFlight: 8, propRange: 0.75, propLevels: 1 },
+      high: { pixelRatioMax: 1.5, msaa: 4, volScale: 0.67, cloudSteps: 30, cloudLight: 3, atmoSteps: 14, atmoLight: 5, cloudShadows: true, bloom: true, bloomLevels: 8, splitFactor: 1, gasOctaves: 4, shimmer: true, godRaySamples: 32, godRayScale: 0.33, lensFlare: true, fxScale: 1, maxChunks: 4500, maxInFlight: 0, propRange: 1, propLevels: 2 },
     },
+  },
+  /** God rays (screen space light shafts from the sun, render/fx/godRays.ts). */
+  godRays: {
+    enabled: true,
+    /** The player's toggle from the settings screen (also needs `enabled`). */
+    user: true,
+    /** Overall multiplier on the shaft brightness. */
+    intensity: 1,
+    /** Brightness of a full strength shaft (HDR, before tone mapping). */
+    gain: 1,
+    /** How much partly blocked beams darken the air (the contrast that makes the lit ones read). */
+    shade: 0.25,
+    /** Per ray decay along the march (1 = no decay). */
+    decay: 0.965,
+    /** Fraction of the sun to pixel distance that is marched (1 = all the way to the sun). */
+    length: 0.9,
+    /** Screen radius (in screen heights) where the sun's glow weight has fallen to 1/e. */
+    sunRadius: 0.9,
+    /** Rays below this strength skip the pass entirely. */
+    minStrength: 0.01,
+    /** Air density baseline for a clear world, plus extra gain for murky air (Mie depth). */
+    baseStrength: 0.8,
+    hazeGain: 2.5,
+    /** Extra strength with the sun low in the sky (sunrise and sunset). */
+    lowSunBoost: 1.2,
+    /** Debug: ignore air density and sun elevation and force this strength (0 = off). */
+    force: 0,
+  },
+  /** Lens flare (render/fx/lensFlare.ts). */
+  lensFlare: {
+    enabled: true,
+    /** The player's toggle from the settings screen (also needs `enabled`). */
+    user: true,
+    intensity: 1,
+    ghostIntensity: 1,
+    haloIntensity: 1,
+    streakIntensity: 1,
+    starburstIntensity: 1,
+    /** Seconds to fade visibility in and out. */
+    smoothing: 0.1,
+    /** Screen radius (in screen heights) of the sample disc used for the depth occlusion test. */
+    sampleRadius: 0.018,
+    /** How far past the screen edge (in screens) the flare still shows. */
+    edgeMargin: 0.12,
+    /** Floor of the dimming when the sun sits on the horizon (0..1). */
+    horizonDim: 0.25,
   },
   /** Touch controls (phones). */
   touch: {
