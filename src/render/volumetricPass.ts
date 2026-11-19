@@ -14,6 +14,7 @@ import {
 import { atmosphereLib } from './atmosphere/atmosphere.glsl';
 import { starLight } from './starLight';
 import { cloudLib } from './clouds/clouds.glsl';
+import { ECLIPSE_GLSL, eclipse } from './eclipse';
 
 const VERT = /* glsl */ `
 in vec3 position;
@@ -42,6 +43,7 @@ uniform mat4 uInvProj;
 uniform mat4 uCamToWorld;
 uniform float uLogFar;
 uniform vec3 uStarColor;       // tint * intensity of the star (white for Sol)
+${ECLIPSE_GLSL}
 ${cloudLib}
 ${atmosphereLib}
 
@@ -94,6 +96,7 @@ export class VolumetricPass extends Pass {
       depthBuffer: false,
     });
     const u: Record<string, Uniform> = { uDepth: new Uniform(null), uStarColor: starLight.uniform as Uniform };
+    for (const [k, v] of Object.entries(eclipse.uniforms)) u[k] = v as unknown as Uniform;
     for (const m of uniforms) for (const [k, v] of m) u[k] = v;
     this.material = new RawShaderMaterial({
       glslVersion: GLSL3,

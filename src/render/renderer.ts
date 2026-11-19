@@ -1,5 +1,6 @@
 import {
   AmbientLight,
+  Color,
   DirectionalLight,
   HemisphereLight,
   PerspectiveCamera,
@@ -18,6 +19,7 @@ import type { BodyView, FrameContext } from './context';
 import { ShipCamera } from './camera/shipCamera';
 import { quality } from './quality';
 import { starLight } from './starLight';
+import { eclipse } from './eclipse';
 import { Starfield } from './sky/starfield';
 import { SpaceScenery } from './space';
 import { ShipView } from './ship/shipView';
@@ -213,6 +215,10 @@ export class GameRenderer {
     starLight.update(sun.def.star);
     starLight.applyTint(this.sunLight.color);
     this.sunLight.intensity = BASE_SUN_LIGHT * starLight.intensity;
+    // Eclipses: choose the occluders for this frame, then dim and tint the ship's sun by the cover at the ship.
+    eclipse.update(world, this.shipCamera.worldPos);
+    const eclL = eclipse.sunLightAt(world.shipWorldPos, world.ship.frame.body, _eclL);
+    this.sunLight.color.multiply(_eclColor.setRGB(eclL.x, eclL.y, eclL.z));
     _sunDir.copy(sun.position).sub(world.shipWorldPos).normalize();
     this.sunLight.position.copy(_sunDir).multiplyScalar(1000);
     this.sunLight.target.position.set(0, 0, 0);
@@ -232,6 +238,8 @@ export class GameRenderer {
 }
 
 const _sunDir = new Vector3();
+const _eclL = new Vector3();
+const _eclColor = new Color();
 const _shake = new Vector3();
 const FILL_BASE = 0.55;
 const _fillDir = new Vector3();

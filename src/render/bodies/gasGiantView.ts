@@ -26,6 +26,7 @@ import type { Body } from '../../sim/universe';
 import { type BodyView, type FrameContext, apparentSizeBoost, placeRelative } from '../context';
 import { quality } from '../quality';
 import { starLight } from '../starLight';
+import { ECLIPSE_GLSL, eclipse } from '../eclipse';
 import { RING_GLSL, RingMesh, makeRingUniforms } from './ringView';
 
 const MAX_BANDS = 8;
@@ -188,6 +189,8 @@ uniform float logDepthBufFC;
 uniform mat4 uProjInv;
 uniform mat3 uViewToLocal;
 uniform vec3 uCamLocal, uSunLocal, uFogColor, uStarColor;
+uniform float uEclSelf;
+${ECLIPSE_GLSL}
 uniform float uScale, uShellR, uDepth, uAlpha, uPixAng, uInside, uFogLen, uSunI, uCamDepth, uCeil;
 varying vec2 vNdc;
 ${GAS_GLSL}
@@ -233,7 +236,8 @@ void main() {
     float mu = abs(dot(N, rd));
     float limb = mix(0.55, 1.0, pow(mu, 0.3));
     vec3 night = vec3(0.012, 0.014, 0.022) + vec3(0.02, 0.016, 0.014) * smoothstep(-0.5, 0.0, lam);
-    col = alb * (sunCol * uStarColor * uSunI * diff * limb + night);
+    vec3 eclL = eclipseLight(vd * dist * mat3(viewMatrix), uEclSelf);
+    col = alb * (sunCol * uStarColor * eclL * uSunI * diff * limb + night);
     col = mix(col, uFogColor, fog);
   }
 
@@ -287,6 +291,8 @@ const PUFF_FRAG = /* glsl */ `
 #include <common>
 #include <logdepthbuf_pars_fragment>
 uniform vec3 uSunView, uPuffColor, uFogColor, uStarColor;
+uniform float uEclSelf;
+${ECLIPSE_GLSL}
 uniform float uSunTerm, uSunI, uFogLen;
 varying vec3 vViewPos;
 varying vec3 vN;
@@ -298,7 +304,7 @@ void main() {
   float lam = max(dot(N, uSunView) * 0.8 + 0.2, 0.0);
   float facing = abs(dot(N, normalize(vViewPos)));
   vec3 base = uPuffColor * vShade * mix(vec3(1.0), vec3(1.05, 0.62, 0.4) * 0.5, vDepth);
-  vec3 col = base * (uStarColor * uSunI * uSunTerm * (0.1 + 0.9 * lam * lam) * 0.8 + 0.03 + 0.05 * uSunTerm);
+  vec3 col = base * (uStarColor * eclipseLight(vViewPos * mat3(viewMatrix), uEclSelf) * uSunI * uSunTerm * (0.1 + 0.9 * lam * lam) * 0.8 + 0.03 + 0.05 * uSunTerm);
   col *= mix(vec3(0.8, 0.62, 0.55), vec3(1.0), N.y * 0.5 + 0.5);
   float fog = 1.0 - exp(-length(vViewPos) / (uFogLen * 0.12));
   col = mix(col, uFogColor, fog * 0.85);
@@ -334,6 +340,7 @@ type SharedUniforms = {
   uStorm: U<Vector4[]>;
   uStormCol: U<Vector3[]>;
   uHasRing: U<number>;
+  uEclSelf: U<number>;
 } & ReturnType<typeof makeRingUniforms>;
 
 const BAKE_CAM = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -421,6 +428,8 @@ export class GasGiantView implements BodyView {
       uStorm: { value: stormVec },
       uStormCol: { value: stormCol },
       uHasRing: { value: body.def.rings ? 1 : 0 },
+      ...eclipse.uniforms,
+      uEclSelf: { value: -1 },
       ...ringUniforms,
     };
 
@@ -484,6 +493,8 @@ export class GasGiantView implements BodyView {
         uSunTerm: { value: 1 },
         uSunI: this.shared.uSunI,
         uStarColor: starLight.uniform,
+        ...eclipse.uniforms,
+        uEclSelf: this.shared.uEclSelf,
         uFogLen: this.shared.uFogLen,
       },
       vertexShader: PUFF_VERT,
@@ -532,6 +543,8 @@ export class GasGiantView implements BodyView {
     _sunW.copy(sun.position).sub(b.position).normalize();
     _sunL.copy(_sunW).applyQuaternion(_inv);
     sh.uSunLocal.value.copy(_sunL);
+    sh.uEclSelf.value = eclipse.idOf(b);
+    if (this.rings) this.rings.eclSelf.value = sh.uEclSelf.value;
 
     // Visibility: skip the screen quads when the planet is outside the view cone.
     _w.copy(_camRel).negate().normalize();

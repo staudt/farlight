@@ -17,6 +17,7 @@ import { VolumetricComposite, VolumetricPass } from './volumetricPass';
 import { SunView } from './bodies/sunView';
 import { HeatShimmer } from './fx/heatShimmer';
 import { Scorch } from './fx/scorch';
+import { eclipse } from './eclipse';
 
 /**
  * HDR post stack: scene -> atmosphere scattering -> bloom -> ACES tone mapping -> vignette.
@@ -73,7 +74,11 @@ export class PostStack {
       this.vol.enabled = volOn;
       this.composite.bind(this.vol, Math.log2(ctx.camera.far + 1), volOn);
       this.skyBrightness = this.estimateSky(gfx);
+      // Totality: the sky is only as bright as the sun that reaches it.
+      const cover = eclipse.sunVisibilityAt(ctx.cameraWorld, ctx.world.ship.frame.body);
+      this.skyBrightness *= smoothstep(0.02, 0.6, cover);
       gfx.starfield.brightness = 1 - 0.97 * this.skyBrightness;
+      // The corona stays (a soft ring) while the disc is covered: only the sky glare fades.
       if (sunView) sunView.glowIntensity = 1 - 0.5 * this.skyBrightness;
       if (sunView) sunView.scorch = this.scorch.update(ctx.realDt, ctx.cameraWorld, bodies);
       this.shimmer.updateFrame(ctx.realDt, Math.log2(ctx.camera.far + 1), ctx.camera.aspect, ctx.cameraWorld, world.universe.root.position, bodies);

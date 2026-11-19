@@ -8,6 +8,7 @@ import { type FrameContext, placeRelative } from '../context';
 import type { GameRenderer } from '../renderer';
 import { type Ground, buildLandmark } from './builders';
 import { createLandmarkMaterial } from './material';
+import { eclipse } from '../eclipse';
 
 interface Entry {
   lm: LandmarkTarget;
@@ -135,6 +136,7 @@ export class LandmarkLayer {
         (u.uBodyCenterView!.value as Vector3).copy(body.position).sub(camera).applyMatrix4(ctx.camera.matrixWorldInverse);
         u.uTime!.value = ctx.realTime;
         u.uGlow!.value = config.landmarks.glow;
+        u.uEclSelf!.value = eclipse.idOf(body);
       }
     }
   }

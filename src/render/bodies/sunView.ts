@@ -9,6 +9,7 @@ import {
   ShaderMaterial,
 } from 'three';
 import type { Body } from '../../sim/universe';
+import { eclipse } from '../eclipse';
 import { type BodyView, type FrameContext, apparentSizeBoost, placeRelative } from '../context';
 
 /** Emissive sun disc plus a camera facing corona glow. HDR values feed the bloom pass. */
@@ -85,7 +86,8 @@ export class SunView implements BodyView {
     const b = this.body;
     placeRelative(this.object, b.position, ctx.cameraWorld);
     const dist = b.position.distanceTo(ctx.cameraWorld);
-    const r = b.radius * apparentSizeBoost(b.radius, dist, b.minApparentSize);
+    // While a body crosses the sun the disc shrinks to the shadow sun, so a total cover hides all of it.
+    const r = b.radius * apparentSizeBoost(b.radius, dist, b.minApparentSize) * eclipse.discScale;
     this.disc.scale.setScalar(r);
     const corona = this.body.def.star?.coronaSize ?? 5;
     this.glow.scale.setScalar(r * corona * (1 + 2.2 * this.scorchAmount));
