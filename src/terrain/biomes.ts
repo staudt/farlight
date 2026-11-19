@@ -116,6 +116,21 @@ export function biomeColor(def: TerrainDef, s: TerrainSample, slope: number, det
     }
   }
 
+  if (s.tint !== 0 && !s.water) {
+    const t = s.tint;
+    if (t > 0) {
+      r += (0.82 - r) * t * 0.6;
+      g += (0.8 - g) * t * 0.6;
+      b += (0.76 - b) * t * 0.6;
+    } else {
+      // Dark, warm staining.
+      const k = -t * 0.75;
+      r += (0.34 - r) * k * 0.6 - r * k * 0.25;
+      g += (0.19 - g) * k * 0.7 - g * k * 0.2;
+      b += (0.1 - b) * k * 0.8 - b * k * 0.15;
+    }
+  }
+
   if (s.ice > 0.02 && !s.water) {
     const e = smoothstep(0.25 - soft * 0.15, 0.75 + soft * 0.15, s.ice + jn * 0.08);
     const c = def.polarCaps?.color ?? [0.88, 0.92, 0.96];

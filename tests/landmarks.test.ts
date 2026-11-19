@@ -10,7 +10,7 @@ import { World } from '../src/sim/world';
 import { createHeightSampler } from '../src/terrain/heightfield';
 import { Vector3 } from 'three';
 
-const KINDS: LandmarkKind[] = ['arch', 'monolith', 'crystalCanyon', 'waterfall', 'craterLake', 'ruins', 'giantTree', 'iceSpire', 'geyserField', 'glowingPool', 'canyon', 'summit', 'mesa', 'crater', 'lander'];
+const KINDS: LandmarkKind[] = ['arch', 'monolith', 'crystalCanyon', 'waterfall', 'craterLake', 'ruins', 'giantTree', 'iceSpire', 'geyserField', 'glowingPool', 'canyon', 'summit', 'mesa', 'crater', 'dunes', 'lander'];
 const DASH = /[-‐-―−]/;
 const galaxy = createGalaxy();
 const systems: StarSystemDef[] = galaxy.stars.slice(0, 41).map((s) => generateSystem(s));
@@ -83,7 +83,7 @@ describe('landmark data', () => {
         const sampler = createHeightSampler(bare, R);
         for (const l of lms) {
           const c = Math.cos(l.lat);
-          const s = { x: 0, y: 0, z: 0, n: 0, height: 0, water: false, depth: 0, depthN: 0, moisture: 0, ice: 0, lat: 0 };
+          const s = { x: 0, y: 0, z: 0, n: 0, height: 0, water: false, depth: 0, depthN: 0, moisture: 0, ice: 0, lat: 0, tint: 0 };
           sampler.sample(c * Math.cos(l.lon), Math.sin(l.lat), -c * Math.sin(l.lon), s);
           expect(s.water, `${sys.id}/${b.id}/${l.id}`).toBe(false);
         }

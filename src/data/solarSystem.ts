@@ -144,6 +144,13 @@ const moon: BodyDef = {
       { type: 'fbm', frequency: 900, amplitude: 0.0018, octaves: 3 },
     ],
     craters: { count: 4500, minRadius: 0.0015, maxRadius: 0.1, depth: 0.32, rimHeight: 0.16 },
+    features: [
+      // Tycho and Copernicus throw bright rays across the grey ground; Orientale is a terraced bullseye.
+      { kind: 'basin', name: 'Tycho', lat: -43.3 * DEG, lon: -11.2 * DEG, radius: 0.05, height: 0.9, rays: 1, bands: 2 },
+      { kind: 'basin', name: 'Copernicus', lat: 9.6 * DEG, lon: -20 * DEG, radius: 0.032, height: 0.7, rays: 0.75, bands: 3 },
+      { kind: 'basin', name: 'Orientale', lat: -19.4 * DEG, lon: -92.8 * DEG, radius: 0.13, height: 0.55, bands: 4 },
+      { kind: 'crater', name: 'Aristarchus', lat: 23.7 * DEG, lon: -47.4 * DEG, radius: 0.018, height: -0.5, rays: 0.8 },
+    ],
     biomes: [
       { name: 'maria', color: [0.055, 0.055, 0.06], maxHeight: -0.1 },
       { name: 'floor', color: [0.15, 0.148, 0.142], maxHeight: 0.0 },
@@ -190,6 +197,11 @@ const mercury: BodyDef = {
       { type: 'fbm', frequency: 30, amplitude: 0.06, octaves: 4 },
     ],
     craters: { count: 700, minRadius: 0.004, maxRadius: 0.1, depth: 0.2, rimHeight: 0.07 },
+    features: [
+      { kind: 'basin', name: 'Hokusai', lat: 57.8 * DEG, lon: -16.8 * DEG, radius: 0.03, height: 0.6, rays: 1, bands: 2 },
+      { kind: 'basin', name: 'Rembrandt', lat: -33 * DEG, lon: 88 * DEG, radius: 0.07, height: 0.5, rays: 0.5, bands: 3 },
+      { kind: 'cliff', name: 'Discovery Rupes', lat: -55 * DEG, lon: 38 * DEG, radius: 0.22, height: 0.35 },
+    ],
     biomes: [
       { name: 'dark plains', color: [0.3, 0.27, 0.24], maxHeight: -0.12 },
       { name: 'grey highlands', color: [0.5, 0.48, 0.45] },
@@ -311,7 +323,10 @@ const mars: BodyDef = {
     craters: { count: 300, minRadius: 0.005, maxRadius: 0.08, depth: 0.2, rimHeight: 0.06 },
     features: [
       { kind: 'volcano', name: 'Olympus Mons', lat: 18.65 * DEG, lon: -133.8 * DEG, radius: 0.12, height: 1.0 },
-      { kind: 'canyon', name: 'Valles Marineris', lat: -8 * DEG, lon: -70 * DEG, radius: 0.25, height: -0.6 },
+      { kind: 'canyon', name: 'Valles Marineris', lat: -8 * DEG, lon: -70 * DEG, radius: 0.25, height: -0.6, bands: 7 },
+      { kind: 'canyon', name: 'Ius Chasma', lat: -7 * DEG, lon: -84 * DEG, radius: 0.12, height: -0.45, bands: 5 },
+      { kind: 'dunes', name: 'Olympia Undae', lat: 72 * DEG, lon: -170 * DEG, radius: 0.07, height: 0.014, bands: 44 },
+      { kind: 'dunes', name: 'Hellespontus Dunes', lat: -45 * DEG, lon: 40 * DEG, radius: 0.09, height: 0.012, bands: 36 },
     ],
     biomes: [
       { name: 'basalt lowlands', color: [0.12, 0.06, 0.05], maxHeight: -0.2 },
@@ -488,7 +503,11 @@ const io: BodyDef = {
     ],
     features: [
       { kind: 'volcano', name: 'Pele', lat: 18.7 * DEG, lon: -105 * DEG, radius: 0.06, height: 0.5 },
-      { kind: 'volcano', name: 'Loki Patera', lat: -13 * DEG, lon: -50 * DEG, radius: 0.1, height: 0.4 },
+      // Loki is a flat floored lake of lava, not a cone; channels feed it and glow at night.
+      { kind: 'plain', name: 'Loki Patera', lat: -13 * DEG, lon: -50 * DEG, radius: 0.07, height: 1.4 },
+      { kind: 'canyon', name: 'Loki Channel', lat: -9 * DEG, lon: -58 * DEG, radius: 0.16, height: -1.2 },
+      { kind: 'canyon', name: 'Amirani Flow', lat: 24 * DEG, lon: 112 * DEG, radius: 0.18, height: -1.2 },
+      { kind: 'canyon', name: 'Prometheus Flow', lat: 2 * DEG, lon: -50 * DEG, radius: 0.14, height: -1.1 },
       { kind: 'volcano', name: 'Prometheus', lat: -1.2 * DEG, lon: -57 * DEG, radius: 0.04, height: 0.3 },
       { kind: 'volcano', name: 'Tvashtar', lat: 64 * DEG, lon: -120 * DEG, radius: 0.05, height: 0.35 },
     ],
@@ -539,8 +558,10 @@ const europa: BodyDef = {
       { type: 'fbm', frequency: 1.5, amplitude: 0.5, octaves: 3 },
       { type: 'ridged', frequency: 6, amplitude: 0.5, octaves: 4 },
     ],
+    // A world wide web of crevasses with ridged flanks and brown stained floors.
+    features: [{ kind: 'lineae', name: 'Lineae', lat: 0, lon: 0, radius: 1.5, height: 0.35, bands: 6 }],
     biomes: [
-      { name: 'brown cracks', color: [0.5, 0.33, 0.2], minHeight: 0.3 },
+      { name: 'brown cracks', color: [0.5, 0.33, 0.2], minHeight: 0.55 },
       { name: 'cream ice', color: [0.86, 0.8, 0.7], maxHeight: -0.1 },
       { name: 'white ice', color: [0.94, 0.92, 0.88] },
     ],
@@ -620,6 +641,11 @@ const callisto: BodyDef = {
       { type: 'fbm', frequency: 30, amplitude: 0.05, octaves: 4 },
     ],
     craters: { count: 1200, minRadius: 0.004, maxRadius: 0.12, depth: 0.2, rimHeight: 0.07 },
+    features: [
+      // Valhalla: a bright multi ring bullseye with terraced walls.
+      { kind: 'basin', name: 'Valhalla', lat: 14.7 * DEG, lon: -55.5 * DEG, radius: 0.2, height: 0.28, rays: 0.7, bands: 5 },
+      { kind: 'basin', name: 'Asgard', lat: 32 * DEG, lon: 140 * DEG, radius: 0.11, height: 0.3, rays: 0.5, bands: 4 },
+    ],
     biomes: [
       { name: 'dark ice', color: [0.2, 0.18, 0.16] },
       { name: 'grey crust', color: [0.35, 0.33, 0.3] },
@@ -723,6 +749,12 @@ const titan: BodyDef = {
       { type: 'fbm', frequency: 2, amplitude: 0.6, octaves: 5 },
       { type: 'ridged', frequency: 8, amplitude: 0.3, octaves: 4 },
       { type: 'billow', frequency: 25, amplitude: 0.08, octaves: 3 },
+    ],
+    // Long linear dune seas wrap the equator.
+    features: [
+      { kind: 'dunes', name: 'Belet', lat: 0 * DEG, lon: -130 * DEG, radius: 0.3, height: 0.012, bands: 160 },
+      { kind: 'dunes', name: 'Shangri-La', lat: 4 * DEG, lon: 150 * DEG, radius: 0.3, height: 0.012, bands: 160 },
+      { kind: 'dunes', name: 'Fensal', lat: 2 * DEG, lon: 10 * DEG, radius: 0.25, height: 0.01, bands: 140 },
     ],
     biomes: [
       { name: 'dark dunes', color: [0.2, 0.14, 0.09], maxHeight: 0.1 },
@@ -1278,23 +1310,30 @@ landmarks(earth, [
 landmarks(moon, [
   { id: 'tranquility', name: 'Tranquility Base', kind: 'lander', lat: 0.67, lon: 23.47, r: 12, h: 8, description: 'A small lander and a flag, left exactly as they were.' },
   { id: 'tycho_monolith', name: 'Tycho Monolith', kind: 'monolith', lat: -43.3, lon: -11.2, r: 34, h: 320, description: 'A black slab buried in the crater floor, waiting to be found.' },
+  { id: 'tycho', name: 'Tycho Crater', kind: 'crater', lat: -43.3, lon: -11.2, r: 8500, h: 60, noStamp: true, description: 'A young crater with terraced walls and a central peak, flinging white rays across half the Moon.', color: [0.8, 0.8, 0.78] },
+  { id: 'copernicus', name: 'Copernicus Crater', kind: 'crater', lat: 9.6, lon: -20, r: 5500, h: 60, noStamp: true, description: 'Stepped walls fall to a mountain at its heart, ringed by a bright blanket of rays.', color: [0.8, 0.8, 0.78] },
   { id: 'shackleton', name: 'Shackleton Crater', kind: 'craterLake', lat: -89.5, lon: 129, r: 1800, h: 150, description: 'Ice that has never seen the sun, deep in a bowl of night.', color: [0.62, 0.8, 0.95] },
 ]);
 landmarks(mercury, [
-  { id: 'caloris', name: 'Caloris Basin', kind: 'crater', lat: 30.5, lon: -170.3, r: 6000, h: 500, description: 'A scar of the first great impact, ringed by broken hills.' },
+  { id: 'hokusai', name: 'Hokusai Rays', kind: 'crater', lat: 57.8, lon: -16.8, r: 7000, h: 60, noStamp: true, description: 'A young crater whose bright rays race across the dark plains for a thousand kilometres.', color: [0.75, 0.72, 0.68] },
+  { id: 'caloris', name: 'Caloris Basin', kind: 'crater', lat: 30.5, lon: -170.3, r: 38000, h: 2500, description: 'A scar of the first great impact, ringed by broken hills.' },
 ]);
 landmarks(mars, [
   { id: 'olympus_caldera', name: 'Olympus Mons Caldera', kind: 'summit', lat: 18.65, lon: -133.8, r: 60, h: 45, description: 'You are higher than any mountain should let you be.', noStamp: true },
   { id: 'valles_floor', name: 'Valles Marineris Floor', kind: 'crystalCanyon', lat: -6.3, lon: -70, r: 3500, h: 200, description: 'Rust walls rise for miles around a floor strewn with glass.', color: [1.0, 0.55, 0.3], noStamp: true },
+  { id: 'olympia_undae', name: 'Olympia Undae', kind: 'dunes', lat: 72, lon: -170, r: 24000, h: 80, noStamp: true, description: 'Black dunes with razor crests circle the pole like a frozen sea.', color: [0.9, 0.5, 0.25] },
   { id: 'cydonia', name: 'Cydonia Ruins', kind: 'ruins', lat: 40.75, lon: -9.46, r: 220, h: 60, description: 'A ring of broken pillars, older than the weather.' },
 ]);
 landmarks(io, [
+  { id: 'amirani_flow', name: 'Amirani Flow', kind: 'glowingPool', lat: 24, lon: 112, r: 1400, h: 120, noStamp: true, description: 'A river of lava, glowing through the dark.', color: [1.0, 0.42, 0.08] },
   { id: 'loki_patera', name: 'Loki Patera', kind: 'glowingPool', lat: -13, lon: -50, r: 2000, h: 250, description: 'A lake of molten rock that breathes light into the dark.', color: [1.0, 0.42, 0.08], noStamp: true },
 ]);
 landmarks(europa, [
+  { id: 'agenor_linea', name: 'Agenor Linea', kind: 'canyon', lat: -40, lon: 160, r: 9000, h: 200, noStamp: true, description: 'Brown cracks cross and recross the ice like scratches on a shell.', color: [0.45, 0.28, 0.18] },
   { id: 'conamara', name: 'Conamara Chaos', kind: 'iceSpire', lat: 9.5, lon: -85.5, r: 1000, h: 350, description: 'Blue needles of ice crowd together and catch the light.' },
 ]);
 landmarks(titan, [
+  { id: 'belet_dunes', name: 'Belet Dune Sea', kind: 'dunes', lat: 0, lon: -130, r: 40000, h: 90, noStamp: true, description: 'Dunes taller than towers run in long parallel lines under the orange haze.', color: [0.9, 0.55, 0.2] },
   { id: 'kraken_mare', name: 'Kraken Mare Shore', kind: 'craterLake', lat: 68, lon: -35, r: 2000, h: 120, description: 'A still methane sea under an orange sky.', color: [0.2, 0.15, 0.06] },
 ]);
 landmarks(enceladus, [
@@ -1312,6 +1351,9 @@ landmarks(miranda, [
 landmarks(triton, [
   { id: 'akupara', name: 'Akupara Maculae', kind: 'geyserField', lat: -45, lon: 30, r: 2500, h: 1200, description: 'Dark plumes lean on the thin wind and paint long streaks across the pink ice.', color: [0.38, 0.3, 0.3] },
 ]);
+landmarks(callisto, [
+  { id: 'valhalla', name: 'Valhalla', kind: 'crater', lat: 14.7, lon: -55.5, r: 45000, h: 200, noStamp: true, description: 'A bright bullseye of ringed ridges, the scar of an impact that shook the whole moon.', color: [0.7, 0.68, 0.64] },
+])
 landmarks(ceres, [
   { id: 'occator', name: 'Occator Crater', kind: 'crater', lat: 19.8, lon: -121, r: 4600, h: 500, description: 'A dark crater whose floor is dotted with patches of salt as white as snow.', color: [0.82, 0.8, 0.72] },
   { id: 'vinalia', name: 'Vinalia Faculae', kind: 'glowingPool', lat: 20.9, lon: -119.6, r: 900, h: 90, description: 'Salt left by briny water, bright as a lamp.', color: [0.85, 0.82, 0.74] },

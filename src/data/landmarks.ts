@@ -18,6 +18,7 @@ export const LANDMARK_NOUN: Record<LandmarkKind, string> = {
   summit: 'Summit',
   mesa: 'Mesa',
   crater: 'Basin',
+  dunes: 'Dunes',
   lander: 'Lander',
 };
 
@@ -36,6 +37,7 @@ export const DESCRIPTIONS: Record<LandmarkKind, readonly string[]> = {
   summit: ['A small cairn marks the top of the world.'],
   mesa: ['A dome of red stone rises alone from the flat land.'],
   crater: ['A vast basin, ringed by hills and hushed by its own size.'],
+  dunes: ['Crisp crested dunes march to the horizon, and the wind is still shaping them.', 'A sea of sand, frozen in the middle of a wave.'],
   lander: ['A small lander and a flag, left exactly as they were.'],
 };
 
@@ -55,6 +57,7 @@ export const LANDMARK_COLOR: Record<LandmarkKind, RGB> = {
   summit: [0.5, 0.48, 0.45],
   mesa: [0.55, 0.2, 0.09],
   crater: [0.4, 0.38, 0.36],
+  dunes: [0.8, 0.6, 0.35],
   lander: [0.8, 0.7, 0.4],
 };
 
@@ -90,8 +93,12 @@ export function landmarkStamps(lm: LandmarkDef, terrain: TerrainDef): FeatureDef
       return [{ ...base, kind: 'cliff', radius: lm.radius, height: h }];
     case 'craterLake':
     case 'glowingPool':
-    case 'crater':
       return [{ ...base, kind: 'crater', radius: lm.radius, height: -h }];
+    case 'crater':
+      // A real basin: terraced wall, central peak and a few bright rays.
+      return [{ ...base, kind: 'basin', radius: lm.radius, height: h, rays: 0.5 }];
+    case 'dunes':
+      return [{ ...base, kind: 'dunes', radius: lm.radius, height: h * 0.06, bands: 30 }];
     case 'iceSpire':
       return [{ ...base, kind: 'spires', radius: lm.radius * 1.6, height: h * 0.8 }];
     default:

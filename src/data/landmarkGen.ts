@@ -11,7 +11,7 @@ export type LandmarkWorld = 'living' | 'desert' | 'lava' | 'ice' | 'toxic' | 'cr
 
 const KINDS: Record<LandmarkWorld, Partial<Record<LandmarkKind, number>>> = {
   living: { arch: 2, waterfall: 3, giantTree: 3, craterLake: 2, ruins: 2, monolith: 1, glowingPool: 1, crystalCanyon: 1 },
-  desert: { arch: 3, monolith: 2, canyon: 2, ruins: 2, mesa: 3, geyserField: 1, crystalCanyon: 1 },
+  desert: { arch: 3, monolith: 2, canyon: 2, ruins: 2, mesa: 3, geyserField: 1, crystalCanyon: 1, dunes: 2 },
   lava: { glowingPool: 3, monolith: 2, crater: 2, geyserField: 2, arch: 1 },
   ice: { iceSpire: 3, geyserField: 2, craterLake: 2, arch: 1, monolith: 1, crystalCanyon: 1 },
   toxic: { glowingPool: 3, monolith: 2, ruins: 2, arch: 2, geyserField: 1 },
@@ -36,6 +36,7 @@ const SIZES: Record<LandmarkKind, { r: [number, number]; h: [number, number] }> 
   summit: { r: [60, 60], h: [40, 40] },
   mesa: { r: [600, 1200], h: [200, 400] },
   crater: { r: [1500, 3000], h: [150, 300] },
+  dunes: { r: [4000, 7000], h: [60, 120] },
   lander: { r: [10, 10], h: [8, 8] },
 };
 

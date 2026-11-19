@@ -26,6 +26,7 @@ import {
   skyAtmosphere,
 } from './generate';
 import { type LandmarkWorld, generateLandmarks } from './landmarkGen';
+import { addWorldFeatures } from './worldFeatures';
 import { moonName, slug } from './names';
 import type { AtmosphereDef, BiomeDef, BodyDef, NoiseLayer, PropDef, RGB, RingDef, TerrainDef, WeatherDef } from './types';
 
@@ -73,6 +74,7 @@ function reskin(def: BodyDef, w: { terrain: TerrainDef; atmosphere?: AtmosphereD
   };
   if (w.hazards?.length) def.info.hazards = w.hazards;
   else delete def.info.hazards;
+  addWorldFeatures(def, world);
   def.landmarks = generateLandmarks(def, world, def.physical.radius * 0.1);
 }
 
@@ -384,7 +386,9 @@ function addMoon(rng: Rng, bodies: BodyDef[], planet: BodyDef, ratio: number, ra
   moon.orbit = orbit;
   moon.physical = { ...moon.physical, radius, surfaceGravity: round(0.165 * (radius / 1.74e6), 4), rotationPeriod: orbit!.period };
   moon.info.temperature = celsiusText(kind === 'volcanic' ? tempC + 60 : tempC - 15);
-  moon.landmarks = generateLandmarks(moon, kind === 'ice' ? 'moonIce' : kind === 'volcanic' ? 'moonVolcanic' : 'cratered', radius * 0.1);
+  const mw: LandmarkWorld = kind === 'ice' ? 'moonIce' : kind === 'volcanic' ? 'moonVolcanic' : 'cratered';
+  addWorldFeatures(moon, mw);
+  moon.landmarks = generateLandmarks(moon, mw, radius * 0.1);
   bodies.push(moon);
   return moon;
 }

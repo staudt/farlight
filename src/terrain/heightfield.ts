@@ -25,10 +25,12 @@ export interface TerrainSample {
   ice: number;
   /** Signed latitude, radians. */
   lat: number;
+  /** -1..1 surface tint from features (bright rays, dune crests, dark cracks, strata). 0 elsewhere. */
+  tint: number;
 }
 
 export function makeSample(): TerrainSample {
-  return { x: 0, y: 1, z: 0, n: 0, height: 0, water: false, depth: 0, depthN: 0, moisture: 0.5, ice: 0, lat: 0 };
+  return { x: 0, y: 1, z: 0, n: 0, height: 0, water: false, depth: 0, depthN: 0, moisture: 0.5, ice: 0, lat: 0, tint: 0 };
 }
 
 export interface TerrainSampler extends HeightSampler {
@@ -71,10 +73,17 @@ interface CompiledFeature {
   nx: number;
   ny: number;
   nz: number;
-  /** Chord radius beyond which the feature has no influence. */
+  /** Chord radius beyond which the feature has no influence on the height. */
   reach: number;
+  /** Chord radius beyond which it has no influence on the tint (ejecta rays reach further). */
+  tintReach: number;
+  /** Covers the whole sphere: no hemisphere cull, no edge fade. */
+  global: boolean;
   seed: number;
 }
+
+/** Ejecta rays fade out within this many feature radii. */
+export const RAY_REACH = 8;
 
 function smoothstep(a: number, b: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -140,8 +149,10 @@ function compileFeature(def: FeatureDef, seed: number): CompiledFeature {
   const nx = cy * ez - cz * ey;
   const ny = cz * ex - cx * ez;
   const nz = cx * ey - cy * ex;
-  const reach = def.kind === 'canyon' ? def.radius * 1.3 : def.radius * 1.3;
-  return { def, cx, cy, cz, ex, ey, ez, nx, ny, nz, reach, seed };
+  const global = def.kind === 'lineae' && def.radius >= 1.4;
+  const reach = global ? Infinity : def.radius * 1.3;
+  const tintReach = (def.kind === 'crater' || def.kind === 'basin') && (def.rays ?? 0) > 0 ? def.radius * RAY_REACH : reach;
+  return { def, cx, cy, cz, ex, ey, ez, nx, ny, nz, reach, tintReach, global, seed };
 }
 
 export function createHeightSampler(def: BodyDef, radius: number): TerrainSampler {
@@ -319,17 +330,44 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
     return sum;
   }
 
+  /** Tint accumulated by the last featuresHeight call (read by sample()). */
+  let tintAcc = 0;
+
+  /** Bright rays thrown out from a crater or basin: radial streaks that fade with distance. */
+  function rayTint(f: CompiledFeature, x: number, y: number, z: number, tt: number): number {
+    const rays = f.def.rays ?? 0;
+    if (rays <= 0) return 0;
+    const a = x * f.ex + y * f.ey + z * f.ez;
+    const b = x * f.nx + y * f.ny + z * f.nz;
+    const len = Math.hypot(a, b) || 1;
+    const ca = a / len;
+    const sa = b / len;
+    const k = f.seed * 0.37;
+    const n1 = detail.noise(ca * 2.6 + k, sa * 2.6, k * 0.5);
+    const n2 = detail.noise(ca * 7.5 + k, sa * 7.5 + 3, 1.7);
+    const streak = Math.min(1, Math.max(0, (n1 * 0.7 + n2 * 0.55) * 1.7));
+    const fall = tt < 1 ? 0.5 * smoothstep(0.2, 1, tt) : Math.exp(-(tt - 1) * 0.45);
+    // The bright ejecta apron hugs the rim, the rays carry on beyond it.
+    const apron = tt > 0.85 ? Math.exp(-Math.pow((tt - 1.0) / 0.45, 2)) * 0.45 : 0;
+    const inner = tt < 0.9 ? 0.4 * (1 - smoothstep(0.5, 0.9, tt)) : 0;
+    return rays * Math.min(1, apron + inner + streak * streak * fall);
+  }
+
   function featuresHeight(x: number, y: number, z: number): number {
     let sum = 0;
+    tintAcc = 0;
     for (let i = 0; i < features.length; i++) {
       const f = features[i]!;
       const dot = x * f.cx + y * f.cy + z * f.cz;
-      if (dot <= 0) continue;
+      if (dot <= 0 && !f.global) continue;
       const dx = x - f.cx;
       const dy = y - f.cy;
       const dz = z - f.cz;
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (dist > f.reach) continue;
+      if (dist > f.reach) {
+        if (dist <= f.tintReach) tintAcc += rayTint(f, x, y, z, dist / f.def.radius);
+        continue;
+      }
       const rad = f.def.radius;
       const tt = dist / rad;
       const ht = f.def.height;
@@ -358,6 +396,71 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
           const bowl = -depth * (1 - smoothstep(0.35, 1.0, tt));
           const rd = (tt - 1) / 0.22;
           sum += bowl + depth * 0.22 * Math.exp(-rd * rd);
+          tintAcc += rayTint(f, x, y, z, tt);
+          break;
+        }
+        case 'basin': {
+          // Flat floor, a terraced wall, a raised rim and a central peak; rays carry on outside.
+          const d = Math.abs(ht);
+          const steps = f.def.bands ?? 3;
+          const u = smoothstep(0.35, 1.0, tt);
+          let uq = u;
+          if (steps > 0) {
+            const sv = u * steps;
+            const fl = Math.floor(sv);
+            uq = u * 0.3 + 0.7 * ((fl + smoothstep(0.55, 1, sv - fl)) / steps);
+          }
+          const rd = (tt - 1) / 0.1;
+          const pk = Math.max(0, 1 - tt / 0.16);
+          let hh = -d * (1 - uq) + d * 0.3 * Math.exp(-rd * rd) + d * 0.75 * pk * pk;
+          if (steps >= 4) {
+            // Multi ring basin: low concentric ridges on the floor.
+            const r1 = (tt - 0.52) / 0.035;
+            const r2 = (tt - 0.74) / 0.035;
+            hh += d * 0.16 * (Math.exp(-r1 * r1) + Math.exp(-r2 * r2));
+          }
+          if (tt > 1) hh += d * 0.06 * (1 - smoothstep(1, 1.35, tt));
+          sum += hh;
+          tintAcc += rayTint(f, x, y, z, tt);
+          break;
+        }
+        case 'lineae': {
+          const fade = f.global ? 1 : smoothstep(1, 0.7, tt);
+          if (fade <= 0) break;
+          const d = Math.abs(ht);
+          const dens = f.def.bands ?? 6;
+          const scale = f.global ? 1 : 0.8 / rad;
+          const k1 = dens * 2 * scale;
+          const k2 = dens * 6 * scale;
+          const sd = f.seed * 0.113;
+          const bend = detail.noise(x * k1 * 0.5 + sd, y * k1 * 0.5, z * k1 * 0.5) * 0.18;
+          const m1 = Math.abs(detail.noise(x * k1 + sd + bend, y * k1 + bend, z * k1 + 7.7)) ;
+          const m2 = Math.abs(detail.noise(x * k2 + sd, y * k2 + 3.1, z * k2 + bend * 3));
+          const g1 = 1 - smoothstep(0, 0.05, m1);
+          const f1 = smoothstep(0.05, 0.1, m1) * (1 - smoothstep(0.1, 0.22, m1));
+          const g2 = 1 - smoothstep(0, 0.08, m2);
+          const f2 = smoothstep(0.08, 0.14, m2) * (1 - smoothstep(0.14, 0.3, m2));
+          sum += d * fade * (f1 * 0.45 - g1 + (f2 * 0.45 - g2) * 0.4);
+          tintAcc -= fade * Math.min(1, g1 * 0.9 + g2 * 0.5 + f1 * 0.2);
+          break;
+        }
+        case 'dunes': {
+          if (tt >= 1) break;
+          const fade = smoothstep(1, 0.6, tt);
+          const a = x * f.ex + y * f.ey + z * f.ez;
+          const b = x * f.nx + y * f.ny + z * f.nz;
+          const wind = f.seed * 0.7;
+          const crests = f.def.bands ?? 40;
+          const kk = 3 / rad;
+          const sw = detail.noise(x * kk + f.seed, y * kk, z * kk) * 1.6 + detail.noise(x * kk * 4, y * kk * 4 + f.seed, z * kk * 4) * 0.35;
+          const patch = smoothstep(-0.25, 0.35, detail.noise(x * kk * 0.6 + 9, y * kk * 0.6 + f.seed, z * kk * 0.6));
+          const sv = ((a * Math.cos(wind) + b * Math.sin(wind)) / rad) * crests * 0.5 + sw;
+          const fr = sv - Math.floor(sv);
+          // Long gentle windward slope, short slip face, a sharpened crest.
+          let prof = fr < 0.78 ? fr / 0.78 : (1 - fr) / 0.22;
+          prof = prof * prof * (3 - 2 * prof);
+          sum += Math.abs(ht) * fade * patch * prof;
+          tintAcc += (prof - 0.45) * 0.45 * fade * patch;
           break;
         }
         case 'plain': {
@@ -387,7 +490,16 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
           const width = rad * (0.07 + 0.03 * Math.sin(along * 6 + f.seed));
           const wall = smoothstep(width * 2.2, width * 0.6, across);
           const end = smoothstep(1, 0.7, Math.abs(along));
-          sum -= Math.abs(ht) * wall * end;
+          const bands = f.def.bands ?? 0;
+          if (bands > 0) {
+            // Layered walls: the depth profile steps, and each layer gets its own shade.
+            const sv = wall * bands;
+            const fl = Math.floor(sv);
+            const wq = (fl + smoothstep(0.7, 1, sv - fl)) / bands;
+            sum -= Math.abs(ht) * (wall * 0.4 + wq * 0.6) * end;
+            const tone = (hash4(fl, Math.floor(f.seed), 5, 77) * INV32 - 0.5) * 0.7;
+            tintAcc += tone * smoothstep(0.04, 0.2, wall) * smoothstep(1, 0.85, wall) * end;
+          } else sum -= Math.abs(ht) * wall * end;
           break;
         }
       }
@@ -425,6 +537,7 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
         out.water = false;
         out.moisture = 0.5;
         out.ice = 0;
+        out.tint = 0;
         return out;
       }
       const n = rawN(x, y, z);
@@ -451,6 +564,7 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
         if (iceMap) out.ice = sampleMap(iceMap, ll.lat, ll.lon);
       }
       out.moisture = moist;
+      out.tint = Math.max(-1, Math.min(1, tintAcc));
       return out;
     },
   };

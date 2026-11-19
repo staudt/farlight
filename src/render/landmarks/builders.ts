@@ -542,6 +542,7 @@ const BUILDERS: Record<LandmarkKind, Builder> = {
   summit,
   mesa,
   crater,
+  dunes: summit,
   lander,
 };
 

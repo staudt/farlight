@@ -20,7 +20,7 @@ import {
   scaleComets,
   skyFocusDir,
 } from './render/space/spaceData';
-import type { BodyDef } from './data/types';
+import type { BodyDef, FeatureKind } from './data/types';
 import { findLifeSpot } from './render/life/spots';
 import { whalePlan } from './render/life/skyWhales';
 import { Flock } from './render/life/boids';
@@ -569,6 +569,54 @@ export const SCENARIOS: Record<string, Scenario> = {
     description: 'Low over a plain bristling with glittering crystal spires',
     generic: true,
     apply: (w) => variantLow(w, (d) => d.info.features.includes('Crystal plains'), 90),
+  },
+  // --- Planet interest: ray craters, basins, strata, dunes, lineae and lava channels (one block).
+  'moon-ray-crater': {
+    description: 'High over Tycho on the Moon, white rays spraying across the grey ground from a terraced crater',
+    apply: (w) => landmarkApproach(w, 'moon', 'tycho', { distance: 60000, altitude: 30000, heading: 0, hour: 12, lookLift: 0, throttle: 0.1 }),
+  },
+  'mercury-ray-crater': {
+    description: 'Over Hokusai on Mercury, bright rays crossing the dark plains',
+    apply: (w) => landmarkApproach(w, 'mercury', 'hokusai', { distance: 50000, altitude: 25000, heading: 0, hour: 12, lookLift: 0, throttle: 0.1 }),
+  },
+  'callisto-valhalla': {
+    description: 'Approaching Valhalla on Callisto, a bright terraced bullseye on dark ice',
+    apply: (w) => landmarkApproach(w, 'callisto', 'valhalla', { distance: 90000, altitude: 30000, heading: 0, hour: 12, lookLift: 0, throttle: 0.1 }),
+  },
+  'mars-strata': {
+    description: 'Along the wall of Valles Marineris on Mars, layered rock in bands of red and ochre',
+    apply: (w) => featureApproach(w, 'canyon', { body: 'mars', distance: 0, altitude: 0.006, hour: 10 }),
+  },
+  'mars-dunes': {
+    description: 'Low over the dark crested dunes of Olympia Undae near the Martian pole',
+    apply: (w) => landmarkApproach(w, 'mars', 'olympia_undae', { distance: 14000, altitude: 1600, heading: 90, hour: 10, lookLift: 0, throttle: 0.15 }),
+  },
+  'titan-dunes': {
+    description: 'Gliding over the linear dune seas of Titan in the orange haze',
+    apply: (w) => landmarkApproach(w, 'titan', 'belet_dunes', { distance: 30000, altitude: 2500, heading: 90, hour: 11, lookLift: 0, throttle: 0.15 }),
+  },
+  'europa-lineae': {
+    description: 'Low over the cracked ice of Europa, brown crevasses crossing and recrossing',
+    apply: (w) => landmarkApproach(w, 'europa', 'agenor_linea', { distance: 9000, altitude: 1500, heading: 0, hour: 12, lookLift: 0, throttle: 0.1 }),
+  },
+  'io-lava-night': {
+    description: 'Over Io at night, rivers of lava glowing in their channels',
+    apply: (w) => landmarkApproach(w, 'io', 'amirani_flow', { distance: 14000, altitude: 1800, heading: 0, hour: 0, lookLift: 0, throttle: 0.1 }),
+  },
+  'basin-world-low': {
+    description: 'High over an impact basin with a central peak, terraced walls and bright rays, on any cratered world',
+    generic: true,
+    apply: (w) => featureApproach(w, 'basin', { distance: 0.8, altitude: 0.35, hour: 12 }),
+  },
+  'dune-world-low': {
+    description: 'Low over a field of crisp crested dunes on any desert world',
+    generic: true,
+    apply: (w) => featureApproach(w, 'dunes', { distance: 0.14, altitude: 0.006, hour: 10 }),
+  },
+  'lineae-world-low': {
+    description: 'Low over a shell of ice cut by criss crossing crevasses, on any icy world',
+    generic: true,
+    apply: (w) => featureApproach(w, 'lineae', { distance: 0.1, altitude: 0.008, hour: 12 }),
   },
 };
 
@@ -1223,6 +1271,46 @@ function landmarkApproach(
   w.place({ body: bodyId, lat: ll.lat / DEG2RAD, lon: ll.lon / DEG2RAD, altitude: o.altitude, heading: o.heading, pitch: 0, throttle: o.throttle ?? 0.22, time });
   const ground = w.groundHeight(body, lm.dir);
   aimAt(w, () => lm.dir, ground + o.lookLift);
+}
+
+/**
+ * Approaches the first authored feature of `kind` on a rocky body (data only). Distances and altitude
+ * are fractions of the body radius. Global features (lineae) are approached at their pole.
+ */
+function featureApproach(w: World, kind: FeatureKind, o: { distance: number; altitude: number; hour: number; body?: string }): void {
+  const def = o.body ? w.universe.system.bodies.find((b) => b.id === o.body)! : variantBody(w, (d) => d.terrain?.features?.some((f) => f.kind === kind) === true);
+  const f = def.terrain?.features?.find((x) => x.kind === kind);
+  if (!f) return variantLow(w, () => true);
+  const body = w.universe.get(def.id);
+  const flat = f.radius >= 1.4 ? 0.5 : f.lat;
+  const flon = f.radius >= 1.4 ? 0.3 : f.lon;
+  const dir = new Vector3();
+  latLonToDir(flat, flon, dir);
+  const east = new Vector3(-Math.sin(flon), 0, -Math.cos(flon));
+  const north = new Vector3().crossVectors(dir, east).normalize();
+  if (kind === 'canyon') {
+    // Over the deepest point of the canyon, looking along it so both walls and their layers show.
+    const probe = new Vector3();
+    let low = Infinity;
+    for (let i = -12; i <= 12; i++) {
+      for (let j = -12; j <= 12; j++) {
+        probe.copy(dir).addScaledVector(east, (i / 12) * f.radius * 0.7).addScaledVector(north, (j / 12) * f.radius * 0.7).normalize();
+        const g = w.groundHeight(body, probe);
+        if (g < low) {
+          low = g;
+          dir.copy(probe);
+        }
+      }
+    }
+    const ll = dirToLatLon(dir.x, dir.y, dir.z);
+    w.place({ body: def.id, lat: ll.lat / DEG2RAD, lon: ll.lon / DEG2RAD, altitude: o.altitude * body.radius, heading: 90, pitch: -10, throttle: 0.1, time: findLocalHourTime(w, def.id, (flon * 180) / Math.PI, o.hour) });
+    return;
+  }
+  const start = dir.clone().multiplyScalar(body.radius).addScaledVector(north, -o.distance * body.radius).normalize();
+  const ll = dirToLatLon(start.x, start.y, start.z);
+  const time = findLocalHourTime(w, def.id, (flon * 180) / Math.PI, o.hour);
+  w.place({ body: def.id, lat: ll.lat / DEG2RAD, lon: ll.lon / DEG2RAD, altitude: o.altitude * body.radius, heading: 0, pitch: 0, throttle: 0.12, time });
+  aimAt(w, () => dir, w.groundHeight(body, dir));
 }
 
 const _dir = new Vector3();

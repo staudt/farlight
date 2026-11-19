@@ -316,7 +316,20 @@ export interface CraterDef {
   rimHeight: number;
 }
 
-export type FeatureKind = 'volcano' | 'canyon' | 'spires' | 'mesa' | 'crater' | 'cliff' | 'plain';
+export type FeatureKind =
+  | 'volcano'
+  | 'canyon'
+  | 'spires'
+  | 'mesa'
+  | 'crater'
+  | 'cliff'
+  | 'plain'
+  /** Impact basin: terraced wall, raised rim, central peak, optional bright rays. */
+  | 'basin'
+  /** Criss-cross network of crevasses with ridged flanks and stained floors. A radius of 1.4 or more covers the whole world. */
+  | 'lineae'
+  /** Field of crisp crested dunes with slip faces, in patches. */
+  | 'dunes';
 
 export interface FeatureDef {
   kind: FeatureKind;
@@ -328,6 +341,10 @@ export interface FeatureDef {
   radius: number;
   /** Normalized height contribution. */
   height: number;
+  /** Craters and basins: brightness of the ejecta rays, 0..1 (0 or omitted: none). */
+  rays?: number;
+  /** Canyons: number of coloured strata bands on the walls. Basins: terraces on the wall. Lineae: crack density. Dunes: crests across the field. */
+  bands?: number;
 }
 
 export type LandmarkKind =
@@ -345,6 +362,7 @@ export type LandmarkKind =
   | 'summit'
   | 'mesa'
   | 'crater'
+  | 'dunes'
   | 'lander';
 
 /**
