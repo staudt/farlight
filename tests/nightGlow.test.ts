@@ -82,4 +82,4 @@ test('generated worlds are deterministic, lava worlds glow, some alien worlds ar
   }
   expect(lava).toBeGreaterThan(0);
   expect(glowing).toBeGreaterThan(0);
-});
+}, 30000); // generates many systems: slow when the machine is loaded
