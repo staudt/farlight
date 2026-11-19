@@ -1,6 +1,6 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { weatherAmount } from './render/weather/weatherMap';
-import { cloudCoverage } from './render/clouds/coverage';
+import { cloudCoverage, cloudRayOpticalDepth } from './render/clouds/coverage';
 import { biomeNameAt } from './terrain/biomes';
 import { makeSample, type TerrainSampler } from './terrain/heightfield';
 import type { World, ShipPlacement } from './sim/world';
@@ -99,6 +99,23 @@ export const SCENARIOS: Record<string, Scenario> = {
   'cockpit-earth': {
     description: 'Cockpit view low over the Portuguese coast in the morning',
     apply: (w) => w.place({ body: 'earth', lat: 38.7, lon: -9.4, altitude: 700, heading: 20, pitch: 0, throttle: 0.55, time: findLocalHourTime(w, 'earth', -9.4, 8.5) }),
+  },
+  // God ray and lens flare scenes.
+  'earth-sunrise-rays': {
+    description: 'Sunrise over mountains with broken clouds: light shafts through the gaps, looking at the sun',
+    apply: (w) => sunwardScene(w, 'earth', SUNRISE_SPOTS, [5.9, 6.0, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.0], [0.5, 8], 1500, 4, 0.4, true),
+  },
+  'earth-cloud-rays': {
+    description: 'Under broken clouds, looking up toward a high sun: shafts stream through the gaps',
+    apply: (w) => sunwardScene(w, 'earth', gridSpots(7, 15, 56), [9.2, 9.8, 10.4, 11], [34, 58], 1400, -6, 0.3),
+  },
+  'titan-haze-rays': {
+    description: 'Gliding toward the low sun through the thick orange haze of Titan',
+    apply: (w) => sunwardScene(w, 'titan', gridSpots(15, 30, 45), [7.5, 8.5, 9.5], [5, 18], 900, 3, 0.3),
+  },
+  'space-sun-flare': {
+    description: 'In space with the sun rising at the edge of the Earth: lens flare, half covered by the limb',
+    apply: (w) => spaceSunFlare(w, 'earth', 4),
   },
   'cockpit-night': {
     description: 'Cockpit view low over dark land at night',
@@ -1360,6 +1377,116 @@ function featureApproach(w: World, kind: FeatureKind, o: { distance: number; alt
 }
 
 const _dir = new Vector3();
+
+// ---------------------------------------------------------------------------------------------
+// Sun facing scenes (god rays, lens flare)
+
+const SUNRISE_SPOTS: [number, number][] = [[46.5, 8.2], [45.5, -110.5], [-33, -70], [-43.5, 170.5], [61.5, 7.5], [28.5, 85], [46.5, -121.7], [37.8, -119.3], [47.5, 11.5], [44, 7], [-13, -72], [35, 138.7], [-45, 168], [50, -123], [40, -106], [32, -109]];
+/** A coarse lat/lon grid of candidate spots. */
+function gridSpots(latStep: number, lonStep: number, latMax: number): [number, number][] {
+  const out: [number, number][] = [];
+  for (let lat = -latMax; lat <= latMax; lat += latStep) for (let lon = -180; lon < 180; lon += lonStep) out.push([lat, lon]);
+  return out;
+}
+
+/**
+ * Picks the best place and time for a view toward the sun with cloud gaps around it: the sun
+ * itself mostly visible, the sky near it half blocked. Scores the cloud optical depth along rays
+ * fanned around the sun, with the CPU cloud mirror. Falls back to the first spot on bodies without clouds.
+ */
+function sunwardScene(
+  w: World,
+  bodyId: string,
+  spots: [number, number][],
+  hours: number[],
+  elevRange: [number, number],
+  altitude: number,
+  pitchOffset: number,
+  throttle: number,
+  terrainWanted = false,
+): void {
+  const body = w.universe.get(bodyId);
+  const cl = body.def.atmosphere?.clouds;
+  const dir = new Vector3();
+  const east = new Vector3();
+  const north = new Vector3();
+  const sunL = new Vector3();
+  const ray = new Vector3();
+  const org = new Vector3();
+  const times = new Map<string, number>();
+  let best: { lat: number; lon: number; time: number; heading: number; pitch: number; score: number } | null = null;
+  for (const [lat, lon] of spots) {
+    for (const hour of hours) {
+      const key = `${lon}/${hour}`;
+      let time = times.get(key);
+      if (time === undefined) times.set(key, (time = findLocalHourTime(w, bodyId, lon, hour)));
+      w.universe.update(time);
+      latLonToDir(lat * DEG2RAD, lon * DEG2RAD, dir);
+      east.set(-Math.sin(lon * DEG2RAD), 0, -Math.cos(lon * DEG2RAD));
+      north.crossVectors(dir, east).normalize();
+      body.worldToLocalDir(sunL.copy(w.universe.root.position).sub(body.position).normalize(), sunL);
+      const sinE = sunL.dot(dir);
+      const elev = Math.asin(Math.min(1, Math.max(-1, sinE))) / DEG2RAD;
+      if (elev < elevRange[0] || elev > elevRange[1]) continue;
+      const az = Math.atan2(sunL.dot(east), sunL.dot(north));
+      let score = 0;
+      // The ridge line toward the sun should sit near the sun's elevation: it peeks over the crest.
+      if (terrainWanted) {
+        const ground0 = w.groundHeight(body, dir);
+        let ridge = -90;
+        for (const km of [2, 4, 7, 11, 16, 24, 35]) {
+          const t = (km * 1000) / body.radius;
+          nb.copy(dir).addScaledVector(north, Math.cos(az) * t).addScaledVector(east, Math.sin(az) * t).normalize();
+          const drop = (km * 1000) ** 2 / (2 * body.radius);
+          ridge = Math.max(ridge, Math.atan2(w.groundHeight(body, nb) - ground0 - altitude - drop, km * 1000) / DEG2RAD);
+        }
+        score += 4 - Math.min(4, Math.abs(ridge - elev + 0.5) / 1.2);
+      }
+      if (cl) {
+        org.copy(dir).multiplyScalar(body.radius + altitude);
+        let blocked = 0;
+        let n = 0;
+        for (const da of [-14, -7, 0, 7, 14]) {
+          for (const de of [-2, 3, 8]) {
+            const a = az + da * DEG2RAD;
+            const e = Math.max(0.5, elev + de) * DEG2RAD;
+            ray.copy(north).multiplyScalar(Math.cos(a)).addScaledVector(east, Math.sin(a)).multiplyScalar(Math.cos(e)).addScaledVector(dir, Math.sin(e));
+            const od = cloudRayOpticalDepth(cl, body.radius, body.atmosphereHeight, org, ray, time);
+            if (od > 0.8) blocked++;
+            n++;
+          }
+        }
+        ray.copy(north).multiplyScalar(Math.cos(az)).addScaledVector(east, Math.sin(az)).multiplyScalar(Math.cos(elev * DEG2RAD)).addScaledVector(dir, sinE);
+        const sunT = Math.exp(-cloudRayOpticalDepth(cl, body.radius, body.atmosphereHeight, org, ray, time));
+        score = 2 - Math.abs(blocked / n - 0.5) * 4 + (sunT > 0.3 ? 1.5 : -2);
+      }
+      if (!best || score > best.score) best = { lat, lon, time, heading: (az / DEG2RAD + 360) % 360, pitch: Math.max(-5, elev + pitchOffset), score };
+    }
+  }
+  if (!best) {
+    const [lat, lon] = spots[0]!;
+    best = { lat, lon, time: findLocalHourTime(w, bodyId, lon, hours[0]!), heading: 90, pitch: 5, score: 0 };
+  }
+  w.place({ body: bodyId, lat: best.lat, lon: best.lon, altitude, heading: best.heading, pitch: best.pitch, throttle, time: best.time });
+}
+
+/**
+ * Camera `radii` out on the night side of a body, looking at the sun just as it rises over the
+ * limb, so the planet half covers it and the flare is cut by its edge.
+ */
+function spaceSunFlare(w: World, bodyId: string, radii: number): void {
+  w.universe.update(w.clock.time);
+  const body = w.universe.get(bodyId);
+  const sun = w.universe.root.position.clone().sub(body.position).normalize();
+  const perp = new Vector3().crossVectors(sun, new Vector3(0, 1, 0)).normalize();
+  const theta = Math.asin(1 / radii) + 0.012;
+  // Direction from the camera to the planet centre, `theta` off the sun direction.
+  const toBody = sun.clone().multiplyScalar(Math.cos(theta)).addScaledVector(perp, Math.sin(theta));
+  w.placeInSpace(bodyId, body.radius * radii, toBody.clone().negate());
+  const fwd = sun.clone().multiplyScalar(0.8).addScaledVector(toBody, 0.2).normalize();
+  w.ship.quat.copy(lookQuat(fwd));
+  w.refresh();
+}
 
 export const DEFAULT_SCENARIO = 'earth-low-morning';
 

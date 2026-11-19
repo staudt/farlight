@@ -18,6 +18,8 @@ import { SunView } from './bodies/sunView';
 import { HeatShimmer } from './fx/heatShimmer';
 import { Scorch } from './fx/scorch';
 import { eclipse } from './eclipse';
+import { GodRays } from './fx/godRays';
+import { LensFlare } from './fx/lensFlare';
 
 /**
  * HDR post stack: scene -> atmosphere scattering -> bloom -> ACES tone mapping -> vignette.
@@ -33,6 +35,8 @@ export class PostStack {
   readonly perf: PerfStats;
   readonly shimmer = new HeatShimmer();
   readonly scorch = new Scorch();
+  readonly godRays = new GodRays();
+  readonly flare = new LensFlare();
   readonly bloom: BloomEffect;
   readonly toneMapping: ToneMappingEffect;
   readonly vignette: VignetteEffect;
@@ -47,6 +51,8 @@ export class PostStack {
     this.composer.addPass(new RenderPass(gfx.scene, gfx.camera));
     this.vol = new VolumetricPass([this.clouds.uniforms, this.atmosphere.uniforms]);
     this.composer.addPass(this.vol);
+    this.composer.addPass(this.godRays.pass);
+    this.composer.addPass(this.flare.pass);
     this.bloom = new BloomEffect({
       intensity: 0.85,
       luminanceThreshold: 0.85,
@@ -56,8 +62,8 @@ export class PostStack {
     });
     this.toneMapping = new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC });
     this.vignette = new VignetteEffect({ darkness: 0.38, offset: 0.32 });
-    this.passWithBloom = new EffectPass(gfx.camera, this.shimmer, this.composite, this.bloom, this.toneMapping, this.vignette);
-    this.passNoBloom = new EffectPass(gfx.camera, this.shimmer, this.composite, this.toneMapping, this.vignette);
+    this.passWithBloom = new EffectPass(gfx.camera, this.shimmer, this.composite, this.godRays.effect, this.flare.effect, this.bloom, this.toneMapping, this.vignette);
+    this.passNoBloom = new EffectPass(gfx.camera, this.shimmer, this.composite, this.godRays.effect, this.flare.effect, this.toneMapping, this.vignette);
     this.finalPass = this.passWithBloom;
     this.composer.addPass(this.finalPass);
 
@@ -73,6 +79,9 @@ export class PostStack {
       const volOn = this.clouds.body !== null || (this.atmosphere.uniforms.get('uCount')!.value as number) > 0;
       this.vol.enabled = volOn;
       this.composite.bind(this.vol, Math.log2(ctx.camera.far + 1), volOn);
+      const logFar = Math.log2(ctx.camera.far + 1);
+      this.godRays.update(ctx.realDt, ctx.camera, ctx.cameraWorld, world.universe.root.position, bodies, this.vol.texT, volOn, logFar);
+      this.flare.update(ctx.realDt, ctx.camera, ctx.cameraWorld, world.universe.root, bodies, ctx.simTime, this.clouds.coverageBias, logFar);
       this.skyBrightness = this.estimateSky(gfx);
       // Totality: the sky is only as bright as the sun that reaches it.
       const cover = eclipse.sunVisibilityAt(ctx.cameraWorld, ctx.world.ship.frame.body);
@@ -100,6 +109,7 @@ export class PostStack {
     gfx.applyPixelRatio(q.pixelRatioMax); // resizes the composer too
     this.composer.multisampling = q.msaa;
     this.vol.setScale(q.volScale);
+    this.godRays.applyQuality();
     this.clouds.animateJitter = !this.vol.blur;
     const c = this.clouds.uniforms;
     c.get('uCloudSteps')!.value = q.cloudSteps;
