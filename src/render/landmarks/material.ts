@@ -1,5 +1,6 @@
 import { Color, ShaderMaterial, Vector3 } from 'three';
 import { starLight } from '../starLight';
+import { ECLIPSE_GLSL, eclipse } from '../eclipse';
 
 /**
  * Flat shaded landmark material. `fx` builds the transparent variant (waterfalls, steam, mist).
@@ -18,6 +19,8 @@ export function createLandmarkMaterial(fx: boolean): ShaderMaterial {
       uTime: { value: 0 },
       uSunIntensity: { value: 1.25 },
       uStarColor: starLight.uniform,
+      ...eclipse.uniforms,
+      uEclSelf: { value: -1 },
       uGlow: { value: 1 },
     },
     vertexShader: /* glsl */ `
@@ -60,6 +63,8 @@ export function createLandmarkMaterial(fx: boolean): ShaderMaterial {
       uniform vec3 uSkyAmbient;
       uniform float uSunIntensity;
       uniform vec3 uStarColor;
+      uniform float uEclSelf;
+      ${ECLIPSE_GLSL}
       uniform float uTime;
       uniform float uGlow;
       varying vec3 vColor;
@@ -86,7 +91,9 @@ export function createLandmarkMaterial(fx: boolean): ShaderMaterial {
         vec3 sunCol = mix(vec3(1.0, 0.5, 0.25), vec3(1.0, 0.96, 0.88), smoothstep(0.0, 0.45, sunR));
         float skyTerm = 0.35 + 0.65 * clamp(dot(N, R), 0.0, 1.0);
         vec3 amb = (vec3(0.04) + uSkyAmbient * skyTerm * (0.25 + 0.75 * term)) * mix(vec3(1.0), uStarColor, 0.6);
-        vec3 lit = sunCol * uStarColor * uSunIntensity * diffuse + amb;
+        vec3 eclL = eclipseLight(vViewPos * mat3(viewMatrix), uEclSelf);
+        amb *= 0.25 + 0.75 * dot(eclL, vec3(0.2126, 0.7152, 0.0722));
+        vec3 lit = sunCol * uStarColor * eclL * uSunIntensity * diffuse + amb;
         vec3 col = vColor * lit;
         float alpha = 1.0;
         if (water) {
@@ -94,7 +101,7 @@ export function createLandmarkMaterial(fx: boolean): ShaderMaterial {
           float nh = max(dot(N, H), 0.0);
           float spark = 0.6 + 0.4 * sin(uTime * 2.1 + vViewPos.x * 0.03 + vViewPos.z * 0.02);
           float fres = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 4.0);
-          col += sunCol * uStarColor * (pow(nh, 140.0) * 1.6 * spark + pow(nh, 14.0) * 0.08) * term * uSunIntensity * 0.6;
+          col += sunCol * uStarColor * eclL * (pow(nh, 140.0) * 1.6 * spark + pow(nh, 14.0) * 0.08) * term * uSunIntensity * 0.6;
           col += vec3(0.30, 0.45, 0.70) * fres * 0.4 * (0.15 + 0.85 * term);
         }
         float day = 0.35 + 0.65 * term;

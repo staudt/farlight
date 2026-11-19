@@ -1,6 +1,7 @@
 import { Color, DoubleSide, Mesh, RingGeometry, ShaderMaterial, Vector3 } from 'three';
 import type { RingDef } from '../../data/types';
 import { starLight } from '../starLight';
+import { ECLIPSE_GLSL, eclipse } from '../eclipse';
 
 /**
  * Shared GLSL: radial ring density at a body-fixed radius `r` (planet radii). Used by the
@@ -67,6 +68,8 @@ export class RingMesh {
   readonly camLocal = { value: new Vector3(0, 0, 1) };
   /** Sun direction in view space. */
   readonly sunView = { value: new Vector3(1, 0, 0) };
+  /** Body index of the planet the ring belongs to (its own shadow is handled above). */
+  readonly eclSelf = { value: -1 };
   private readonly material: ShaderMaterial;
   private readonly depthMaterial: ShaderMaterial;
 
@@ -79,6 +82,8 @@ export class RingMesh {
         uCamLocal: this.camLocal,
         uSunView: this.sunView,
         uStarColor: starLight.uniform,
+        ...eclipse.uniforms,
+        uEclSelf: this.eclSelf,
       },
       vertexShader: /* glsl */ `
         #include <common>
@@ -97,6 +102,8 @@ export class RingMesh {
         #include <logdepthbuf_pars_fragment>
         ${RING_GLSL}
         uniform vec3 uColor, uSunLocal, uCamLocal, uSunView, uStarColor;
+        uniform float uEclSelf;
+        ${ECLIPSE_GLSL}
         varying vec3 vLocal;
         varying vec3 vViewPos;
         void main() {
@@ -128,7 +135,8 @@ export class RingMesh {
             col = base * (0.2 + (1.0 - alpha) * 1.2 * dens) * (1.0 + 8.0 * fwd);
             alpha *= 0.9;
           }
-          col *= (1.0 - 0.97 * shadow) * uStarColor;
+          // Moons shadow the rings (camera relative world position of this ring point).
+          col *= (1.0 - 0.97 * shadow) * uStarColor * eclipseLight(vViewPos * mat3(viewMatrix), uEclSelf);
           gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
           #include <tonemapping_fragment>
           #include <colorspace_fragment>

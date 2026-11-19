@@ -2,6 +2,7 @@ import { Color, Matrix3, Matrix4, type PerspectiveCamera, Quaternion, Uniform, V
 import type { Body } from '../../sim/universe';
 import { cloudDrift } from './coverage';
 import { createCloudNoiseTexture } from './noiseTexture';
+import { eclipse } from '../eclipse';
 
 /** Uniforms and per frame state of the raymarched cloud layer (drawn by the volumetric pass). */
 export class CloudEffect {
@@ -36,6 +37,7 @@ export class CloudEffect {
         ['uCSunDir', new Uniform(new Vector3(1, 0, 0))],
         ['uCloudColor', new Uniform(new Color(1, 1, 1))],
         ['uCSunI', new Uniform(1.6)],
+        ['uCloudSelf', new Uniform(-1)],
         ['uFlash', new Uniform(0)],
         ['uFlashPos', new Uniform(new Vector3())],
         ['uFrame', new Uniform(0)],
@@ -85,6 +87,7 @@ export class CloudEffect {
     (u.get('uCSunDir')!.value as Vector3).copy(sun.position).sub(best.position).normalize();
     (u.get('uCloudColor')!.value as Color).setRGB(c.color[0], c.color[1], c.color[2]);
     u.get('uCSunI')!.value = this.sunIntensity;
+    u.get('uCloudSelf')!.value = eclipse.idOf(best);
     u.get('uFlash')!.value = this.flash;
     (u.get('uFlashPos')!.value as Vector3).copy(this.flashPos);
     u.get('uFrame')!.value = this.frame++;

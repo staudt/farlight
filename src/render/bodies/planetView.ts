@@ -22,6 +22,7 @@ import { config } from '../../core/config';
 import { createPropMaterial, createPropMeshes, disposePropMeshes } from './props';
 import { quality } from '../quality';
 import { createTerrainMaterial } from './terrainMaterial';
+import { eclipse } from '../eclipse';
 import { type WaterLook, type WaveUniforms, updateWaveUniforms, waterLook } from './waterWaves';
 import { RingMesh, makeRingUniforms } from './ringView';
 
@@ -291,6 +292,7 @@ export class PlanetView implements BodyView {
     sunView.copy(ctx.world.universe.root.position).sub(b.position).normalize().transformDirection(ctx.camera.matrixWorldInverse);
     (u.uBodyCenterView!.value as Vector3).copy(b.position).sub(ctx.cameraWorld).applyMatrix4(ctx.camera.matrixWorldInverse);
     u.uTime!.value = ctx.realTime;
+    u.uEclSelf!.value = eclipse.idOf(b);
     updateWaveUniforms(u as unknown as WaveUniforms, this.waterLook, ctx, b.rotation, _cam);
     u.uGlow!.value = config.props.nightGlow;
     u.uNightAmb!.value = config.props.nightAmbient;

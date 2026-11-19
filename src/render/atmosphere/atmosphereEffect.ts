@@ -1,6 +1,7 @@
 import { Matrix4, type PerspectiveCamera, Uniform, Vector3 } from 'three';
 import type { Body } from '../../sim/universe';
 import { MAX_ATMOS } from './atmosphere.glsl';
+import { eclipse } from '../eclipse';
 
 /** Mie haze hugs the ground: its scale height is this fraction of the Rayleigh one. */
 const MIE_SCALE = 0.22;
@@ -23,6 +24,7 @@ export class AtmosphereEffect {
     hm: new Array<number>(MAX_ATMOS).fill(1),
     g: new Array<number>(MAX_ATMOS).fill(0.76),
     sunI: new Array<number>(MAX_ATMOS).fill(20),
+    self: new Array<number>(MAX_ATMOS).fill(-1),
   };
   private cand: Body[] = [];
   private shells: number[] = [];
@@ -51,6 +53,7 @@ export class AtmosphereEffect {
     u.set('uHm', new Uniform(this.nums.hm));
     u.set('uMieG', new Uniform(this.nums.g));
     u.set('uSunI', new Uniform(this.nums.sunI));
+    u.set('uAtmoSelf', new Uniform(this.nums.self));
   }
 
   /**
@@ -108,6 +111,7 @@ export class AtmosphereEffect {
       this.nums.hm[i] = hm;
       this.nums.g[i] = a.mieG;
       this.nums.sunI[i] = a.sunIntensity * this.intensity;
+      this.nums.self[i] = eclipse.idOf(b);
       // Zenith optical depth -> per meter coefficient at sea level.
       this.betaR[i]!.set(a.rayleighDepth[0] / hr, a.rayleighDepth[1] / hr, a.rayleighDepth[2] / hr);
       const mc = a.mieColor ?? [1, 1, 1];

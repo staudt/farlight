@@ -57,6 +57,14 @@ export class DebugPanel {
     props.add(config.props, 'emissive', 0, 8);
     props.add(config.props, 'nightAmbient', 0, 0.3);
     props.add(config.props, 'nightGlow', 0, 4);
+    const ecl = this.gui.addFolder('Eclipse').close();
+    ecl.add(config.eclipse, 'enabled');
+    ecl.add(config.eclipse, 'sunSizeScale', 0.1, 1).name('sun size (shadows)');
+    ecl.add(config.eclipse, 'maxOccluders', 0, 4, 1);
+    ecl.add(config.eclipse, 'umbraStrength', 0, 0.5);
+    ecl.addColor(config.eclipse, 'umbraTint');
+    ecl.add(config.eclipse, 'penumbraSoft', 0.3, 3);
+    ecl.add(config.eclipse, 'discMatch').name('shrink sun disc');
     const lm = this.gui.addFolder('Landmarks').close();
     lm.add(config.landmarks, 'enabled');
     lm.add(config.landmarks, 'discoverRadius', 100, 20000);

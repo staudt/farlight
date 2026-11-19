@@ -11,6 +11,7 @@ import {
 import type { PropKind } from '../../data/types';
 import type { PropBatch } from '../../terrain/props';
 import { starLight } from '../starLight';
+import { ECLIPSE_GLSL, eclipse } from '../eclipse';
 
 type V3 = [number, number, number];
 
@@ -226,6 +227,8 @@ export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0
       uSkyAmbient: shared.uSkyAmbient!,
       uSunIntensity: shared.uSunIntensity!,
       uStarColor: starLight.uniform,
+      ...eclipse.uniforms,
+      uEclSelf: shared.uEclSelf!,
       uFadeNear: { value: 900 },
       uFadeFar: { value: 1900 },
       uEmissive: { value: 2.2 },
@@ -272,6 +275,8 @@ export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0
       uniform vec3 uSkyAmbient;
       uniform float uSunIntensity;
       uniform vec3 uStarColor;
+      uniform float uEclSelf;
+      ${ECLIPSE_GLSL}
       uniform float uEmissive;
       uniform float uBioGlow;
       uniform float uNightGlow;
@@ -293,7 +298,9 @@ export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0
         vec3 sunCol = mix(vec3(1.0, 0.5, 0.25), vec3(1.0, 0.96, 0.88), smoothstep(0.0, 0.45, sunR));
         float skyTerm = 0.35 + 0.65 * clamp(dot(N, R), 0.0, 1.0);
         vec3 amb = (vec3(0.05) + uSkyAmbient * skyTerm * (0.25 + 0.75 * term)) * mix(vec3(1.0), uStarColor, 0.6);
-        vec3 col = vColor * (sunCol * uStarColor * uSunIntensity * diffuse + amb);
+        vec3 eclL = eclipseLight(vViewPos * mat3(viewMatrix), uEclSelf);
+        amb *= 0.25 + 0.75 * dot(eclL, vec3(0.2126, 0.7152, 0.0722));
+        vec3 col = vColor * (sunCol * uStarColor * eclL * uSunIntensity * diffuse + amb);
         // Crystal glow: brighter at night, still readable by day.
         col += vInst * vEmit * uEmissive * (0.35 + 0.65 * (1.0 - term)) * uNightGlow;
         // Bioluminescence: the tinted parts (foliage, not bark) glow once the sun is down.

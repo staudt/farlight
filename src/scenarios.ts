@@ -25,6 +25,7 @@ import { findLifeSpot } from './render/life/spots';
 import { whalePlan } from './render/life/skyWhales';
 import { Flock } from './render/life/boids';
 import { flockPlan } from './render/life/birds';
+import { findTransit, type Transit } from './sim/shadowSearch';
 
 export interface Scenario {
   description: string;
@@ -456,6 +457,51 @@ export const SCENARIOS: Record<string, Scenario> = {
       // The shadow lands on the hemisphere opposite the sun; look at it from a little over that side.
       const sign = sun.dot(pole) >= 0 ? 1 : -1;
       w.placeInSpace('saturn', saturn.radius * 3.2, flat.clone().multiplyScalar(0.85).addScaledVector(side, 0.25).addScaledVector(pole, -0.4 * sign));
+    },
+  },
+  // --- Eclipses and moon shadows (one block) ---
+  'earth-solar-eclipse': {
+    description: 'Gliding low inside the Moon\'s shadow at totality: the sun a black disc in a dark sky, a sunset glow all round the horizon',
+    apply: (w) => {
+      // Shadow axis 0.7 radii off the centre: the sun stands about 45 degrees up for the observer.
+      const hit = findTransit(w.universe, 'earth', 'moon', 0, YEAR, 3600, 0.7);
+      const s = shadowSpot(w, 'earth', hit);
+      w.place({ body: 'earth', lat: s.lat, lon: s.lon, altitude: 300, heading: s.heading, pitch: Math.min(27, s.pitch * 0.6), throttle: 0.04, time: hit.time });
+    },
+  },
+  'earth-eclipse-orbit': {
+    description: 'Earth from orbit with the Moon\'s shadow, a dark spot with a soft edge, crossing the day side',
+    apply: (w) => {
+      const hit = findTransit(w.universe, 'earth', 'moon', 0, YEAR, 3600, 0);
+      shadowOrbit(w, 'earth', hit, 2.3, 0.5);
+    },
+  },
+  'moon-lunar-eclipse': {
+    description: 'The Moon inside Earth\'s shadow, lit only by the red light bent round the planet',
+    apply: (w) => {
+      const hit = findTransit(w.universe, 'moon', 'earth', 0, YEAR, 3600, 0);
+      w.clock.time = hit.time;
+      w.universe.update(hit.time);
+      const moon = w.universe.get('moon');
+      const earth = w.universe.get('earth');
+      // Earth side of the Moon (that face is the sunlit one), a little off the Earth line so the shading reads.
+      const toEarth = earth.position.clone().sub(moon.position).normalize();
+      const side = new Vector3().crossVectors(toEarth, new Vector3(0, 1, 0)).normalize();
+      w.placeInSpace('moon', moon.radius * 4.5, toEarth.multiplyScalar(0.85).addScaledVector(side, 0.45).addScaledVector(_up, 0.2));
+    },
+  },
+  'jupiter-io-shadow': {
+    description: 'Over the Jupiter cloud tops with the black shadow of Io crossing the bands',
+    apply: (w) => {
+      const hit = findTransit(w.universe, 'jupiter', 'io', 0, 4 * 86400, 600, 0.3);
+      shadowOrbit(w, 'jupiter', hit, 1.45, 0.18);
+    },
+  },
+  'saturn-moon-shadow': {
+    description: 'Saturn and its rings with the shadow of Titan on the cloud tops',
+    apply: (w) => {
+      const hit = findTransit(w.universe, 'saturn', 'titan', 0, 12 * YEAR, 4 * 3600, 0.3);
+      shadowOrbit(w, 'saturn', hit, 2.4, 0.5);
     },
   },
   'landmark-falls': {
@@ -1483,4 +1529,39 @@ function nebulaSpace(w: World): void {
   w.universe.update(0);
   const outer = Math.max(...w.universe.root.children.filter((b) => b.kind !== 'star').map((b) => b.orbit?.a ?? 0), 1e8);
   placeWorld(w, focus.clone().multiplyScalar(outer * 1.25), focus);
+}
+
+/** One Earth year, seconds (search window for eclipse scenarios). */
+const YEAR = 86400 * 365.25;
+
+/** Lat, lon, and the heading and pitch that put the sun in view, for the spot where a shadow axis meets `bodyId`. Sets the world to that time. */
+function shadowSpot(w: World, bodyId: string, hit: Transit): { lat: number; lon: number; heading: number; pitch: number } {
+  w.clock.time = hit.time;
+  w.universe.update(hit.time);
+  const body = w.universe.get(bodyId);
+  const up = body.worldToLocalDir(hit.point.clone().sub(body.position).normalize(), new Vector3());
+  const ll = dirToLatLon(up.x, up.y, up.z);
+  const sun = body.worldToLocalDir(w.universe.root.position.clone().sub(body.position).normalize(), new Vector3());
+  const east = new Vector3(-Math.sin(ll.lon), 0, -Math.cos(ll.lon));
+  const north = new Vector3().crossVectors(up, east).normalize();
+  const deg = 180 / Math.PI;
+  return {
+    lat: ll.lat * deg,
+    lon: ll.lon * deg,
+    heading: Math.atan2(sun.dot(east), sun.dot(north)) * deg,
+    pitch: Math.asin(Math.max(-1, Math.min(1, sun.dot(up)))) * deg,
+  };
+}
+
+/** In space `radii` out from `bodyId`, above the shadow spot but shifted `lean` to the side, so the spot sits in the day side view. */
+function shadowOrbit(w: World, bodyId: string, hit: Transit, radii: number, lean: number): void {
+  w.clock.time = hit.time;
+  w.universe.update(hit.time);
+  const body = w.universe.get(bodyId);
+  const spot = hit.point.clone().sub(body.position).normalize();
+  const sun = w.universe.root.position.clone().sub(body.position).normalize();
+  const side = new Vector3().crossVectors(sun, spot);
+  if (side.lengthSq() < 1e-8) side.set(0, 1, 0);
+  side.normalize();
+  w.placeInSpace(bodyId, body.radius * radii, spot.addScaledVector(side, lean).addScaledVector(sun, 0.25));
 }

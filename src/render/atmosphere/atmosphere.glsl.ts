@@ -30,6 +30,7 @@ uniform vec3 uBetaM[MAX_ATMOS];      // per meter (tinted)
 uniform vec3 uBetaA[MAX_ATMOS];      // absorption per meter (Rayleigh profile)
 uniform float uMieG[MAX_ATMOS];
 uniform float uSunI[MAX_ATMOS];
+uniform float uAtmoSelf[MAX_ATMOS];   // body index (eclipse shadows skip the body itself)
 
 const float PI_ = 3.14159265359;
 
@@ -116,6 +117,8 @@ void applyAtmosphere(int i, vec3 d, float tScene, out vec3 outTrans, out vec3 ou
     float lit = smoothstep(horizon - 0.02, horizon + 0.02, cosSun);
     vec3 tau = uBetaR[i] * (odR + lR) + uBetaM[i] * 1.1 * (odM + lM) + uBetaA[i] * (odR + lR);
     vec3 att = exp(-tau) * lit;
+    // Eclipses: other bodies' shadows darken the sunlight reaching this sample (dark sky in totality).
+    if (uEclCfg.x > 0.5) att *= eclipseLight(d * t, uAtmoSelf[i]);
     sumR += att * dR;
     sumM += att * dM;
   }

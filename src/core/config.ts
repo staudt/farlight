@@ -216,6 +216,24 @@ export const config = {
     /** HDR strength of landmark glows (pools, monolith, crystals). */
     glow: 1,
   },
+  /** Eclipses and moon shadows: bodies shadow each other from the sun. */
+  eclipse: {
+    enabled: true,
+    /**
+     * Shrinks the sun ONLY for shadow math. At game scale the Moon's umbra would not reach Earth
+     * (annular eclipses only); 0.45 makes total solar eclipses happen. 1 is the true size.
+     */
+    sunSizeScale: 0.45,
+    /** Occluding spheres per frame (the shader arrays hold at most 4). */
+    maxOccluders: 4,
+    /** Sunlight colour left inside the shadow of a body with an atmosphere (lunar eclipse copper). */
+    umbraTint: [1.0, 0.3, 0.1] as [number, number, number],
+    umbraStrength: 0.22,
+    /** Penumbra edge shape: 1 smooth, above 1 a tighter core, below 1 a longer tail. */
+    penumbraSoft: 1,
+    /** The visible sun shrinks to the shadow sun while a body crosses it, so the cover is total. */
+    discMatch: true,
+  },
   debug: {
     showPanel: false,
   },

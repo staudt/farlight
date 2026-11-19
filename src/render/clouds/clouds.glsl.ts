@@ -24,6 +24,7 @@ uniform float uScale;        // feature size (m)
 uniform float uCoverage;
 uniform vec3 uDrift;         // body fixed noise offset (m)
 uniform vec3 uCSunDir;
+uniform float uCloudSelf;     // body index for eclipse shadows (skips the body itself)
 uniform vec3 uCloudColor;
 uniform float uCSunI;
 uniform float uFlash;        // lightning flash 0..1
@@ -115,7 +116,8 @@ vec4 farClouds(vec3 d, float tScene, float rIn, float thickness) {
   vec3 sunCol = mix(vec3(1.0, 0.45, 0.2), vec3(1.0, 0.97, 0.92), smoothstep(0.0, 0.35, cosSun)) * day;
   // Thicker cloud reads brighter; a soft self shadow keeps some relief.
   float lambert = 0.35 + 0.65 * max(cosSun, 0.0);
-  vec3 col = uCloudColor * (sunCol * uStarColor * uCSunI * 0.62 * lambert * (0.7 + 0.3 * dens) + vec3(0.03, 0.04, 0.06) * day * mix(vec3(1.0), uStarColor, 0.6));
+  vec3 eclL = uEclCfg.x > 0.5 ? eclipseLight(d * tm.x, uCloudSelf) : vec3(1.0);
+  vec3 col = uCloudColor * (sunCol * uStarColor * eclL * uCSunI * 0.62 * lambert * (0.7 + 0.3 * dens) + vec3(0.03, 0.04, 0.06) * day * mix(vec3(1.0), uStarColor, 0.6));
   // Grazing angles near the limb thicken the layer visually.
   float graze = 1.0 - abs(dot(d, up));
   float a = clamp(dens * (0.85 + 0.6 * graze), 0.0, 0.97);
@@ -208,6 +210,7 @@ void cloudCompute(vec3 d, vec3 dView, float tScene, out float T, out vec3 L) {
     float detail = 1.0 - smoothstep(uScale * 2.0, uScale * 8.0, t);
     float dens = cloudDensity(pl, h01, detail);
     if (dens > 0.003) {
+      vec3 eclL = uEclCfg.x > 0.5 ? eclipseLight(d * t, uCloudSelf) : vec3(1.0);
       vec3 up = pw / r;
       float cosSun = dot(up, uCSunDir);
       float day = smoothstep(-0.12, 0.06, cosSun);
@@ -227,7 +230,7 @@ void cloudCompute(vec3 d, vec3 dView, float tScene, out float T, out vec3 L) {
       // Sunlight gets warm when the sun is low.
       vec3 sunCol = mix(vec3(1.0, 0.42, 0.18), vec3(1.0, 0.97, 0.92), smoothstep(0.0, 0.35, cosSun)) * day;
       vec3 ambient = mix(vec3(0.015, 0.02, 0.035), vec3(0.42, 0.55, 0.78), day) * (0.45 + 0.55 * h01);
-      vec3 col = uCloudColor * (sunCol * uStarColor * uCSunI * lightT * phase * mix(1.0, powder, 0.5) + ambient * mix(vec3(1.0), uStarColor, 0.6));
+      vec3 col = uCloudColor * (sunCol * uStarColor * eclL * uCSunI * lightT * phase * mix(1.0, powder, 0.5) + ambient * mix(vec3(1.0), uStarColor, 0.6));
       // Lightning lights the cloud from inside.
       if (uFlash > 0.0) {
         float fd = length(pl - uFlashPos);

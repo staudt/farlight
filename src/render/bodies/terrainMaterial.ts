@@ -1,5 +1,6 @@
 import { Color, ShaderMaterial, Texture, Vector3 } from 'three';
 import { starLight } from '../starLight';
+import { ECLIPSE_GLSL, eclipse } from '../eclipse';
 import { WAVE_COUNT, createWaveUniforms, waterLook } from './waterWaves';
 import type { BodyDef } from '../../data/types';
 
@@ -15,6 +16,8 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
       uTime: { value: 0 },
       uSunIntensity: { value: 1.25 },
       uStarColor: starLight.uniform,
+      ...eclipse.uniforms,
+      uEclSelf: { value: -1 },
       uGlow: { value: 1 },
       uNightAmb: { value: 0.08 },
       // Settlement lights map (night side), used by coarse chunks; uLampColor is zero without one.
@@ -54,6 +57,8 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
       uniform float uTime;
       uniform float uSunIntensity;
       uniform vec3 uStarColor;
+      uniform float uEclSelf;
+      ${ECLIPSE_GLSL}
       uniform float uGlow;
       uniform sampler2D uLights;
       uniform vec3 uLampColor;
@@ -144,7 +149,11 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
         // Moonlight and starlight: a cool, faint light from a tilted direction so facets still shade.
         vec3 Mn = normalize(R * 0.6 + normalize(cross(R, L) + vec3(1e-5)) * 0.6);
         amb += vec3(0.35, 0.5, 1.0) * uNightAmb * (1.0 - term) * (0.3 + 0.7 * clamp(dot(N, Mn), 0.0, 1.0));
-        vec3 lightIn = sunCol * uStarColor * uSunIntensity * diffuse + amb;
+        // Eclipses: other bodies shadow the sun here (camera relative world position).
+        vec3 eclL = eclipseLight(vViewPos * mat3(viewMatrix), uEclSelf);
+        // No sun means no skylight either: the shadow darkens the ambient too.
+        amb *= 0.25 + 0.75 * dot(eclL, vec3(0.2126, 0.7152, 0.0722));
+        vec3 lightIn = sunCol * uStarColor * eclL * uSunIntensity * diffuse + amb;
         vec3 albedo = mix(vColor, uFoamColor, foam * 0.92);
         vec3 col = albedo * lightIn;
         if (isWater > 0.5) {
@@ -157,7 +166,7 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
           // The glitter path: tight highlights where wave facets mirror the sun, a soft sheen around them.
           float spec = (pow(nh, 220.0) * 3.2 * sparkle * sparkleFar + pow(nh, 40.0) * 0.18 + pow(nh, 8.0) * 0.05) * term * (1.0 - foam);
           float fres = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 4.0);
-          col += sunCol * uStarColor * spec * uSunIntensity * 0.6;
+          col += sunCol * uStarColor * eclL * spec * uSunIntensity * 0.6;
           col += vec3(0.30, 0.45, 0.70) * fres * 0.35 * (0.15 + 0.85 * term) * (1.0 - foam);
           // Light through the crests: turquoise glow, stronger in shallows and looking toward the sun.
           float shallow = 1.0 - smoothstep(0.0, 3.5, shore);
@@ -165,7 +174,7 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
           // Crest light is a close range effect: far away the chevrons of the fine swells alias into a hard edged zigzag disc.
           float sssNear = 1.0 - smoothstep(120.0, 700.0, dist);
           float sssK = mix(0.32, crest, sssNear) * (0.35 + 0.65 * toSun) * (0.7 + 0.8 * shallow) * term * (1.0 - foam);
-          col += uSssColor * sunCol * uStarColor * uSunIntensity * sssK * 0.2;
+          col += uSssColor * sunCol * uStarColor * eclL * uSunIntensity * sssK * 0.2;
         }
         // Self light (settlements, lava): fades in through twilight by the local sun elevation.
         // The atmosphere pass multiplies scene colour by transmittance and adds no night inscatter.
