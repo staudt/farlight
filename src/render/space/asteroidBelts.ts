@@ -179,7 +179,8 @@ export class AsteroidBelts {
     return null;
   }
 
-  update(ctx: FrameContext): void {
+  /** `skyDim` is the star brightness (0 under a bright day sky), so distant dust fades by day. */
+  update(ctx: FrameContext, skyDim = 1): void {
     if (this.belts.length === 0) return;
     const on = config.space.enabled;
     this.object.visible = on;
@@ -188,7 +189,8 @@ export class AsteroidBelts {
     this.cam.copy(cw);
     for (const m of this.dustMaterials) {
       m.uniforms.uTime!.value = ctx.simTime;
-      m.uniforms.uBright!.value = config.space.beltDust;
+      // Big soft dust blobs read far more than star points: fade them much faster by day.
+      m.uniforms.uBright!.value = config.space.beltDust * skyDim * skyDim * skyDim;
       m.uniforms.uPixelRatio!.value = ctx.renderer.getPixelRatio();
     }
     this.updateRocks(ctx);

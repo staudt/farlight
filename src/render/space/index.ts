@@ -39,7 +39,7 @@ export class SpaceScenery {
   update(ctx: FrameContext): void {
     const on = config.space.enabled;
     this.nebula.update(ctx.renderer, on ? this.starfield.brightness : 0, config.space.nebula);
-    this.belts.update(ctx);
+    this.belts.update(ctx, this.starfield.brightness);
     for (const c of this.comets) c.update(ctx);
   }
 
