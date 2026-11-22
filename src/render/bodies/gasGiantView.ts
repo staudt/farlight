@@ -12,7 +12,6 @@ import {
   LinearFilter,
   PlaneGeometry,
   RepeatWrapping,
-  ClampToEdgeWrapping,
   RGBAFormat,
   Texture,
   WebGLRenderTarget,
@@ -88,23 +87,23 @@ vec4 flowTap(float lon, float lat, float off) {
   return textureGrad(uFlowTex, vec2(u, v), vec2(g.x, dFdx(v)), vec2(g.y, dFdy(v)));
 }
 
-float dHash(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
-float dNoise(vec3 x) {
-  vec3 i = floor(x);
-  vec3 f = fract(x);
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(mix(dHash(i), dHash(i + vec3(1, 0, 0)), f.x), mix(dHash(i + vec3(0, 1, 0)), dHash(i + vec3(1, 1, 0)), f.x), f.y),
-             mix(mix(dHash(i + vec3(0, 0, 1)), dHash(i + vec3(1, 0, 1)), f.x), mix(dHash(i + vec3(0, 1, 1)), dHash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
-}
-/** Flow aligned fine noise (stretched along longitude), drifting with the band at longitude offset off. */
+#ifdef GAS_DEEP
+const bool kTop = false; // deeper decks are dark and fogged: the compiler drops the fine terms
+#else
+const bool kTop = true;
+#endif
+/** The flow texture tiled finer (integer repeat in longitude: no seam), for close up filaments. Two octaves, four taps. */
 float flowDetail(float lon, float lat, float off) {
-  float l = lon + off;
-  vec3 q = vec3(cos(lat) * cos(l), sin(lat), -cos(lat) * sin(l)) + uSeed;
-  vec3 f = q * vec3(26.0, 190.0, 26.0);
-  float n = dNoise(f);
-  n += 0.55 * dNoise(f * vec3(2.1, 2.3, 2.1) + 5.3 + n * 0.8);
-  n += 0.3 * dNoise(f * vec3(4.3, 4.6, 4.3) + 9.1);
-  return n / 1.85;
+  float u = (lon + off) * 0.15915494 + 0.5;
+  float v = lat * 0.31830989 + 0.5;
+  float u2 = fract(u + 0.5);
+  vec2 dx = vec2(dFdx(fract(u)), dFdy(fract(u)));
+  vec2 dx2 = vec2(dFdx(u2), dFdy(u2));
+  vec2 g = dot(dx, dx) < dot(dx2, dx2) ? dx : dx2;
+  vec2 gv = vec2(dFdx(v), dFdy(v));
+  float a = textureGrad(uFlowTex, vec2(u * 6.0, v * 5.0 + uSeed), vec2(g.x * 6.0, gv.x * 5.0), vec2(g.y * 6.0, gv.y * 5.0)).g;
+  float b = textureGrad(uFlowTex, vec2(u * 13.0 + 0.37, v * 11.0 + 0.61), vec2(g.x * 13.0, gv.x * 11.0), vec2(g.y * 13.0, gv.y * 11.0)).g;
+  return 0.6 * a + 0.4 * b;
 }
 
 /** Albedo of the cloud deck seen in direction d (unit, body fixed). depth: 0 tops .. 1 floor. */
@@ -116,12 +115,13 @@ vec3 deckColor(vec3 d, float depth) {
   float ph1 = fract(uPhase + 0.5);
   float w0 = 1.0 - abs(2.0 * ph0 - 1.0);
   vec4 s0 = flowTap(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph0 - 0.5));
-  vec4 s1 = flowTap(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph1 - 0.5));
-  vec4 s = mix(s1, s0, w0);
+  // The deeper decks are dark and fogged: one tap, no crossfade.
+  vec4 s = s0;
+  if (kTop) s = mix(flowTap(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph1 - 0.5)), s0, w0);
   // Close up the baked texture is magnified: add flow aligned filaments, faded by screen footprint.
   float dfade = 1.0 - smoothstep(1.0, 2.5, length(fwidth(d)) / ${TEX_ANG});
   float dn = 0.5;
-  if (dfade > 0.01) {
+  if (kTop && dfade > 0.01) {
     float da = flowDetail(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph0 - 0.5));
     float db = flowDetail(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph1 - 0.5));
     dn = mix(0.5, mix(db, da, w0), dfade);
@@ -169,9 +169,11 @@ vec3 deckColor(vec3 d, float depth) {
   col *= (0.8 + 0.4 * s.y) * (1.0 + (dn - 0.5) * 0.7 * (0.4 + turb));
   float lum = dot(col, vec3(0.33));
   col = mix(col, vec3(1.0, 0.95, 0.86) * lum * 1.6, smoothstep(0.66, 0.92, s.y) * 0.22 * (0.4 + turb));
-  // White ovals and dark barges.
+  // White ovals and dark barges (the deeper decks are darkened and fogged anyway: skip the fine terms there).
+  if (kTop) {
   col = mix(col, vec3(1.0, 0.96, 0.88) * (lum + 0.45), clamp(s.b * 0.85 * uOvals, 0.0, 1.0));
   col = mix(col, col * vec3(0.5, 0.32, 0.22), clamp(s.a * 0.8 * uOvals, 0.0, 1.0));
+  }
 
   for (int i = 0; i < ${MAX_STORMS}; i++) {
     if (float(i) >= uStormN) break;
@@ -188,7 +190,7 @@ vec3 deckColor(vec3 d, float depth) {
     vec3 pale = mix(body, col * 1.15 + 0.05, 0.6);
     vec3 inner = mix(core, body, smoothstep(0.18, 0.5, rw));
     inner = mix(inner, pale, smoothstep(0.58, 0.9, rw));
-    inner *= 0.86 + 0.14 * sin(rw * 34.0 + (s.x - 0.5) * 10.0 + (dn - 0.5) * 6.0);
+    inner *= 0.93 + 0.07 * sin(rw * 34.0 + (s.x - 0.5) * 10.0 + (dn - 0.5) * 6.0);
     inner = mix(inner, inner * 0.6, smoothstep(0.25, 0.9, fil) * 0.75 * smoothstep(0.1, 0.4, rw));
     inner = mix(inner, pale * 1.15, smoothstep(0.6, 0.95, fil2 * (0.5 + 0.5 * fil)) * 0.4 * smoothstep(0.55, 0.9, rw));
     // A thin dark moat, then the bright collar.
@@ -197,6 +199,7 @@ vec3 deckColor(vec3 d, float depth) {
     float collar = smoothstep(0.92, 1.1, r) * (1.0 - smoothstep(1.1, 1.55, r));
     col = mix(col, vec3(1.0, 0.92, 0.8) * (dot(col, vec3(0.33)) + 0.25), collar * (0.2 + 0.25 * s.y));
     // Turbulent wake trailing west.
+    if (!kTop) continue;
     float wk = smoothstep(-4.5, -1.0, q.x) * (1.0 - smoothstep(-1.2, -0.6, q.x)) * (1.0 - smoothstep(0.7, 1.8, abs(q.y)));
     float lw = dot(col, vec3(0.33));
     col = mix(col, col * (0.62 + 0.8 * s.y), wk * 0.65);
@@ -204,6 +207,7 @@ vec3 deckColor(vec3 d, float depth) {
   }
 
   // Polar region: darker and cooler, a vortex inside a jet stream ring (a polygon if the data says so).
+  if (colat < 0.85 && kTop) {
   vec3 avg = vec3(0.0);
   for (int i = 0; i < ${MAX_BANDS}; i++) { if (float(i) >= uBandCount) break; avg += uBands[i]; }
   avg /= uBandCount;
@@ -221,6 +225,7 @@ vec3 deckColor(vec3 d, float depth) {
   float ring = exp(-pow((shape - 0.235) / 0.03, 2.0)) * uPolar;
   col = mix(col, col * 1.55 + 0.04, clamp(ring * 0.55, 0.0, 1.0));
   col *= 1.0 - 0.45 * exp(-shape * shape / 0.003) * uPolar;
+  }
 
   // Deeper decks are darker, warmer and moodier.
   col = mix(col, col * vec3(1.05, 0.62, 0.4) * 0.5 + vec3(1.1, 0.42, 0.14) * (0.5 + 0.5 * s.y), depth);
@@ -599,6 +604,7 @@ export class GasGiantView implements BodyView {
         uniforms: { ...this.shared, uShellR: { value: shellR }, uDepth: { value: depth }, uAlpha: { value: alpha }, uCeil: { value: order === 0 ? 1 : 0 } },
         vertexShader: FULLSCREEN_VERT,
         fragmentShader: SHELL_FRAG,
+        defines: depth > 0 ? { GAS_DEEP: 1 } : {},
         transparent,
         depthWrite: !transparent || order === 0,
       });
@@ -763,7 +769,7 @@ export class GasGiantView implements BodyView {
       minFilter: LinearMipmapLinearFilter,
       magFilter: LinearFilter,
       wrapS: RepeatWrapping,
-      wrapT: ClampToEdgeWrapping,
+      wrapT: RepeatWrapping,
     });
     rt.texture.anisotropy = 4;
     const gas = this.body.def.gas!;
