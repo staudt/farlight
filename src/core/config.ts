@@ -103,10 +103,26 @@ export const config = {
     /** Seconds ignored after load before auto adapts. */
     warmup: 4,
     presets: {
-      low: { pixelRatioMax: 1, msaa: 0, volScale: 0.4, cloudSteps: 14, cloudLight: 2, atmoSteps: 8, atmoLight: 3, cloudShadows: false, bloom: false, bloomLevels: 3, splitFactor: 0.7, gasOctaves: 2, shimmer: false, godRaySamples: 0, godRayScale: 0.25, lensFlare: true, fxScale: 0.35, maxChunks: 700, maxInFlight: 6, propRange: 0.55, propLevels: 1 },
-      medium: { pixelRatioMax: 1.25, msaa: 2, volScale: 0.5, cloudSteps: 22, cloudLight: 3, atmoSteps: 10, atmoLight: 4, cloudShadows: true, bloom: true, bloomLevels: 5, splitFactor: 0.85, gasOctaves: 3, shimmer: true, godRaySamples: 20, godRayScale: 0.25, lensFlare: true, fxScale: 0.65, maxChunks: 1400, maxInFlight: 8, propRange: 0.75, propLevels: 1 },
-      high: { pixelRatioMax: 1.5, msaa: 4, volScale: 0.67, cloudSteps: 30, cloudLight: 3, atmoSteps: 14, atmoLight: 5, cloudShadows: true, bloom: true, bloomLevels: 8, splitFactor: 1, gasOctaves: 4, shimmer: true, godRaySamples: 32, godRayScale: 0.33, lensFlare: true, fxScale: 1, maxChunks: 4500, maxInFlight: 0, propRange: 1, propLevels: 2 },
+      low: { pixelRatioMax: 1, msaa: 0, volScale: 0.4, cloudSteps: 10, cloudLight: 2, atmoSteps: 8, atmoLight: 3, cloudShadows: false, bloom: false, bloomLevels: 3, splitFactor: 0.7, gasOctaves: 2, shimmer: false, godRaySamples: 0, godRayScale: 0.25, lensFlare: true, fxScale: 0.35, maxChunks: 700, maxInFlight: 6, propRange: 0.55, propLevels: 1 },
+      medium: { pixelRatioMax: 1.25, msaa: 2, volScale: 0.5, cloudSteps: 14, cloudLight: 3, atmoSteps: 10, atmoLight: 4, cloudShadows: true, bloom: true, bloomLevels: 5, splitFactor: 0.85, gasOctaves: 3, shimmer: true, godRaySamples: 20, godRayScale: 0.25, lensFlare: true, fxScale: 0.65, maxChunks: 1400, maxInFlight: 8, propRange: 0.75, propLevels: 1 },
+      high: { pixelRatioMax: 1.5, msaa: 4, volScale: 0.67, cloudSteps: 20, cloudLight: 3, atmoSteps: 14, atmoLight: 5, cloudShadows: true, bloom: true, bloomLevels: 8, splitFactor: 1, gasOctaves: 4, shimmer: true, godRaySamples: 32, godRayScale: 0.33, lensFlare: true, fxScale: 1, maxChunks: 4500, maxInFlight: 0, propRange: 1, propLevels: 2 },
     },
+  },
+  /** Volumetric clouds (render/clouds, render/volumetricPass.ts). */
+  clouds: {
+    /** Weather scale structure: latitude bands (ITCZ, dry subtropics, storm tracks), meandering fronts. 0 = old uniform blobs. */
+    structure: 1,
+    /** Cyclones (spiral storms, up to 4) and their angular radius in radians. */
+    cyclones: 3,
+    cycloneSize: 0.3,
+    /** Temporal accumulation: history weight 0..0.95 (0 = off) and the neighbourhood clip width in standard deviations. */
+    taa: 0.85,
+    taaClip: 1.3,
+    /** Lighting: powder (dark sun facing edges), silver lining strength, bluish grey underside, warm tint at low sun. */
+    powder: 0.8,
+    silver: 1,
+    underside: 0.6,
+    warmth: 1,
   },
   /** God rays (screen space light shafts from the sun, render/fx/godRays.ts). */
   godRays: {

@@ -146,6 +146,10 @@ export const SCENARIOS: Record<string, Scenario> = {
     description: 'Orbit over Africa in full daylight, Europe and Arabia in view',
     apply: (w) => faceLatLon(w, 'earth', 5, 20, 2.4),
   },
+  'earth-cyclone-orbit': {
+    description: 'High over the western Pacific: a spiral cyclone with its eye, banded storm tracks and clear subtropics',
+    apply: (w) => faceLatLon(w, 'earth', 22, 142, 1.9),
+  },
   'earth-himalaya': surface('Above the foothills, looking north at the Himalaya', {
     body: 'earth', lat: 24, lon: 87, localHour: 10, altitude: 11000, heading: 0, pitch: -12, throttle: 0.4,
   }),

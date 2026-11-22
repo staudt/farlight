@@ -1,8 +1,14 @@
 import { Effect, EffectAttribute, Pass } from 'postprocessing';
 import {
+  BufferAttribute,
+  BufferGeometry,
   HalfFloatType,
+  LinearFilter,
+  Mesh,
   NearestFilter,
+  OrthographicCamera,
   RawShaderMaterial,
+  Scene,
   RGBAFormat,
   GLSL3,
   Uniform,
@@ -15,6 +21,7 @@ import { atmosphereLib } from './atmosphere/atmosphere.glsl';
 import { starLight } from './starLight';
 import { cloudLib } from './clouds/clouds.glsl';
 import { ECLIPSE_GLSL, eclipse } from './eclipse';
+import { config } from '../core/config';
 
 const VERT = /* glsl */ `
 in vec3 position;
@@ -59,23 +66,110 @@ void main() {
 
   float tc;
   vec3 lc;
-  cloudCompute(d, dView, tScene, tc, lc);
+  float tHit;
+  cloudCompute(d, dView, tScene, tc, lc, tHit);
   vec3 T = vec3(tc);
   vec3 L = lc;
   atmoCompute(d, tScene, T, L);
   // One NaN turns the whole frame black through bloom: never let one out.
   if (any(isnan(L)) || any(isnan(T))) { L = vec3(0.0); T = vec3(1.0); }
-  oL = vec4(min(L, vec3(60000.0)), 0.0);
+  // Alpha: log2(1 + distance) of what the pixel shows, for the temporal reprojection (23 = far away).
+  float seen = tHit > 0.0 ? tHit : min(tScene, 8e6);
+  oL = vec4(min(L, vec3(60000.0)), min(log2(1.0 + seen), 23.0));
   oT = vec4(clamp(T, 0.0, 1.0), raw);
 }
 `;
 
+
+/**
+ * Temporal resolve: reprojects last frame's result through the cloud body's own frame (so planet
+ * rotation, camera motion and the floating origin are all accounted for), clips it to the
+ * neighbourhood of the new samples and blends. The march jitter changes every frame, so the noise
+ * averages out instead of being blurred away.
+ */
+const RESOLVE_FRAG = /* glsl */ `
+precision highp float;
+precision highp int;
+precision highp sampler2D;
+in vec2 vUv;
+layout(location = 0) out vec4 oL;
+layout(location = 1) out vec4 oT;
+uniform sampler2D uCurL;
+uniform sampler2D uCurT;
+uniform sampler2D uHistL;
+uniform sampler2D uHistT;
+uniform vec2 uSize;
+uniform mat4 uInvProj;
+uniform mat4 uCamToWorld;
+uniform float uLogFar;
+uniform float uHistW;
+uniform float uTaaClip;
+uniform vec3 uCCenter;
+uniform mat3 uToLocal;
+uniform vec3 uPrevCenter;
+uniform mat3 uPrevToWorld;
+uniform mat3 uPrevViewInv;
+uniform mat4 uPrevProj;
+
+vec3 comp(vec3 c) { return c / (1.0 + max(c.r, max(c.g, c.b))); }
+vec3 decomp(vec3 c) { return c / max(1.0 - max(c.r, max(c.g, c.b)), 1e-5); }
+
+void main() {
+  ivec2 ip = ivec2(gl_FragCoord.xy);
+  vec4 cl = texelFetch(uCurL, ip, 0);
+  vec4 ct = texelFetch(uCurT, ip, 0);
+  oL = cl;
+  oT = ct;
+  if (uHistW <= 0.0) return;
+  ivec2 hi = ivec2(uSize) - 1;
+  vec3 mL = vec3(0.0), sL = vec3(0.0), mT = vec3(0.0), sT = vec3(0.0);
+  for (int k = 0; k < 9; k++) {
+    ivec2 c = clamp(ip + ivec2(k % 3 - 1, k / 3 - 1), ivec2(0), hi);
+    vec3 l = comp(texelFetch(uCurL, c, 0).rgb);
+    vec3 t = texelFetch(uCurT, c, 0).rgb;
+    mL += l; sL += l * l; mT += t; sT += t * t;
+  }
+  mL /= 9.0; mT /= 9.0;
+  vec3 dL = sqrt(max(sL / 9.0 - mL * mL, 0.0)) * uTaaClip + 0.004;
+  vec3 dT = sqrt(max(sT / 9.0 - mT * mT, 0.0)) * uTaaClip + 0.004;
+
+  vec2 uv = (vec2(ip) + 0.5) / uSize;
+  vec4 clip = vec4(uv * 2.0 - 1.0, -1.0, 1.0);
+  vec4 view = uInvProj * clip;
+  vec3 d = normalize(mat3(uCamToWorld) * normalize(view.xyz / view.w));
+  float dist = exp2(min(cl.a, 23.0)) - 1.0;
+  vec3 pl = uToLocal * (d * dist - uCCenter);
+  vec3 pv = uPrevViewInv * (uPrevToWorld * pl + uPrevCenter);
+  vec4 pc = uPrevProj * vec4(pv, 1.0);
+  if (pc.w <= 0.0) return;
+  vec2 puv = pc.xy / pc.w * 0.5 + 0.5;
+  if (any(lessThan(puv, vec2(0.0))) || any(greaterThan(puv, vec2(1.0)))) return;
+  float hd = texelFetch(uHistT, clamp(ivec2(puv * uSize), ivec2(0), hi), 0).a;
+  // Disocclusion: the surface behind this pixel was at a different depth last frame.
+  if (abs(hd - ct.a) * uLogFar > 0.25) return;
+  float motion = length((puv - uv) * uSize);
+  float w = uHistW * (1.0 - clamp(motion * 0.08, 0.0, 0.5));
+  vec3 hL = clamp(comp(texture(uHistL, puv).rgb), mL - dL, mL + dL);
+  vec3 hT = clamp(texture(uHistT, puv).rgb, mT - dT, mT + dT);
+  oL = vec4(decomp(mix(comp(cl.rgb), hL, w)), cl.a);
+  oT = vec4(mix(ct.rgb, hT, w), ct.a);
+}
+`;
+
 export class VolumetricPass extends Pass {
-  readonly target: WebGLRenderTarget;
+  /** The two resolved buffers (ping pong): one is written each frame, the other is last frame's history. */
+  private readonly out: [WebGLRenderTarget, WebGLRenderTarget];
+  /** Raw march result of this frame, before the temporal resolve. */
+  private readonly cur: WebGLRenderTarget;
+  private writeIdx = 0;
+  private needReset = true;
   private readonly material: RawShaderMaterial;
+  private readonly resolveMaterial: RawShaderMaterial;
+  private readonly resolveScene = new Scene();
+  private readonly resolveCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
   /** Fraction of the full resolution. */
   private scale = 0.5;
-  /** True at 0.55 scale or lower (medium, low): the composite blurs the jitter grain. */
+  /** True at 0.55 scale or lower (medium, low): the composite blurs what noise is left. */
   get blur(): boolean {
     return this.scale <= 0.55;
   }
@@ -87,14 +181,10 @@ export class VolumetricPass extends Pass {
     super('VolumetricPass');
     this.needsSwap = false;
     this.needsDepthTexture = true;
-    this.target = new WebGLRenderTarget(1, 1, {
-      count: 2,
-      type: HalfFloatType,
-      format: RGBAFormat,
-      minFilter: NearestFilter,
-      magFilter: NearestFilter,
-      depthBuffer: false,
-    });
+    const make = (filter: typeof NearestFilter | typeof LinearFilter): WebGLRenderTarget =>
+      new WebGLRenderTarget(1, 1, { count: 2, type: HalfFloatType, format: RGBAFormat, minFilter: filter, magFilter: filter, depthBuffer: false });
+    this.cur = make(NearestFilter);
+    this.out = [make(LinearFilter), make(LinearFilter)];
     const u: Record<string, Uniform> = { uDepth: new Uniform(null), uStarColor: starLight.uniform as Uniform };
     for (const [k, v] of Object.entries(eclipse.uniforms)) u[k] = v as unknown as Uniform;
     for (const m of uniforms) for (const [k, v] of m) u[k] = v;
@@ -107,19 +197,41 @@ export class VolumetricPass extends Pass {
       depthWrite: false,
     });
     this.fullscreenMaterial = this.material;
+    const ru: Record<string, Uniform> = {
+      uCurL: new Uniform(null),
+      uCurT: new Uniform(null),
+      uHistL: new Uniform(null),
+      uHistT: new Uniform(null),
+      uSize: new Uniform(new Vector2(1, 1)),
+      uTaaClip: new Uniform(1.3),
+    };
+    for (const k of ['uInvProj', 'uCamToWorld', 'uLogFar', 'uHistW', 'uCCenter', 'uToLocal', 'uPrevCenter', 'uPrevToWorld', 'uPrevViewInv', 'uPrevProj'])
+      for (const m of uniforms) if (m.has(k)) ru[k] = m.get(k)!;
+    this.resolveMaterial = new RawShaderMaterial({ glslVersion: GLSL3, vertexShader: VERT, fragmentShader: RESOLVE_FRAG, uniforms: ru, depthTest: false, depthWrite: false });
+    const geo = new BufferGeometry();
+    geo.setAttribute('position', new BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
+    const quad = new Mesh(geo, this.resolveMaterial);
+    quad.frustumCulled = false;
+    this.resolveScene.add(quad);
   }
 
+  /** The resolved buffer that this frame's render writes (bind it before `render`: it is the same target). */
   get texL(): Texture {
-    return this.target.textures[0]!;
+    return this.out[this.writeIdx]!.textures[0]!;
   }
   get texT(): Texture {
-    return this.target.textures[1]!;
+    return this.out[this.writeIdx]!.textures[1]!;
   }
   get width(): number {
-    return this.target.width;
+    return this.cur.width;
   }
   get height(): number {
-    return this.target.height;
+    return this.cur.height;
+  }
+
+  /** Drop the accumulated history (teleports, resizes). */
+  resetHistory(): void {
+    this.needReset = true;
   }
 
   setScale(s: number): void {
@@ -136,18 +248,41 @@ export class VolumetricPass extends Pass {
   override setSize(width: number, height: number): void {
     this.fullW = width;
     this.fullH = height;
-    this.target.setSize(Math.max(1, Math.round(width * this.scale)), Math.max(1, Math.round(height * this.scale)));
+    const w = Math.max(1, Math.round(width * this.scale));
+    const h = Math.max(1, Math.round(height * this.scale));
+    if (w !== this.cur.width || h !== this.cur.height) {
+      this.cur.setSize(w, h);
+      this.out[0].setSize(w, h);
+      this.out[1].setSize(w, h);
+      this.needReset = true;
+    }
   }
 
   override render(renderer: WebGLRenderer): void {
     if (!this.depth) return;
-    renderer.setRenderTarget(this.target);
+    renderer.setRenderTarget(this.cur);
     renderer.render(this.scene, this.camera);
+    const ru = this.resolveMaterial.uniforms;
+    const hist = this.out[this.writeIdx ^ 1]!;
+    if (this.needReset) ru.uHistW!.value = 0;
+    ru.uCurL!.value = this.cur.textures[0];
+    ru.uCurT!.value = this.cur.textures[1];
+    ru.uHistL!.value = hist.textures[0];
+    ru.uHistT!.value = hist.textures[1];
+    (ru.uSize!.value as Vector2).set(this.cur.width, this.cur.height);
+    ru.uTaaClip!.value = config.clouds.taaClip;
+    renderer.setRenderTarget(this.out[this.writeIdx]!);
+    renderer.render(this.resolveScene, this.resolveCamera);
+    this.needReset = false;
+    this.writeIdx ^= 1;
   }
 
   override dispose(): void {
-    this.target.dispose();
+    this.cur.dispose();
+    this.out[0].dispose();
+    this.out[1].dispose();
     this.material.dispose();
+    this.resolveMaterial.dispose();
     super.dispose();
   }
 }
