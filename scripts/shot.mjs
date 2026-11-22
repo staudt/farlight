@@ -46,7 +46,9 @@ await page.evaluate(
   },
   [quality, sets],
 );
-await page.waitForTimeout(3500);
+await page.waitForTimeout(1500);
+await page.waitForFunction(() => !(window.__game.getState().pending > 0), null, { timeout: 30000 }).catch(() => {});
+await page.waitForTimeout(2500);
 await page.screenshot({ path: out });
 await browser.close();
 proc.kill('SIGTERM');

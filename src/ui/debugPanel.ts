@@ -54,6 +54,7 @@ export class DebugPanel {
     props.add(config.props, 'enabled');
     props.add(config.props, 'fadeNear', 100, 5000);
     props.add(config.props, 'fadeFar', 200, 8000);
+    props.add(config.props, 'lodNear', 0, 3000);
     props.add(config.props, 'emissive', 0, 8);
     props.add(config.props, 'nightAmbient', 0, 0.3);
     props.add(config.props, 'nightGlow', 0, 4);
@@ -139,6 +140,7 @@ export class DebugPanel {
       const apply = (): void => quality.notify();
       p.add(s, 'pixelRatioMax', 0.5, 2).onChange(apply);
       p.add(s, 'msaa', [0, 2, 4]).onChange(apply);
+      p.add(s, 'fxaa').onChange(apply);
       p.add(s, 'volScale', 0.25, 1).onChange(apply);
       p.add(s, 'cloudSteps', 8, 30, 1).onChange(apply);
       p.add(s, 'cloudLight', 1, 3, 1).onChange(apply);

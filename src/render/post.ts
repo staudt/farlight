@@ -2,6 +2,7 @@ import {
   BloomEffect,
   EffectComposer,
   EffectPass,
+  FXAAEffect,
   RenderPass,
   ToneMappingEffect,
   ToneMappingMode,
@@ -71,6 +72,11 @@ export class PostStack {
     this.passNoBloom = new EffectPass(gfx.camera, this.shimmer, this.composite, this.godRays.effect, this.flare.effect, this.toneMapping, this.vignette);
     this.finalPass = this.passWithBloom;
     this.composer.addPass(this.finalPass);
+    // Cheap edge AA on the tone mapped image, for presets that run without MSAA.
+    this.fxaaPass = new EffectPass(gfx.camera, new FXAAEffect());
+    this.fxaaPass.enabled = false;
+    this.composer.addPass(this.fxaaPass);
+    this.perf.addStage('fxaa', this.fxaaPass);
     this.perf.addStage('finalBloom', this.passWithBloom);
     this.perf.addStage('finalNoBloom', this.passNoBloom);
 
@@ -110,6 +116,7 @@ export class PostStack {
   private readonly passWithBloom: EffectPass;
   private readonly passNoBloom: EffectPass;
   private finalPass: EffectPass;
+  private readonly fxaaPass: EffectPass;
 
   /** Pushes a quality preset into the post stack, the renderer and the shaders. */
   private applyQuality(gfx: GameRenderer, q: QualitySettings): void {
@@ -129,9 +136,12 @@ export class PostStack {
     const want = q.bloom ? this.passWithBloom : this.passNoBloom;
     if (want !== this.finalPass) {
       this.composer.removePass(this.finalPass);
+      this.composer.removePass(this.fxaaPass);
       this.composer.addPass(want);
+      this.composer.addPass(this.fxaaPass);
       this.finalPass = want;
     }
+    this.fxaaPass.enabled = q.fxaa && q.msaa === 0;
   }
 
   /** Renders one frame with the bloom variant that is not active, so a later quality switch does not stall on a compile. */
@@ -139,10 +149,14 @@ export class PostStack {
     const keep = this.finalPass;
     const other = keep === this.passWithBloom ? this.passNoBloom : this.passWithBloom;
     this.composer.removePass(keep);
+    this.composer.removePass(this.fxaaPass);
     this.composer.addPass(other);
+    this.composer.addPass(this.fxaaPass);
     this.composer.render(0);
     this.composer.removePass(other);
+    this.composer.removePass(this.fxaaPass);
     this.composer.addPass(keep);
+    this.composer.addPass(this.fxaaPass);
   }
 
   /** Cheap CPU estimate of how bright the sky around the camera is. */
