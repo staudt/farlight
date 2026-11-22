@@ -32,6 +32,8 @@ import { RING_GLSL, RingMesh, makeRingUniforms } from './ringView';
 
 const MAX_BANDS = 8;
 const MAX_STORMS = 4;
+/** Angular size (radians) of one flow texture texel at 4096 wide: the footprint where analytic detail fades in. */
+const TEX_ANG = 0.0015;
 /** Period of the flow cross-fade (sim seconds). Bounds how far the zonal jets can shear the noise. */
 const FLOW_PERIOD = 43200;
 /** Cloud-deck shell depths as fractions of the full deck depth. */
@@ -86,6 +88,25 @@ vec4 flowTap(float lon, float lat, float off) {
   return textureGrad(uFlowTex, vec2(u, v), vec2(g.x, dFdx(v)), vec2(g.y, dFdy(v)));
 }
 
+float dHash(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
+float dNoise(vec3 x) {
+  vec3 i = floor(x);
+  vec3 f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(dHash(i), dHash(i + vec3(1, 0, 0)), f.x), mix(dHash(i + vec3(0, 1, 0)), dHash(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(dHash(i + vec3(0, 0, 1)), dHash(i + vec3(1, 0, 1)), f.x), mix(dHash(i + vec3(0, 1, 1)), dHash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+/** Flow aligned fine noise (stretched along longitude), drifting with the band at longitude offset off. */
+float flowDetail(float lon, float lat, float off) {
+  float l = lon + off;
+  vec3 q = vec3(cos(lat) * cos(l), sin(lat), -cos(lat) * sin(l)) + uSeed;
+  vec3 f = q * vec3(26.0, 190.0, 26.0);
+  float n = dNoise(f);
+  n += 0.55 * dNoise(f * vec3(2.1, 2.3, 2.1) + 5.3 + n * 0.8);
+  n += 0.3 * dNoise(f * vec3(4.3, 4.6, 4.3) + 9.1);
+  return n / 1.85;
+}
+
 /** Albedo of the cloud deck seen in direction d (unit, body fixed). depth: 0 tops .. 1 floor. */
 vec3 deckColor(vec3 d, float depth) {
   float lat = asin(clamp(d.y, -1.0, 1.0));
@@ -97,6 +118,14 @@ vec3 deckColor(vec3 d, float depth) {
   vec4 s0 = flowTap(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph0 - 0.5));
   vec4 s1 = flowTap(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph1 - 0.5));
   vec4 s = mix(s1, s0, w0);
+  // Close up the baked texture is magnified: add flow aligned filaments, faded by screen footprint.
+  float dfade = 1.0 - smoothstep(1.0, 2.5, length(fwidth(d)) / ${TEX_ANG});
+  float dn = 0.5;
+  if (dfade > 0.01) {
+    float da = flowDetail(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph0 - 0.5));
+    float db = flowDetail(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph1 - 0.5));
+    dn = mix(0.5, mix(db, da, w0), dfade);
+  }
 
   // Polar caps: more chaotic, darker, with a vortex (uPolar is the data strength).
   float colat = 1.5707963 - abs(lat);
@@ -110,6 +139,7 @@ vec3 deckColor(vec3 d, float depth) {
   // Kelvin-Helmholtz curls and festoons along the band boundaries (integer wavenumbers: no seam).
   float kh = sin(lon * 9.0 + s.x * 7.0 + b0 * 2.0) * 0.6 + sin(lon * 23.0 - s.y * 9.0 + b0 * 5.0) * 0.4;
   b += uCurls * edgeW * ((0.03 + 0.1 * turb) * kh + (s.x - 0.5) * 0.4 * turb);
+  b += (dn - 0.5) * (0.06 + 0.3 * edgeW) * (0.3 + turb);
 
   // Storm geometry first so the bands can bend around the ovals and trail a wake.
   vec3 q3[${MAX_STORMS}];
@@ -136,7 +166,7 @@ vec3 deckColor(vec3 d, float depth) {
   float sv = uSubBands * (0.3 + turb);
   col *= 1.0 + sv * (sb - 0.5) * 0.7;
   col *= 1.0 + sv * vec3(0.2 * (s.x - 0.5), 0.0, -0.24 * (s.x - 0.5));
-  col *= 0.8 + 0.4 * s.y;
+  col *= (0.8 + 0.4 * s.y) * (1.0 + (dn - 0.5) * 0.7 * (0.4 + turb));
   float lum = dot(col, vec3(0.33));
   col = mix(col, vec3(1.0, 0.95, 0.86) * lum * 1.6, smoothstep(0.66, 0.92, s.y) * 0.22 * (0.4 + turb));
   // White ovals and dark barges.
@@ -148,11 +178,19 @@ vec3 deckColor(vec3 d, float depth) {
     vec3 q = q3[i];
     float r = q.z;
     float ang = atan(q.y, q.x);
-    float spiral = sin(ang * 2.0 + log(r + 0.06) * 5.0 - uPhase * 12.566 + (s.x - 0.5) * 2.0);
-    float arms = sin(ang * 5.0 + log(r + 0.05) * 11.0 - uPhase * 31.416 + (s.y - 0.5) * 3.0);
-    float mask = 1.0 - smoothstep(0.74, 1.0, r + (s.y - 0.5) * 0.28);
-    vec3 inner = pow(uStormCol[i], vec3(1.5)) * 1.3 * (0.8 + 0.35 * spiral) * (0.9 + 0.12 * arms) * (0.8 + 0.35 * r);
-    inner *= 1.0 - 0.45 * exp(-r * r * 40.0); // dark eye
+    // Oval storm: layered rings (dark core, red body, pale outer ring) with turbulent filaments wrapped around.
+    float rw = r + (s.y - 0.5) * 0.2 + (dn - 0.5) * 0.12;
+    float mask = 1.0 - smoothstep(0.74, 1.0, rw);
+    float fil = sin(ang * 3.0 + r * 3.0 - uPhase * 18.85 + (s.x - 0.5) * 8.0 + (dn - 0.5) * 5.0);
+    float fil2 = sin(ang * 7.0 - r * 9.0 + uPhase * 43.98 + (s.y - 0.5) * 9.0);
+    vec3 body = pow(uStormCol[i], vec3(1.5)) * 1.3;
+    vec3 core = body * 0.62;
+    vec3 pale = mix(body, col * 1.15 + 0.05, 0.6);
+    vec3 inner = mix(core, body, smoothstep(0.18, 0.5, rw));
+    inner = mix(inner, pale, smoothstep(0.58, 0.9, rw));
+    inner *= 0.86 + 0.14 * sin(rw * 34.0 + (s.x - 0.5) * 10.0 + (dn - 0.5) * 6.0);
+    inner = mix(inner, inner * 0.6, smoothstep(0.25, 0.9, fil) * 0.75 * smoothstep(0.1, 0.4, rw));
+    inner = mix(inner, pale * 1.15, smoothstep(0.6, 0.95, fil2 * (0.5 + 0.5 * fil)) * 0.4 * smoothstep(0.55, 0.9, rw));
     // A thin dark moat, then the bright collar.
     col *= 1.0 - 0.3 * smoothstep(0.62, 0.9, r) * (1.0 - smoothstep(0.9, 1.0, r)) * (1.0 - mask);
     col = mix(col, inner, mask * 0.93);
@@ -328,6 +366,8 @@ void main() {
     diff *= 1.0 - 0.92 * rs;
     vec3 sunCol = mix(vec3(1.0, 0.5, 0.28), vec3(1.0, 0.95, 0.86), smoothstep(0.0, 0.5, lam));
     vec3 alb = deckColor(N, uDepth);
+    // Seen from below the cloud tops: warm, saturated, deeper.
+    if (c < 0.0) alb = mix(alb, pow(max(alb, vec3(0.0)), vec3(1.0, 1.7, 2.6)) * vec3(1.05, 0.8, 0.6), uInside);
     float mu = abs(dot(N, rd));
     float limb = mix(0.5, 1.0, pow(mu, 0.38));
     vec3 night = vec3(0.012, 0.014, 0.022) + vec3(0.02, 0.016, 0.014) * smoothstep(-0.5, 0.0, lam);
@@ -335,7 +375,7 @@ void main() {
     vec3 sunLit = uStarColor * eclL * uSunI;
     // Warm band along the terminator, and a soft palette tinted limb glow (outside views only).
     float warm = exp(-pow((lam - 0.04) / 0.16, 2.0));
-    float rim = pow(1.0 - mu, 3.0) * (c > 0.0 ? 1.0 : 0.0);
+    float rim = pow(1.0 - mu, 3.0) * uCeil * (1.0 - uInside) * (c > 0.0 ? 1.0 : 0.0);
     float lit = smoothstep(-0.25, 0.5, lam);
     col = alb * (sunCol * sunLit * diff * limb + night);
     col += alb * vec3(1.0, 0.4, 0.14) * sunLit * warm * uTermWarm * 0.5;
