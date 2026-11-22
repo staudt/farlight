@@ -121,6 +121,7 @@ atmoFolder.add(post.atmosphere, 'intensity', 0, 3).name('scatter intensity');
 atmoFolder.add(post.bloom, 'intensity', 0, 3).name('bloom');
 atmoFolder.add(post.clouds, 'coverageBias', -0.5, 0.5).name('cloud coverage');
 atmoFolder.add(post.clouds, 'sunIntensity', 0, 5).name('cloud light');
+post.clouds.addDebug(atmoFolder.addFolder('Clouds').close());
 post.godRays.addDebug(atmoFolder.addFolder('God rays').close());
 post.flare.addDebug(atmoFolder.addFolder('Lens flare').close());
 gfx.space.addDebug(debug.folder('Space'));
