@@ -71,7 +71,7 @@ function stormHeading(w: World, bodyId: string, spot: { lat: number; lon: number
 
 const STORM_RING: [number, number][] = [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3], [2, 2], [-2, 2], [2, -2], [-2, -2], [5, 5], [-5, -5], [5, -5], [-5, 5]];
 
-function stormSpot(w: World, bodyId: string, kind: 'rain' | 'lightning' | 'snow' | 'acidRain' | 'methaneRain', lats: [number, number]): { lat: number; lon: number } {
+function stormSpot(w: World, bodyId: string, kind: 'rain' | 'lightning' | 'snow' | 'acidRain' | 'methaneRain', lats: [number, number], night = false): { lat: number; lon: number } {
   w.universe.update(w.clock.time);
   const body = w.universe.get(bodyId);
   const def = body.def.atmosphere!.weather!.find((d) => d.kind === kind)!;
@@ -83,7 +83,7 @@ function stormSpot(w: World, bodyId: string, kind: 'rain' | 'lightning' | 'snow'
   for (let lat = lats[0]; lat <= lats[1]; lat += 1.5) {
     for (let lon = -180; lon < 180; lon += 1.5) {
       latLonToDir((lat * Math.PI) / 180, (lon * Math.PI) / 180, d);
-      if (d.dot(sun) < 0.3) continue;
+      if (night ? d.dot(sun) > -0.35 : d.dot(sun) < 0.3) continue;
       // Weakest point around the candidate: the storm should fill the whole sky, not sit at an edge or in an eye.
       let score = 1;
       for (const [dl, dn] of STORM_RING) {
@@ -485,6 +485,25 @@ export const SCENARIOS: Record<string, Scenario> = {
     apply: (w) => {
       const spot = stormSpot(w, 'earth', 'lightning', [-30, 30]);
       w.place({ body: 'earth', ...spot, altitude: 1200, heading: stormHeading(w, 'earth', spot), pitch: 3, throttle: 0.15 });
+    },
+  },
+  'earth-storm-night': {
+    description: 'Low under storm clouds at night, rain and lightning lighting the cloud from inside',
+    apply: (w) => {
+      const spot = stormSpot(w, 'earth', 'lightning', [-30, 30], true);
+      w.place({ body: 'earth', ...spot, altitude: 1200, heading: stormHeading(w, 'earth', spot), pitch: 6, throttle: 0.1 });
+    },
+  },
+  'earth-storm-orbit-night': {
+    description: 'From orbit over the night side, flashes popping inside storm systems',
+    apply: (w) => {
+      const spot = stormSpot(w, 'earth', 'lightning', [-35, 35], true);
+      w.universe.update(w.clock.time);
+      const earth = w.universe.get('earth');
+      const dir = new Vector3();
+      latLonToDir((spot.lat * Math.PI) / 180, (spot.lon * Math.PI) / 180, dir);
+      dir.applyQuaternion(earth.rotation);
+      w.placeInSpace('earth', earth.radius + 1.1e6, dir);
     },
   },
   'earth-snow': {
