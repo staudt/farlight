@@ -47,8 +47,8 @@ export class SunView implements BodyView {
     this.disc = new Mesh(new IcosahedronGeometry(1, 5), this.discMat);
     const h = this.look.heat;
     const hot = Math.min(1, Math.max(0, (h - 0.7) * 3));
-    const pc = new Color(1, 0.22, 0.1).lerp(new Color(0.55, 0.72, 1), hot);
-    pc.multiply(color).multiplyScalar(1.5);
+    const pc = new Color(1, 0.1, 0.03).lerp(new Color(0.55, 0.72, 1), hot);
+    pc.multiply(color).multiplyScalar(2.2);
     this.prom = new Prominences(body.def.seed, MAX_ARCS, pc);
     this.glowMat = new ShaderMaterial({
       uniforms: {
@@ -110,13 +110,13 @@ export class SunView implements BodyView {
             vec2 dir = vUv / max(rr0, 1e-4);
             float t = uTime * 0.02;
             float s1 = cN(dir * 2.6 + vec2(x * 0.09, t) + uSeedF);
-            float s2 = cN(dir * 6.5 + vec2(x * 0.16, -t * 1.3) + uSeedF * 1.7);
-            float s3 = cN(dir * 14.0 + vec2(x * 0.3, t * 0.7) + uSeedF * 2.3);
-            float st = smoothstep(0.42, 0.85, s1 * 0.5 + s2 * 0.32 + s3 * 0.18);
-            float fall = exp(-(x - 1.0) * 0.85) / (0.6 + 0.4 * x);
-            float body = 0.12 * exp(-(x - 1.0) * 1.4);
-            float c = (st * 0.55 * fall + body) * smoothstep(1.0, 0.7, rr0);
-            outc += mix(uColor, vec3(1.0), 0.55) * c * uStream * uIntensity;
+            float s2 = cN(dir * 11.0 + vec2(x * 0.16, -t * 1.3) + uSeedF * 1.7);
+            float s3 = cN(dir * 30.0 + vec2(x * 0.3, t * 0.7) + uSeedF * 2.3);
+            float st = smoothstep(0.4, 0.8, s1 * 0.3 + s2 * 0.35 + s3 * 0.35);
+            float fall = exp(-(x - 1.0) * 1.5) / (0.6 + 0.4 * x);
+            float body = 0.35 * exp(-(x - 1.0) * 3.0);
+            float c = (st * 0.5 * fall + body) * smoothstep(1.0, 0.7, rr0);
+            outc += mix(uColor, vec3(1.0), 0.25) * c * uStream * uIntensity;
           }
           gl_FragColor = vec4(outc, 1.0);
         }`,

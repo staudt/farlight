@@ -112,9 +112,9 @@ export function createSurfaceMaterial(): ShaderMaterial {
 
         // Limb darkening per channel: the rim cools toward orange (or deep red on a red star).
         vec3 limb = 1.0 - uLimbU * (1.0 - mu);
-        vec3 col = pow(uTint, vec3(2.3)) * uGain * limb * lum;
+        vec3 col = pow(uTint, vec3(2.6)) * uGain * limb * lum;
         // Hot cell highlights lean white, dark lanes lean to the star colour.
-        col += uTint * uGain * 0.06 * max(cell, 0.0) * mu;
+        col += uTint * uGain * 0.1 * mu * mu;
         gl_FragColor = vec4(max(mix(plain, col, uDetail), vec3(0.0)), 1.0);
       }`,
   });

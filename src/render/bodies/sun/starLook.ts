@@ -30,13 +30,13 @@ export function starLook(star: Pick<StarDef, 'color' | 'activity'> | undefined, 
   // Blue over red: red dwarf about 0.2, Sun about 0.8, blue giant 1.6 or more.
   const ratio = c[2] / Math.max(c[0], 1e-3);
   const heat = Math.min(1, Math.max(0, (ratio - 0.2) / 1.2));
-  const k = 0.75 + 0.5 * heat;
+  const k = 0.95 + 0.5 * heat;
   const activity = activityOf(star, seed);
   return {
     tint,
     heat,
     limbU: [0.5 * k, 0.66 * k, 0.86 * k],
-    granuleContrast: 0.14 + 0.2 * heat,
+    granuleContrast: 0.15 + 0.08 * heat,
     spotThreshold: 0.8 - 0.16 * activity,
     faculae: 0.25 + 0.75 * activity,
     activity,

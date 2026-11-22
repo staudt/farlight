@@ -99,7 +99,7 @@ export class Prominences {
           float sl = length(side);
           side = sl > 1e-4 ? side / sl : vec3(1.0, 0.0, 0.0);
           float prof = 0.45 + 0.55 * sin(3.14159 * u);
-          float w = 0.045 * (0.7 + 0.5 * fract(aPar.z * 0.37)) * prof * uScale * (0.85 + 0.3 * sin(uTime * 0.31 + aPar.z * 2.0));
+          float w = 0.07 * (0.7 + 0.5 * fract(aPar.z * 0.37)) * prof * uScale * (0.85 + 0.3 * sin(uTime * 0.31 + aPar.z * 2.0));
           mv.xyz += side * aPar.y * w;
           // Blobs of brighter plasma run along the strand.
           float flow = 0.65 + 0.35 * sin(u * 14.0 - uTime * 0.9 + aPar.z * 5.0);

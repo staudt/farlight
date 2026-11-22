@@ -401,9 +401,9 @@ export const config = {
     detailFull: 200,
     /** Disc brightness (HDR) in the sky, and when the surface is fully detailed. A big disc needs less or it blows out to white. */
     skyGain: 6,
-    closeGain: 0.85,
+    closeGain: 1.9,
     /** How much of the base glow is removed when the disc is big (0..1). */
-    closeHalo: 0.6,
+    closeHalo: 0.15,
     /** Granule cells across a radius, and how fast they churn (1 = slow). */
     granuleScale: 24,
     churn: 1,
