@@ -198,7 +198,7 @@ function companionFor(star: GalaxyStar, primary: BodyDef, outerPlanetAU: number)
       period,
     },
     visual: { color, radius: visualRadius, orbitDistance: distance, soiFactor: 6, minApparentSize: 0.02 },
-    star: { color, intensity: round(ps.intensity * (hot ? 0.8 : rng.range(0.25, 0.6)), 2), coronaSize: hot ? 7.5 : 6.5 },
+    star: { color, intensity: round(ps.intensity * (hot ? 0.8 : rng.range(0.25, 0.6)), 2), coronaSize: hot ? 7.5 : 6.5, activity: hot ? 0.15 : 0.75 },
     info: {
       type: hot ? 'White dwarf companion' : 'Companion star',
       atmosphere: 'Plasma',
