@@ -205,6 +205,8 @@ export class Precipitation {
   readonly methane = makeSnow(true, 10);
   /** Strength of acid rain at the camera, 0..1 (for the lens droplets). */
   acidAmount = 0;
+  /** Strength of rain at the camera, 0..1. */
+  rainAmount = 0;
   private layers: Layer[];
   private primed = false;
   private vel = new Vector3();
@@ -286,6 +288,7 @@ export class Precipitation {
       any ||= l.object.visible;
     }
     this.acidAmount = this.layers[2]!.amount;
+    this.rainAmount = Math.max(this.layers[0]!.amount, this.layers[2]!.amount * 0.6, this.layers[3]!.amount * 0.4);
     if (!any) return;
 
     // Ship velocity over the ground in world axes. Particles are fixed in the air.

@@ -22,7 +22,7 @@ export const lightningSettings = {
   bolts: true,
   /** Chance that a strike draws a visible bolt. */
   boltChance: 0.6,
-  flashStrength: 1,
+  flashStrength: 0.7,
 };
 
 export const auroraSettings = {
@@ -34,6 +34,20 @@ export const auroraSettings = {
   fold: 1,
   /** Strength of the glowing ring seen from orbit. */
   shell: 1,
+};
+
+/** Rain shafts hanging from storm cells and splashes on the ground. */
+export const precipFxSettings = {
+  enabled: true,
+  intensity: 1,
+  /** Shaft width multiplier. */
+  width: 1,
+  /** How far down from the cloud base the shafts reach. */
+  reach: 1,
+  /** Search range multiplier for storm cells. */
+  range: 1,
+  /** Splash and ripple strength near the ground. */
+  splashes: 1,
 };
 
 export const acidRainSettings = {
@@ -90,6 +104,7 @@ export const weatherSettings = {
   snow: snowSettings,
   lightning: lightningSettings,
   aurora: auroraSettings,
+  rainFx: precipFxSettings,
   acidRain: acidRainSettings,
   methaneRain: methaneRainSettings,
   heatShimmer: heatShimmerSettings,
