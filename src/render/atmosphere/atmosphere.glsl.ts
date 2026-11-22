@@ -13,6 +13,7 @@ export const atmosphereLib = /* glsl */ `
 #define MAX_ATMOS ${MAX_ATMOS}
 #define ATMO_STEPS 14
 #define ATMO_LIGHT_STEPS 5
+uniform float uAtmoAdaptive;    // sample spacing on short paths, in scale heights (0 = off)
 uniform int uAtmoSteps;         // quality: <= ATMO_STEPS
 uniform int uAtmoLight;         // quality: <= ATMO_LIGHT_STEPS
 
@@ -80,7 +81,11 @@ void applyAtmosphere(int i, vec3 d, float tScene, out vec3 outTrans, out vec3 ou
   t1 = min(t1, tScene);
   if (t1 <= t0) return;
 
-  float seg = (t1 - t0) / float(uAtmoSteps);
+  // Short paths (terrain a few km away) need no more samples than keep each one under a fraction of the
+  // smaller scale height: the same spacing the full count gives on a long path, so the look is unchanged.
+  int ns = uAtmoSteps;
+  if (uAtmoAdaptive > 0.0) ns = clamp(int(ceil((t1 - t0) / (uAtmoAdaptive * min(uHr[i], uHm[i])))), 3, uAtmoSteps);
+  float seg = (t1 - t0) / float(ns);
   vec3 sumR = vec3(0.0);
   vec3 sumM = vec3(0.0);
   float odR = 0.0;
@@ -88,7 +93,7 @@ void applyAtmosphere(int i, vec3 d, float tScene, out vec3 outTrans, out vec3 ou
   float mu = dot(d, uSunDir);
 
   for (int s = 0; s < ATMO_STEPS; s++) {
-    if (s >= uAtmoSteps) break;
+    if (s >= ns) break;
     float t = t0 + (float(s) + 0.5) * seg;
     vec3 p = d * t - c;                 // relative to the planet center
     float r = length(p);

@@ -322,6 +322,16 @@ export class PlanetView implements BodyView {
     // Hidden chunks leave the scene graph: no matrix walk or traversal for the thousands that are not drawn.
     for (const n of this.visiblePrev) if (!this.visibleNow.has(n) && n.mesh) this.object.remove(n.mesh);
     for (const n of this.visibleNow) if (n.mesh && n.mesh.parent !== this.object) this.object.add(n.mesh);
+    // Props fade to nothing past the fade distance in their vertex shader; a chunk whose whole bounding
+    // sphere is beyond it skips the draw (identical image, fewer instanced draws and vertices).
+    if (this.hasProps) {
+      const far = config.props.enabled ? config.props.fadeFar * quality.settings.propRange : 0;
+      for (const n of this.visibleNow) {
+        if (n.props.length === 0) continue;
+        const show = distanceToSphere(_cam.x, _cam.y, _cam.z, n.center.x, n.center.y, n.center.z, n.boundR) * boost < far;
+        for (const p of n.props) p.visible = show;
+      }
+    }
     const t = this.visiblePrev;
     this.visiblePrev = this.visibleNow;
     this.visibleNow = t;

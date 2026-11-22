@@ -20,7 +20,7 @@ export class DebugPanel {
     warp: 1,
   };
   private perf: PerfStats | null = null;
-  private perfReadout = { drawCalls: 0, triangles: 0, cpuMs: 0, gpuMs: 0, level: '' };
+  private perfReadout = { drawCalls: 0, triangles: 0, cpuMs: 0, gpuMs: 0, level: '', profileStages: false, stages: '' };
 
   constructor(private world: World, gfx: GameRenderer, jump: (name: string) => void) {
     this.gui = new GUI({ title: 'Farlight debug' });
@@ -104,6 +104,7 @@ export class DebugPanel {
     this.addQualityFolder();
     const render = this.gui.addFolder('Render').close();
     render.add(gfx.renderer, 'toneMappingExposure', 0.1, 4).name('exposure');
+    render.add(config.render, 'atmoAdaptive', 0, 2).name('atmo adaptive steps');
   }
 
   private addQualityFolder(): void {
@@ -139,7 +140,9 @@ export class DebugPanel {
       p.add(s, 'fxScale', 0, 1).onChange(apply);
     }
     const perf = this.gui.addFolder('Perf').close();
-    for (const k of Object.keys(this.perfReadout) as (keyof typeof this.perfReadout)[]) perf.add(this.perfReadout, k).listen().disable();
+    for (const k of ['drawCalls', 'triangles', 'cpuMs', 'gpuMs', 'level'] as const) perf.add(this.perfReadout, k).listen().disable();
+    perf.add(this.perfReadout, 'profileStages').name('per stage timing').onChange((v: boolean) => this.perf?.setProfile(v));
+    perf.add(this.perfReadout, 'stages').listen().disable();
   }
 
   /** Hooks up the render stats readout (frame time split uses GPU timer queries when available). */
@@ -166,6 +169,12 @@ export class DebugPanel {
       pr.cpuMs = Number(this.perf.cpuMs.toFixed(2));
       pr.gpuMs = this.perf.gpuSupported ? Number(this.perf.gpuMs.toFixed(2)) : -1;
       pr.level = quality.label;
+      if (this.perf.profile) {
+        pr.stages = Object.entries(this.perf.passes)
+          .filter(([, v]) => v.ms > 0)
+          .map(([k, v]) => `${k} ${v.ms.toFixed(1)}`)
+          .join(' ');
+      }
     }
     const w = this.world;
     const r = this.readout;
