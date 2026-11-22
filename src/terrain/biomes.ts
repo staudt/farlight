@@ -125,9 +125,9 @@ export function biomeColor(def: TerrainDef, s: TerrainSample, slope: number, det
     } else {
       // Dark, warm staining.
       const k = -t * 0.75;
-      r += (0.34 - r) * k * 0.6 - r * k * 0.25;
-      g += (0.19 - g) * k * 0.7 - g * k * 0.2;
-      b += (0.1 - b) * k * 0.8 - b * k * 0.15;
+      r += (0.38 - r) * k * 0.62 - r * k * 0.2;
+      g += (0.15 - g) * k * 0.78 - g * k * 0.22;
+      b += (0.07 - b) * k * 0.9 - b * k * 0.2;
     }
   }
 

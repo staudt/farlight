@@ -238,6 +238,8 @@ export const config = {
     glintStretch: 1.7,
     /** Twinkle of the glitter path, 0 smooth, 1 full sparkle. */
     sparkle: 1,
+    /** Without sparkle (low quality) the glint lobe is this much broader and dimmer, same energy. */
+    glintSoft: 2.4,
     /** Turquoise shallows, 0 off. */
     shallows: 1,
     /** Moon glint on the night sea. */
@@ -349,6 +351,11 @@ export const config = {
     airglow: 1,
     /** Orange and red twilight band along the terminator seen from orbit. */
     twilightBand: 1,
+  },
+  /** Atmosphere pass tuning (render/atmosphere). */
+  atmosphere: {
+    /** 0..1: how much the Mie extinction is greyed relative to its scattering colour (rust dust scatters rust but must not strip red from what is behind it). */
+    mieExtinctionGrey: 0.8,
   },
   /** Space scenery: asteroid belts, comets and the nebula backdrop. */
   space: {

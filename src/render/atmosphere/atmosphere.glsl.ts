@@ -31,7 +31,8 @@ uniform float uCamAlt[MAX_ATMOS];    // camera altitude above sea level (float64
 uniform float uHr[MAX_ATMOS];        // Rayleigh scale height (m)
 uniform float uHm[MAX_ATMOS];        // Mie scale height (m)
 uniform vec3 uBetaR[MAX_ATMOS];      // per meter at sea level
-uniform vec3 uBetaM[MAX_ATMOS];      // per meter (tinted)
+uniform vec3 uBetaM[MAX_ATMOS];      // per meter (tinted): scattering
+uniform vec3 uBetaX[MAX_ATMOS];      // per meter: Mie extinction, less tinted than the scattering (dust darkens the light more evenly)
 uniform vec3 uBetaA[MAX_ATMOS];      // absorption per meter (Rayleigh profile)
 uniform float uMieG[MAX_ATMOS];
 uniform float uSunI[MAX_ATMOS];
@@ -187,7 +188,7 @@ void applyAtmosphere(int i, vec3 d, float tScene, out vec3 outTrans, out vec3 ou
     // Horizon angle at this altitude: below it the sun is blocked by the planet.
     float horizon = -sqrt(max(0.0, 1.0 - (R * R) / (r * r)));
     float lit = smoothstep(horizon - 0.02, horizon + 0.02, cosSun);
-    vec3 tau = uBetaR[i] * (odR + lR) + uBetaM[i] * 1.1 * (odM + lM) + uBetaA[i] * (odR + lR);
+    vec3 tau = uBetaR[i] * (odR + lR) + uBetaX[i] * 1.1 * (odM + lM) + uBetaA[i] * (odR + lR);
     vec3 att = exp(-tau) * lit;
     // Eclipses: other bodies' shadows darken the sunlight reaching this sample (dark sky in totality).
     if (uEclCfg.x > 0.5) att *= eclipseLight(d * t, uAtmoSelf[i]);
@@ -196,7 +197,7 @@ void applyAtmosphere(int i, vec3 d, float tScene, out vec3 outTrans, out vec3 ou
   }
 
   vec3 inscatter = uSunI[i] * uStarColor * (sumR * uBetaR[i] * phaseR(mu) + sumM * uBetaM[i] * phaseM(mu, uMieG[i]));
-  outTrans = exp(-(uBetaR[i] * odR + uBetaM[i] * 1.1 * odM + uBetaA[i] * odR));
+  outTrans = exp(-(uBetaR[i] * odR + uBetaX[i] * 1.1 * odM + uBetaA[i] * odR));
   outInscatter = inscatter;
   if (uNightFx > 0.5) outInscatter += nightExtras(i, d, c, R, H, h, t0, t1, outTrans);
 }

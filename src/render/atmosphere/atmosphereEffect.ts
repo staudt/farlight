@@ -18,6 +18,7 @@ export class AtmosphereEffect {
   private centers = Array.from({ length: MAX_ATMOS }, () => new Vector3());
   private betaR = Array.from({ length: MAX_ATMOS }, () => new Vector3());
   private betaM = Array.from({ length: MAX_ATMOS }, () => new Vector3());
+  private betaX = Array.from({ length: MAX_ATMOS }, () => new Vector3());
   private betaA = Array.from({ length: MAX_ATMOS }, () => new Vector3());
   private nums = {
     radius: new Array<number>(MAX_ATMOS).fill(1),
@@ -53,6 +54,7 @@ export class AtmosphereEffect {
     u.set('uCenter', new Uniform(this.centers));
     u.set('uBetaR', new Uniform(this.betaR));
     u.set('uBetaM', new Uniform(this.betaM));
+    u.set('uBetaX', new Uniform(this.betaX));
     u.set('uBetaA', new Uniform(this.betaA));
     u.set('uRadius', new Uniform(this.nums.radius));
     u.set('uTop', new Uniform(this.nums.top));
@@ -130,6 +132,10 @@ export class AtmosphereEffect {
       const bm = a.mieDepth / hm;
       // Colored Mie: dust scatters its own color and absorbs the complement a bit.
       this.betaM[i]!.set(bm * mc[0], bm * mc[1], bm * mc[2]);
+      // Extinction is much less tinted than the scattering colour: a rust dust haze must not strip the red from the scene behind it.
+      const mean = (mc[0] + mc[1] + mc[2]) / 3;
+      const g = config.atmosphere.mieExtinctionGrey;
+      this.betaX[i]!.set(bm * (mc[0] + (mean - mc[0]) * g), bm * (mc[1] + (mean - mc[1]) * g), bm * (mc[2] + (mean - mc[2]) * g));
       const ab = a.absorptionDepth ?? [0, 0, 0];
       this.betaA[i]!.set(ab[0] / hr, ab[1] / hr, ab[2] / hr);
     }

@@ -87,6 +87,8 @@ export class DebugPanel {
     night.add(config.night, 'zodiacal', 0, 3);
     night.add(config.night, 'airglow', 0, 4);
     night.add(config.night, 'twilightBand', 0, 4);
+    const atm = this.gui.addFolder('Atmosphere').close();
+    atm.add(config.atmosphere, 'mieExtinctionGrey', 0, 1);
     const rg = this.gui.addFolder('Rings').close();
     rg.add(config.rings, 'detail', 0, 2);
     rg.add(config.rings, 'octaves', 3, 9, 1);

@@ -395,7 +395,7 @@ export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0
         vec3 eclL = eclipseLight(vViewPos * mat3(viewMatrix), uEclSelf);
         amb *= 0.25 + 0.75 * dot(eclL, vec3(0.2126, 0.7152, 0.0722));
         vec3 lightIn = sunCol * uStarColor * eclL * uSunIntensity * diffuse + amb + nightMoon(N, R, term);
-        vec3 col = nightPurkinje(vColor * lightIn, lightIn);
+        vec3 col = nightPurkinje(vColor * lightIn, lightIn, sunR);
         col = landMist(col, vec3(0.82, 0.87, 0.95) * (amb + sunCol * uStarColor * eclL * uSunIntensity * 0.5 * term), 0.6, sunR, vViewPos, uBodyCenterView);
         // Crystal glow: brighter at night, still readable by day.
         col += vInst * vEmit * uEmissive * (0.35 + 0.65 * (1.0 - term)) * uNightGlow;
