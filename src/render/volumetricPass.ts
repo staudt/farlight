@@ -70,7 +70,13 @@ void main() {
   cloudCompute(d, dView, tScene, tc, lc, tHit);
   vec3 T = vec3(tc);
   vec3 L = lc;
-  atmoCompute(d, tScene, T, L);
+  // Air in front of an opaque cloud only scatters up to the cloud, so a dark storm deck is not washed out by sky light from behind it.
+  float tAir = tScene;
+  if (tHit > 0.0) {
+    float opaque = clamp(1.0 - tc, 0.0, 1.0);
+    tAir = exp(mix(log(min(tScene, 1e9)), log(max(min(tHit, tScene), 1.0)), opaque));
+  }
+  atmoCompute(d, tAir, T, L);
   // One NaN turns the whole frame black through bloom: never let one out.
   if (any(isnan(L)) || any(isnan(T))) { L = vec3(0.0); T = vec3(1.0); }
   // Alpha: log2(1 + distance) of what the pixel shows, for the temporal reprojection (23 = far away).

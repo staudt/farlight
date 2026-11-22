@@ -33,6 +33,8 @@ uniform vec3 uFlashPos;      // body fixed flash position (m)
 uniform float uFrame;
 uniform float uCStruct;       // weather structure strength (latitude bands, fronts, cyclones), 0 = plain noise
 uniform vec4 uCyc[4];         // cyclones: body fixed direction xyz, cos of the angular radius w (2 = off)
+uniform vec3 uCMoonDir;       // world axes, toward the moon
+uniform vec3 uNLCol;          // moonlight colour (0 without a moon)
 uniform vec4 uCLit;           // lighting: x powder, y silver, z underside, w sunset warmth
 
 vec2 hitShell(vec3 d, vec3 c, float k) {
@@ -63,7 +65,7 @@ float cloudCover(vec3 pl) {
     float lon = atan(-dir.z, dir.x + 1e-6);
     float al = abs(lat + s * (0.1 * sin(lon * 4.0 + w1 * 9.0) + (w2 - 0.5) * 0.25));
     float a0 = al / 0.13, a1 = (al - 0.45) / 0.14, a2 = (al - 0.95) / 0.2;
-    cov += s * (0.32 * exp(-a0 * a0) - 0.4 * exp(-a1 * a1) + 0.3 * exp(-a2 * a2) - 0.1 * smoothstep(1.2, 1.5, al));
+    cov += s * (0.4 * exp(-a0 * a0) * (0.4 + 1.2 * w1) - 0.4 * exp(-a1 * a1) + 0.22 * exp(-a2 * a2) * (0.4 + 1.1 * w1) - 0.1 * smoothstep(1.2, 1.5, al));
     for (int i = 0; i < 4; i++) {
       vec4 cy = uCyc[i];
       float cd = dot(dir, cy.xyz);
@@ -82,8 +84,10 @@ float cloudCover(vec3 pl) {
     cov += 0.2 * s * smoothstep(0.55, 0.9, cov);
   }
   // Soft ceiling: fully saturated coverage is a flat grey sheet with no relief.
+  // Storm decks bypass the ceiling and close to full overcast.
+  float storm = smoothstep(0.7, 0.88, cov) * min(1.0, s * 2.0);
   if (cov > 0.86) cov = 0.86 + (cov - 0.86) * 0.4;
-  return clamp(cov, 0.0, 1.0);
+  return clamp(mix(cov, 1.0, storm), 0.0, 1.0);
 }
 
 // Density at a body fixed position for a known coverage (the light march reuses the sample's own
@@ -262,7 +266,7 @@ void cloudCompute(vec3 d, vec3 dView, float tScene, out float T, out vec3 L, out
   float tw = 0.0, tws = 0.0;
   float mu = dot(d, uCSunDir);
   // Forward scattering lobes per multiple scattering octave, plus a narrow silver peak.
-  float p0 = mix(hgPhase(mu, 0.5), hgPhase(mu, -0.25), 0.35) * 4.0 * 3.14159265;
+  float p0 = mix(hgPhase(mu, 0.4), hgPhase(mu, -0.25), 0.35) * 4.0 * 3.14159265;
   float p1 = mix(hgPhase(mu, 0.3), hgPhase(mu, -0.12), 0.3) * 4.0 * 3.14159265;
   float pSilver = min(hgPhase(mu, 0.93) * 4.0 * 3.14159265, 30.0);
   float powderK = uCLit.x * (1.0 - 0.75 * smoothstep(0.2, 0.9, mu)); // backlit: powder edges wash out
@@ -297,13 +301,15 @@ void cloudCompute(vec3 d, vec3 dView, float tScene, out float T, out vec3 L, out
       }
       od *= 3.0 / float(max(nl, 1)); // keep the optical depth of the full 3 step march
       // Multiple scattering: three octaves, each attenuated less and scattered more evenly.
-      float e0 = exp(-od * sigma * 1.3);
-      float e1 = exp(-od * sigma * 0.45);
+      float e0 = exp(-od * sigma * 2.4);
+      float e1 = exp(-od * sigma * 0.8);
       float e2 = exp(-od * sigma * 0.15);
       float powder = mix(1.0, 1.0 - exp(-dens * 3.0), powderK);
-      float direct = e0 * p0 * powder + 0.2 * e1 * p1 + 0.06 * e2;
+      float direct = e0 * p0 * powder + 0.1 * e1 * p1 + 0.03 * e2;
       // The base sits under the whole cloud: darker toward the bottom.
-      direct *= mix(1.0, 0.3 + 0.7 * smoothstep(0.0, 0.8, h01), uCLit.z);
+      float baseDark = uCLit.z * (1.0 - smoothstep(0.0, 0.65, h01)) * (0.45 + 0.55 * (1.0 - e1));
+      float deck = smoothstep(0.93, 1.0, cov);   // storm deck: dark grey all through
+      direct *= (1.0 - 0.95 * baseDark) * (1.0 - 0.85 * deck);
       // Silver lining: thin edges lit from behind glow with the narrow forward lobe.
       direct += silverK * pSilver * e1 * exp(-dens * 2.5) * 0.05;
       // Sunlight gets warm when the sun is low.
@@ -313,8 +319,10 @@ void cloudCompute(vec3 d, vec3 dView, float tScene, out float T, out vec3 L, out
       vec3 skyAmb = mix(vec3(0.015, 0.02, 0.035), vec3(0.42, 0.55, 0.78), day);
       skyAmb = mix(skyAmb, vec3(0.6, 0.34, 0.3) * day + skyAmb * 0.4, warm * h01);
       float under = mix(1.0, 0.22 + 0.78 * pow(h01, 0.8), uCLit.z);
-      vec3 ambient = skyAmb * under * (0.55 + 0.45 * e2) * mix(vec3(0.78, 0.86, 1.0), vec3(1.0), h01 * 0.6 + 0.4 * (1.0 - uCLit.z));
+      vec3 ambient = skyAmb * 0.55 * (1.0 - 0.7 * baseDark) * (1.0 - 0.72 * deck) * under * (0.55 + 0.45 * e2) * mix(vec3(0.78, 0.86, 1.0), vec3(1.0), h01 * 0.6 + 0.4 * (1.0 - uCLit.z));
       vec3 col = uCloudColor * (sunCol * uStarColor * eclL * uCSunI * direct + ambient * mix(vec3(1.0), uStarColor, 0.6));
+      // Moonlight on the tops at night.
+      col += uCloudColor * uNLCol * (0.6 + 0.4 * smoothstep(0.3, 1.0, h01)) * (0.5 + 0.5 * max(dot(up, uCMoonDir), 0.0)) * 2.0 * (1.0 - day) * (1.0 - 0.7 * baseDark);
       // Lightning lights the cloud from inside.
       if (uFlash > 0.0) {
         float fd = length(pl - uFlashPos);
