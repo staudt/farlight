@@ -441,7 +441,10 @@ export function createHeightSampler(def: BodyDef, radius: number): TerrainSample
           const g2 = 1 - smoothstep(0, 0.08, m2);
           const f2 = smoothstep(0.08, 0.14, m2) * (1 - smoothstep(0.14, 0.3, m2));
           sum += d * fade * (f1 * 0.45 - g1 + (f2 * 0.45 - g2) * 0.4);
-          tintAcc -= fade * Math.min(1, g1 * 0.9 + g2 * 0.5 + f1 * 0.2);
+          // Reddish-brown stain bleeds well beyond the crack itself, patchy along its length.
+          const patchy = 0.55 + 0.45 * smoothstep(-0.3, 0.4, detail.noise(x * k2 * 0.7 + 5.5, y * k2 * 0.7, z * k2 * 0.7 + sd));
+          const wide = (1 - smoothstep(0.03, 0.26, m1)) * patchy + (1 - smoothstep(0.02, 0.14, m2)) * 0.35;
+          tintAcc -= fade * Math.min(1, g1 * 0.9 + g2 * 0.5 + f1 * 0.2 + wide * 0.85);
           break;
         }
         case 'dunes': {
