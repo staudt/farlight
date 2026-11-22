@@ -50,6 +50,7 @@ const shaftVert = /* glsl */ `
   attribute vec3 iUp;
   attribute vec4 iSize;
   attribute vec4 iColor;
+  varying float vW;
   varying vec2 vUv;
   varying vec4 vSize;
   varying vec4 vColor;
@@ -66,6 +67,7 @@ const shaftVert = /* glsl */ `
     vDist = length(iPos);
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     gl_Position = projectionMatrix * mv;
+    vW = -mv.z;
     #include <logdepthbuf_vertex>
   }
 `;
@@ -75,6 +77,11 @@ const shaftFrag = /* glsl */ `
   #include <logdepthbuf_pars_fragment>
   uniform float uTime;
   uniform float uFlash;
+  uniform float uFar;
+  uniform float uLogFar;
+  uniform vec2 uSize;
+  uniform sampler2D uDepth;
+  varying float vW;
   varying vec2 vUv;
   varying vec4 vSize;
   varying vec4 vColor;
@@ -102,15 +109,19 @@ const shaftFrag = /* glsl */ `
     float s2 = vn(vec2(x * 24.0 - seed * 7.0, y * 6.0 * (h / 3000.0) + uTime * 0.7));
     float streak = 0.45 + 0.9 * s1 * (0.6 + 0.8 * s2);
     // Hangs from the cloud base (y = 1) and frays away toward the foot (y = 0).
-    float fray = smoothstep(0.0, 0.85, y) * (0.55 + 0.45 * smoothstep(0.0, 0.5, y));
-    float top = 1.0 - 0.7 * smoothstep(0.9, 1.0, y);
+    // Dense at the cloud base (y = 1), fading softly downward.
+    float fray = pow(smoothstep(0.0, 1.0, y), 1.5);
+    float top = 1.0 - smoothstep(0.94, 1.0, y) * 0.6;
     float near = smoothstep(vSize.x * 0.35, vSize.x * 1.4, vDist);
-    float a = amount * side * streak * fray * top * near * 0.5;
-    // Screen door: pixels are either veil or untouched, so the sky behind keeps its colour at the edges.
-    float n = fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy * 0.5), vec2(0.06711056, 0.00583715))) + uTime * 0.37);
-    if (n > a * 2.4) discard;
-    vec3 col = vColor.rgb * (0.75 + 0.5 * s1) * (1.0 + uFlash * 5.0);
-    gl_FragColor = vec4(col, 1.0);
+    float far = 1.0 - smoothstep(0.45, 1.0, vDist / uFar);
+    // Hand made depth test against the scene (raw log depth), so terrain and the ship occlude the veil.
+    float raw = texture2D(uDepth, gl_FragCoord.xy / (uSize * 0.4)).r;
+    float sceneW = raw < 0.99999 ? exp2(raw * uLogFar) - 1.0 : 1.0e12;
+    float occ = smoothstep(0.0, 0.02 * vW + 3.0, sceneW - vW);
+    float a = amount * side * streak * fray * top * near * far * occ * 0.75;
+    vec3 col = vColor.rgb * 0.65 * (0.8 + 0.4 * s1) * (1.0 + uFlash * 5.0);
+    a = clamp(a, 0.0, 0.7);
+    gl_FragColor = vec4(col * a, a);
   }
 `;
 
@@ -209,13 +220,21 @@ export class RainFx {
     this.shaftGeo.setAttribute('iColor', mk(this.iColor, 4));
     this.shaftGeo.instanceCount = 0;
     this.shaftMat = new ShaderMaterial({
-      uniforms: { uTime: { value: 0 }, uFlash: { value: 0 } },
+      uniforms: {
+        uTime: { value: 0 },
+        uFlash: { value: 0 },
+        uFar: { value: 70000 },
+        uLogFar: post.veil.logFarUniform,
+        uSize: post.veil.sizeUniform,
+        uDepth: post.veil.depthUniform,
+      },
       vertexShader: shaftVert,
       fragmentShader: shaftFrag,
       side: DoubleSide,
       transparent: true,
-      // Writes depth: the atmosphere pass would otherwise treat the veil as sky at infinity and erase it.
-      depthWrite: true,
+      depthWrite: false,
+      depthTest: false,
+      premultipliedAlpha: true,
     });
     this.shaftMesh = new Mesh(this.shaftGeo, this.shaftMat);
     this.shaftMesh.frustumCulled = false;
@@ -256,7 +275,8 @@ export class RainFx {
     this.splash.frustumCulled = false;
     this.splash.renderOrder = 10;
     this.splash.visible = false;
-    this.object.add(this.shaftMesh, this.splash);
+    post.veil.veilScene.add(this.shaftMesh);
+    this.object.add(this.splash);
   }
 
   /** `rainAmount`: strength of rain at the camera 0..1 (from the precipitation layer). */
@@ -273,6 +293,7 @@ export class RainFx {
     }
     if (!body || !precipFxSettings.enabled) {
       this.shaftMesh.visible = false;
+      this.post.veil.active = false;
       this.splash.visible = false;
       this.shafts.length = 0;
       this.splashAmount = 0;
@@ -308,6 +329,7 @@ export class RainFx {
     const flash = this.post.clouds.flash;
     const shown = this.shafts.length > 0 && camAlt < H * 0.9;
     this.shaftMesh.visible = shown;
+    this.post.veil.active = shown;
     if (shown) {
       const n = Math.min(this.shafts.length, this.lowQuality() ? 4 : MAX_SHAFTS);
       for (let i = 0; i < n; i++) {
