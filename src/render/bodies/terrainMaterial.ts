@@ -1,4 +1,6 @@
-import { Color, ShaderMaterial, Texture, Vector3 } from 'three';
+import { Color, ShaderMaterial, Texture, Vector3, Vector4 } from 'three';
+import { config } from '../../core/config';
+import { MIST_GLSL, updateMist } from './landLook';
 import { starLight } from '../starLight';
 import { NIGHT_LIGHT_GLSL, nightUniforms } from '../nightLight';
 import { ECLIPSE_GLSL, eclipse } from '../eclipse';
@@ -6,9 +8,10 @@ import { WAVE_COUNT, createWaveUniforms, waterLook } from './waterWaves';
 import type { BodyDef } from '../../data/types';
 
 /** Flat shaded, vertex colored terrain material with sun lighting and glinting water. */
-export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
+export function createTerrainMaterial(def?: BodyDef, radius = 0): ShaderMaterial {
   const wave = createWaveUniforms(waterLook(def ?? ({} as BodyDef)));
-  return new ShaderMaterial({
+  const mist = new Vector4(0, 0, 1, 0);
+  const mat = new ShaderMaterial({
     side: 2, // DoubleSide: skirts and any winding mismatch never show holes
     uniforms: {
       uSunDirView: { value: new Vector3(1, 0, 0) },
@@ -25,6 +28,9 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
       // Settlement lights map (night side), used by coarse chunks; uLampColor is zero without one.
       uLights: { value: null as Texture | null },
       uLampColor: { value: new Vector3(0, 0, 0) },
+      uMist: { value: mist },
+      uBodyRadius: { value: radius },
+      uRim: { value: 0 },
       ...wave,
     },
     vertexShader: /* glsl */ `
@@ -82,6 +88,8 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
       uniform vec4 uWaterB;
       uniform vec3 uMoonDir;
       uniform float uMoonLit;
+      uniform float uRim;
+      ${MIST_GLSL}
       ${NIGHT_LIGHT_GLSL}
       varying vec4 vDir;
       varying vec4 vEmit;
@@ -219,6 +227,14 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
         if (dot(uNLCol, uNLCol) > 0.0) lightIn += nightMoon(N, R, term);
         vec3 albedo = mix(vColor, uFoamColor, foam * 0.92);
         vec3 col = albedo * lightIn;
+        if (isWater < 0.5 && skirt < 0.5) {
+          // Ridges and cliff edges catch the low sun: a grazing rim on steep lit faces.
+          float steep = smoothstep(0.12, 0.5, 1.0 - clamp(dot(N, R), 0.0, 1.0));
+          float rim = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 3.0) * steep * uRim * term;
+          col += albedo * sunCol * uStarColor * eclL * uSunIntensity * rim * (0.4 + 0.6 * lam);
+          vec3 mistLit = vec3(0.82, 0.87, 0.95) * (amb + sunCol * uStarColor * eclL * uSunIntensity * 0.5 * term);
+          col = landMist(col, mistLit, vWater.y, sunR, vViewPos, uBodyCenterView);
+        }
         // Purkinje shift is zero in good light (coherent branch: day pixels skip it).
         if (dot(lightIn, vec3(0.2126, 0.7152, 0.0722)) < 0.9) col = nightPurkinje(col, lightIn);
         if (isWater > 0.5) {
@@ -304,4 +320,9 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
         #include <colorspace_fragment>
       }`,
   });
+  mat.onBeforeRender = () => {
+    updateMist(mist, def, radius);
+    mat.uniforms.uRim!.value = config.terrain.rim;
+  };
+  return mat;
 }

@@ -285,6 +285,33 @@ export const config = {
     /** Rooster tail of spray behind the ship low over water. */
     roosterTail: 1,
   },
+  /** Land look: per facet variation, rock and strata on steep faces, baked occlusion, valley mist, ground clutter (terrain/biomes.ts, render/bodies/terrainMaterial.ts). Chunk bake values apply to chunks built after a change. */
+  terrain: {
+    /** Per facet brightness jitter (0.2 is plus or minus 10 percent) and warm/cool hue shift, on fine chunks. */
+    facetValue: 0.2,
+    facetHue: 0.09,
+    /** Low frequency (tens of meters) patchwork of value over fields. */
+    patch: 0.08,
+    /** Facet slope (tan) where the ground turns to rock, and how much of it shows (0 off). */
+    rockSlope: 0.7,
+    rock: 0.85,
+    /** Rock colour banding by altitude on steep faces (0 off) and the band thickness as a fraction of the relief. */
+    strata: 1,
+    strataPeriod: 0.006,
+    /** Baked occlusion in valleys and concave spots, and light on convex ridges (0 off). */
+    ao: 1,
+    ridge: 1,
+    /** Ridge rim light in the shader on lit steep faces (0 off). */
+    rim: 0.1,
+    /** Valley mist on humid worlds: strength (0 off), top above sea level as a fraction of the relief, and optical depth per km. */
+    mist: 1,
+    mistTop: 0.12,
+    mistDensity: 2.2,
+    /** Ground clutter (grass tufts, pebbles) near the camera: on, and the distances (game meters) where it shrinks into the ground. */
+    clutter: true,
+    clutterNear: 150,
+    clutterFar: 300,
+  },
   /** Surface props (trees, rocks, spires, crystals, mesas). */
   props: {
     enabled: true,
@@ -424,6 +451,36 @@ export const config = {
     penumbraSoft: 1,
     /** The visible sun shrinks to the shadow sun while a body crosses it, so the cover is total. */
     discMatch: true,
+  },
+  /** Star surface, corona and prominences (render/bodies/sunView.ts, render/bodies/sun/). */
+  sun: {
+    enabled: true,
+    /** Pixel radius of the disc where surface detail starts to fade in, and where it is full. From a planet's sky the sun stays a clean disc. */
+    detailStart: 40,
+    detailFull: 200,
+    /** Disc brightness (HDR) in the sky, and when the surface is fully detailed. A big disc needs less or it blows out to white. */
+    skyGain: 6,
+    closeGain: 1.9,
+    /** How much of the base glow is removed when the disc is big (0..1). */
+    closeHalo: 0.15,
+    /** Granule cells across a radius, and how fast they churn (1 = slow). */
+    granuleScale: 24,
+    churn: 1,
+    /** Strengths, 1 = default look. */
+    granulation: 1,
+    limb: 1,
+    spots: 1,
+    faculae: 1,
+    streamers: 1,
+    prominences: 1,
+    /** Extra corona size and strength while a body covers the sun (totality). */
+    totalityCorona: 2.6,
+    /** Per quality level: noise octaves of the surface and the most prominence arcs drawn. */
+    byQuality: {
+      low: { octaves: 1, arcs: 2 },
+      medium: { octaves: 2, arcs: 4 },
+      high: { octaves: 3, arcs: 6 },
+    },
   },
   debug: {
     showPanel: false,

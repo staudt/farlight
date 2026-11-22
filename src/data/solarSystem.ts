@@ -17,7 +17,7 @@ const sun: BodyDef = {
   seed: 1,
   physical: { radius: 6.957e8, surfaceGravity: 28, rotationPeriod: 25.4 * DAY, axialTilt: 7.25 * DEG },
   visual: { color: [1.0, 0.92, 0.78], minApparentSize: 0.02 },
-  star: { color: [1.0, 0.93, 0.8], intensity: 1.0, coronaSize: 6 },
+  star: { color: [1.0, 0.93, 0.8], intensity: 1.0, coronaSize: 6, activity: 0.55 },
   info: {
     type: 'Star',
     atmosphere: 'Plasma',
@@ -100,6 +100,9 @@ const earth: BodyDef = {
       { kind: 'tree', density: 750, color: [0.1, 0.3, 0.12], minSize: 14, maxSize: 32, biomes: ['forest'], maxSlope: 0.75 },
       { kind: 'tree', density: 110, color: [0.2, 0.45, 0.1], minSize: 9, maxSize: 22, biomes: ['grass', 'meadow'], maxSlope: 0.6 },
       { kind: 'rock', density: 50, color: [0.5, 0.46, 0.42], minSize: 3, maxSize: 15, biomes: ['rock', 'tundra', 'desert'] },
+      // Ground clutter, only seen within a few hundred meters.
+      { kind: 'tuft', density: 850, color: [0.3, 0.48, 0.13], minSize: 0.9, maxSize: 2.0, biomes: ['grass', 'meadow', 'tundra'], maxSlope: 0.6 },
+      { kind: 'pebble', density: 650, color: [0.62, 0.58, 0.52], minSize: 0.3, maxSize: 1.0, biomes: ['rock', 'tundra', 'desert', 'beach', 'snow'] },
       { kind: 'mesa', density: 4, color: [0.85, 0.5, 0.3], minSize: 30, maxSize: 90, biomes: ['desert'], maxSlope: 0.5 },
     ],
   },
@@ -157,7 +160,10 @@ const moon: BodyDef = {
       { name: 'rim', color: [0.42, 0.415, 0.4], minHeight: 0.3 },
       { name: 'highlands', color: [0.27, 0.265, 0.25] },
     ],
-    props: [{ kind: 'rock', density: 140, color: [0.55, 0.55, 0.53], minSize: 2, maxSize: 14 }],
+    props: [
+      { kind: 'rock', density: 140, color: [0.55, 0.55, 0.53], minSize: 2, maxSize: 14 },
+      { kind: 'pebble', density: 800, color: [0.62, 0.62, 0.6], minSize: 0.3, maxSize: 1.1 },
+    ],
   },
   info: {
     type: 'Moon',
@@ -338,6 +344,7 @@ const mars: BodyDef = {
     props: [
       { kind: 'rock', density: 120, color: [0.5, 0.28, 0.17], minSize: 3, maxSize: 16, maxSlope: 0.8 },
       { kind: 'mesa', density: 10, color: [0.82, 0.44, 0.24], minSize: 30, maxSize: 90, maxSlope: 0.6 },
+      { kind: 'pebble', density: 800, color: [0.68, 0.42, 0.28], minSize: 0.3, maxSize: 1.1, maxSlope: 0.7 },
     ],
   },
   info: {

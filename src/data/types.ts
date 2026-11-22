@@ -422,7 +422,8 @@ export interface BiomeEmissiveDef {
   day?: number;
 }
 
-export type PropKind = 'tree' | 'rock' | 'spire' | 'crystal' | 'mesa';
+/** `tuft` and `pebble` are ground clutter (a metre or less): they only show within a few hundred meters. */
+export type PropKind = 'tree' | 'rock' | 'spire' | 'crystal' | 'mesa' | 'tuft' | 'pebble';
 
 export interface PropDef {
   kind: PropKind;
@@ -509,6 +510,8 @@ export interface StarDef {
   intensity: number;
   /** Glow sprite size as a multiple of the radius. */
   coronaSize: number;
+  /** 0..1: how spotted and stormy the surface is (sunspots, faculae, prominences). Derived from the body seed when absent. */
+  activity?: number;
 }
 
 export interface BodyInfo {
