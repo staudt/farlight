@@ -304,6 +304,10 @@ export const SCENARIOS: Record<string, Scenario> = {
     description: 'Gliding 300 metres over the boreal forests of Sweden in the morning',
     apply: (w) => w.place({ body: 'earth', lat: 58, lon: 15.5, altitude: 300, heading: 200, pitch: -2, throttle: 0.3, time: findLocalHourTime(w, 'earth', 15.5, 8) }),
   },
+  'earth-valley-mist': {
+    description: 'Early morning, low over hilly country with mist pooled in the valleys',
+    apply: (w) => w.place({ body: 'earth', lat: 44.4, lon: 8.8, altitude: 120, heading: 300, pitch: -1, throttle: 0.05, time: findLocalHourTime(w, 'earth', 8.8, 8) }),
+  },
   'mars-mesas-low': {
     description: 'Skimming red mesas and boulders over the Martian plains in the morning',
     apply: (w) => w.place({ body: 'mars', lat: -5, lon: 100, altitude: 250, heading: 90, pitch: -1, throttle: 0.3, time: findLocalHourTime(w, 'mars', 100, 9) }),

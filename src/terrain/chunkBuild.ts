@@ -1,7 +1,7 @@
 import { Simplex3 } from '../core/noise';
 import { hashInts } from '../core/rng';
 import type { BodyDef } from '../data/types';
-import { biomeColor } from './biomes';
+import { DEFAULT_LOOK, type TerrainLook, biomeColor, occlusion, rockAmount, rockColor, snowiness, strataBand } from './biomes';
 import { getMap, sampleMap } from './maps';
 import { type TerrainSample, type TerrainSampler, createHeightSampler, makeSample } from './heightfield';
 import { chunkEdgeLength, chunkRect, faceToDir } from './quadtree';
@@ -21,6 +21,8 @@ export interface ChunkRequest {
   mapBase?: string;
   /** Prop scattering, only for chunks at `minLevel` or finer (props matter within a few km). */
   props?: { minLevel: number; gridLevel: number };
+  /** Land look bake parameters (the pool fills them from `config.terrain`). */
+  look?: TerrainLook;
 }
 
 export interface ChunkResult {
@@ -28,7 +30,7 @@ export interface ChunkResult {
   /** Non indexed triangles, relative to `center`. */
   positions: Float32Array;
   colors: Float32Array;
-  /** Per vertex (isWater, facetRandom, shore): shore is the signed distance to the coast in foam band widths, negative on land. */
+  /** Per vertex (isWater, facetRandom, shore): shore is the signed distance to the coast in foam band widths, negative on land. On land y is the baked mist pooling weight (moisture and concavity) instead of the random. */
   water: Float32Array;
   /** Per vertex (r, g, b, dayShare) HDR self light. Absent when the body has none. */
   emit?: Float32Array;
@@ -66,6 +68,7 @@ const SHORE_BAND = 110;
 const WHITE_LAMP_SHARE = 0.3;
 const WHITE_LAMP: readonly [number, number, number] = [1.0, 0.82, 0.55];
 let lampNoise: Simplex3 | null = null;
+let patchNoise: Simplex3 | null = null;
 
 function smoothstep(a: number, b: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -142,6 +145,43 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
   const emitTmp = [0, 0, 0, 0, 0];
   const rad = new Float64Array(V * V);
   for (let k = 0; k < V * V; k++) rad[k] = Math.hypot(px[k]!, py[k]!, pz[k]!);
+  const look = req.look ?? DEFAULT_LOOK;
+  // Baked occlusion: heights on the lattice plus a 2 vertex margin (sampled straight from the height
+  // field, so neighbouring chunks agree at the borders). Concavity is how far the ring of neighbours
+  // sits above the vertex, in slope units: positive in hollows, negative on crests. Fine chunks only.
+  const aoW = 1 - smoothstep(2500, 9000, cell);
+  const conc = new Float32Array(V * V);
+  if (aoW > 0.01) {
+    const M = 2;
+    const W = V + 2 * M;
+    const H = new Float64Array(W * W);
+    const d3 = { x: 0, y: 0, z: 0 };
+    for (let j = 0; j < W; j++) {
+      for (let i = 0; i < W; i++) {
+        const ii = i - M;
+        const jj = j - M;
+        if (ii >= 0 && ii < V && jj >= 0 && jj < V) H[i + j * W] = samples[ii + jj * V]!.height;
+        else {
+          faceToDir(req.face, u0 + (ii / G) * size, v0 + (jj / G) * size, d3);
+          H[i + j * W] = sampler.heightAt(d3.x, d3.y, d3.z);
+        }
+      }
+    }
+    const cellM = cell || 1;
+    for (let j = 0; j < V; j++) {
+      for (let i = 0; i < V; i++) {
+        if (samples[i + j * V]!.water) continue;
+        const c = i + M + (j + M) * W;
+        const m =
+          (H[c - M]! + H[c + M]! + H[c - M * W]! + H[c + M * W]! + H[c - M - M * W]! + H[c + M - M * W]! + H[c - M + M * W]! + H[c + M + M * W]!) / 8;
+        conc[i + j * V] = ((m - H[c]!) / (M * cellM)) * (1 / 0.3) * aoW;
+      }
+    }
+  }
+  const noiseSeed = 7311;
+  patchNoise ??= new Simplex3(noiseSeed);
+  const patchW = facetVar * look.patch;
+  const poolV = new Float32Array(V * V);
   for (let j = 0; j < V; j++) {
     for (let i = 0; i < V; i++) {
       const k = i + j * V;
@@ -160,7 +200,17 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
       const sample = samples[k]!;
       const slope = sample.water ? 0 : Math.min(1, Math.hypot(gx, gy) * slopeScale);
       if (vglow) emitTmp.fill(0);
-      const col = biomeColor(terrain, sample, slope, detail, vglow ? emitTmp : undefined);
+      const col: [number, number, number] = [...biomeColor(terrain, sample, slope, detail, vglow ? emitTmp : undefined)];
+      if (!sample.water) {
+        // Hollows darker, crests lighter, and a slow patchwork of value across fields.
+        let k2 = occlusion(conc[k]!, look.ao, look.ridge);
+        if (patchW > 0.001) k2 *= 1 + patchW * patchNoise.noise(sample.x * (R / 42), sample.y * (R / 42), sample.z * (R / 42));
+        col[0] *= k2;
+        col[1] *= k2;
+        col[2] *= k2;
+        const wet = 0.3 + 0.7 * smoothstep(0.25, 0.7, sample.moisture);
+        poolV[k] = wet * (0.35 + 0.65 * Math.max(0, Math.min(1, 0.5 + 0.5 * conc[k]!)));
+      }
       if (vglow) for (let q = 0; q < 5; q++) vglow[k * 5 + q] = emitTmp[q]!;
       if (vlamp && vclump && !sample.water) {
         const raw = lightMap ? sampleMap(lightMap, sample.lat, Math.atan2(-sample.z, sample.x)) * (nl!.density ?? 1) : (nl!.density ?? 0);
@@ -222,6 +272,7 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
   const triColor = new Float32Array(cells * 18); // two triangles per cell, 3 vertices, rgb
   const triWater = new Float32Array(cells * 2);
   const triRnd = new Float32Array(cells * 2);
+  const triPool = new Float32Array(cells * 2);
   const triEmit = hasEmit ? new Float32Array(cells * 2 * 12) : null; // per triangle vertex rgb + dayShare
   const emit = hasEmit ? new Float32Array(tris * 12) : undefined;
   const dirAttr = lightMap ? new Float32Array(tris * 12) : undefined;
@@ -249,7 +300,7 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
       colors[o + q * 3 + 1] = triColor[co + 1]!;
       colors[o + q * 3 + 2] = triColor[co + 2]!;
       water[t * 9 + q * 3] = triWater[cell * 2 + which]!;
-      water[t * 9 + q * 3 + 1] = triRnd[cell * 2 + which]!;
+      water[t * 9 + q * 3 + 1] = triWater[cell * 2 + which]! > 0.5 ? triRnd[cell * 2 + which]! : poolV[k]!;
       water[t * 9 + q * 3 + 2] = shoreN[k]!;
       if (dirAttr) {
         dirAttr[t * 12 + q * 4] = dx[k]!;
@@ -325,10 +376,46 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
     fg /= cnt;
     fb /= cnt;
     const rnd = (hashInts(baseSeed, cell, which) & 0xffff) / 65535;
+    // Bare rock on steep facets (snow sheds earlier), banded by altitude into strata.
+    if (!isWater && look.rock > 0 && facetVar > 0.01) {
+      const ux = dx[a]! + dx[b]! + dx[c]!;
+      const uy = dy[a]! + dy[b]! + dy[c]!;
+      const uz = dz[a]! + dz[b]! + dz[c]!;
+      const e1x = px[b]! - px[a]!;
+      const e1y = py[b]! - py[a]!;
+      const e1z = pz[b]! - pz[a]!;
+      const e2x = px[c]! - px[a]!;
+      const e2y = py[c]! - py[a]!;
+      const e2z = pz[c]! - pz[a]!;
+      const nx = e1y * e2z - e1z * e2y;
+      const ny = e1z * e2x - e1x * e2z;
+      const nz = e1x * e2y - e1y * e2x;
+      const cosT = Math.abs(nx * ux + ny * uy + nz * uz) / ((Math.hypot(nx, ny, nz) * Math.hypot(ux, uy, uz)) || 1);
+      const ft = (Math.sqrt(Math.max(0, 1 - cosT * cosT)) / Math.max(cosT, 0.05)) * slopeScale;
+      const sn = snowiness(fr, fg, fb);
+      const amt = rockAmount(ft, look.rockSlope * (1 - 0.3 * sn)) * look.rock * facetVar;
+      if (amt > 0.01) {
+        const rc: [number, number, number] = [...rockColor(fr, fg, fb)];
+        if (look.strata > 0) {
+          const period = Math.max(1.5, look.strataPeriod * sampler.amplitudeMeters);
+          const alt = (rad[a]! + rad[b]! + rad[c]!) / 3 - R;
+          patchNoise ??= new Simplex3(noiseSeed);
+          const warp = patchNoise.noise((ux / 3) * (R / 2500), (uy / 3) * (R / 2500), (uz / 3) * (R / 2500)) * period * 2.5;
+          const [sv, warm] = strataBand(alt, period, warp);
+          const v = 1 + (sv - 1) * look.strata;
+          rc[0] = rc[0] * v * (1 + warm * look.strata);
+          rc[1] *= v;
+          rc[2] = rc[2] * v * (1 - warm * look.strata);
+        }
+        fr += (rc[0] - fr) * amt * 0.92;
+        fg += (rc[1] - fg) * amt * 0.92;
+        fb += (rc[2] - fb) * amt * 0.92;
+      }
+    }
     // Water stays calm: brightness jitter per facet reads as a zigzag on still seas.
-    const kv = isWater ? 1 : 1 + (rnd - 0.5) * 0.14 * facetVar;
-    // A subtle warm/cool shift per facet makes the low poly look read on land.
-    const tint = isWater ? 0 : (((hashInts(baseSeed, cell, which + 7) & 0xff) / 255) - 0.5) * 0.05 * facetVar;
+    const kv = isWater ? 1 : 1 + (rnd - 0.5) * look.facetValue * facetVar;
+    // A warm/cool shift per facet makes the low poly look read on land.
+    const tint = isWater ? 0 : (((hashInts(baseSeed, cell, which + 7) & 0xff) / 255) - 0.5) * look.facetHue * facetVar;
     for (let q = 0; q < 3; q++) {
       const k = vs[q]!;
       const o = (cell * 2 + which) * 9 + q * 3;
@@ -342,6 +429,7 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
     }
     triWater[cell * 2 + which] = isWater ? 1 : 0;
     triRnd[cell * 2 + which] = rnd;
+    triPool[cell * 2 + which] = isWater ? 0 : (poolV[a]! + poolV[b]! + poolV[c]!) / 3;
     if (triEmit) {
       // Biome glow: flat mean over the triangle blended to per vertex on coarse chunks, like colour.
       let fe0 = 0;
@@ -467,7 +555,7 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
         colors[tri * 9 + q * 3 + 1] = triColor[(cell * 2 + which) * 9 + 1]!;
         colors[tri * 9 + q * 3 + 2] = triColor[(cell * 2 + which) * 9 + 2]!;
         water[tri * 9 + q * 3] = triWater[cell * 2 + which]! + 2;
-        water[tri * 9 + q * 3 + 1] = triRnd[cell * 2 + which]!;
+        water[tri * 9 + q * 3 + 1] = triWater[cell * 2 + which]! > 0.5 ? triRnd[cell * 2 + which]! : triPool[cell * 2 + which]!;
         water[tri * 9 + q * 3 + 2] = 100; // skirts: far from any coast
       }
     };
