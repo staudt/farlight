@@ -293,7 +293,7 @@ export class PlanetView implements BodyView {
     (u.uBodyCenterView!.value as Vector3).copy(b.position).sub(ctx.cameraWorld).applyMatrix4(ctx.camera.matrixWorldInverse);
     u.uTime!.value = ctx.realTime;
     u.uEclSelf!.value = eclipse.idOf(b);
-    updateWaveUniforms(u as unknown as WaveUniforms, this.waterLook, ctx, b.rotation, _cam);
+    updateWaveUniforms(u as unknown as WaveUniforms, this.waterLook, ctx, b.rotation, _cam, b);
     u.uGlow!.value = config.props.nightGlow;
     u.uNightAmb!.value = config.props.nightAmbient;
     const pc = config.props;

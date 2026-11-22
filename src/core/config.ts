@@ -210,6 +210,22 @@ export const config = {
     foam: 1,
     /** Shore foam band width multiplier (1 is about 110 m, wider on coarse terrain). */
     foamWidth: 1,
+    /** Sky reflection strength (Fresnel), from the body's atmosphere colours. */
+    reflection: 0.85,
+    /** Brightness of the reflected sky. */
+    skyGain: 0.75,
+    /** Sun glint strength. */
+    glint: 1,
+    /** Base glint lobe half width as a slope (about 0.1 is a breezy sea). It broadens with distance. */
+    glintRoughness: 0.08,
+    /** Glint stretch along the sun direction. */
+    glintStretch: 1.7,
+    /** Twinkle of the glitter path, 0 smooth, 1 full sparkle. */
+    sparkle: 1,
+    /** Turquoise shallows, 0 off. */
+    shallows: 1,
+    /** Moon glint on the night sea. */
+    moonGlint: 1,
     /** Wake: below this height over water the ship throws spray, meters. */
     wakeAltitude: 60,
     /** Wake: speed (m/s) where the spray starts and where it is full. */

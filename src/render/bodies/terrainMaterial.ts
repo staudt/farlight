@@ -73,11 +73,63 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
       uniform vec3 uFoamColor;
       uniform vec3 uSssColor;
       uniform float uHasWater;
+      uniform vec3 uSkyZenith;
+      uniform vec3 uSkyHorizon;
+      uniform vec3 uSkyDepth;
+      uniform vec4 uWaterA;
+      uniform vec4 uWaterB;
+      uniform vec3 uMoonDir;
+      uniform float uMoonLit;
       varying vec4 vDir;
       varying vec4 vEmit;
       varying vec3 vColor;
       varying vec3 vWater;
       varying vec3 vViewPos;
+      float h12(vec2 p) {
+        vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+        p3 += dot(p3, p3.yzx + 33.33);
+        return fract((p3.x + p3.y) * p3.z);
+      }
+      // Smooth value noise over the glitter cells (two hashes per corner: strength and twinkle phase).
+      vec2 gnoise(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        vec2 a = vec2(h12(i), h12(i + 41.7));
+        vec2 b = vec2(h12(i + vec2(1.0, 0.0)), h12(i + vec2(1.0, 0.0) + 41.7));
+        vec2 c = vec2(h12(i + vec2(0.0, 1.0)), h12(i + vec2(0.0, 1.0) + 41.7));
+        vec2 d = vec2(h12(i + 1.0), h12(i + 1.0 + 41.7));
+        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+      }
+      // One layer of glitter cells fixed to the water: twinkles over time, mean about 1.
+      float glitterLayer(vec2 uv, float s, float t) {
+        vec2 n = gnoise(uv * s);
+        float tw = 0.5 + 0.5 * sin(t * (1.6 + 2.4 * n.y) + 40.0 * n.y);
+        float a = smoothstep(0.25, 0.95, n.x);
+        return a * a * (0.15 + 4.5 * tw * tw * tw);
+      }
+      // Glitter with cells about two pixels wide at any distance (two octaves blended): grainy, never banded.
+      float glitter(vec2 uv, float fw, float t) {
+        float lv = log2(max(fw * 3.0 * 2.0, 1.0));
+        float l0 = floor(lv);
+        float s0 = 3.0 / exp2(l0);
+        float a = glitterLayer(uv, s0, t);
+        float b = glitterLayer(uv + 17.3, s0 * 0.5, t);
+        return mix(a, b, smoothstep(0.0, 1.0, lv - l0)) * 1.6;
+      }
+      // Anisotropic Beckmann lobe: sa along the plane of incidence, sc across it.
+      float glintLobe(vec3 N, vec3 Hv, vec3 Lv, float sa, float sc) {
+        float nh = max(dot(N, Hv), 0.02);
+        vec3 hp = Hv / nh - N;
+        vec3 lt = Lv - N * dot(Lv, N);
+        float ll = length(lt);
+        vec3 Tp = ll > 1e-4 ? lt / ll : normalize(cross(N, vec3(0.0, 1.0, 0.001)));
+        vec3 Tq = cross(N, Tp);
+        float x = dot(hp, Tp) / sa;
+        float y = dot(hp, Tq) / sc;
+        float nh2 = nh * nh;
+        return exp(-(x * x + y * y)) / (3.14159 * sa * sc * nh2 * nh2);
+      }
       void main() {
         #include <logdepthbuf_fragment>
         vec3 N = normalize(cross(dFdx(vViewPos), dFdy(vViewPos)));
@@ -99,6 +151,9 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
         float shore = vWater.z;
         float dist = length(vViewPos);
         vec3 wTilt = vec3(0.0);
+        vec2 glUV = vec2(0.0);
+        float glFw = 1.0;
+        float fadedVar = 0.0;
         if (isWater > 0.5 && skirt < 0.5 && uHasWater > 0.5) {
           float hsum = 0.0;
           float wsum = 0.0;
@@ -118,9 +173,13 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
             float c1 = cos(ph + 0.55 * sin(ph)) * (1.0 + 0.55 * cos(ph));
             vec3 kd = normalize(uWaveK[i]);
             wTilt += kd * c1 * uWaveS[i] * fade * swellK;
+            fadedVar += (1.0 - fade) * uWaveS[i] * uWaveS[i] * 0.3;
             hsum += s1 * L0 * fade;
             wsum += L0 * fade;
           }
+          fadedVar *= uWaveAmp * uWaveAmp;
+          glUV = vec2(raw[4], raw[5]) * 0.15915494;
+          glFw = max(sqrt(max(fwidth(glUV.x), fwidth(glUV.y)) * min(fwidth(glUV.x), fwidth(glUV.y))), 1e-5);
           wTilt = (wTilt - R * dot(wTilt, R)) * uWaveAmp;
           N = normalize(N - wTilt); // no per facet noise: finest chunks would show it as a zigzag disc
           crest = smoothstep(0.15, 0.85, hsum / max(wsum, 1.0));
@@ -158,23 +217,64 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
         vec3 col = albedo * lightIn;
         if (isWater > 0.5) {
           vec3 H = normalize(L + V);
-          float nh = max(dot(N, H), 0.0);
-          float sparkleRaw = 0.55 + 0.45 * sin(uTime * 2.3 + crest * 5.0 + dot(uWaveK[0], vViewPos) * 0.5);
-          // Far away the phase term is huge and aliases into concentric rings on the glint: settle on the mean.
-          float sparkle = mix(sparkleRaw, 0.8, smoothstep(2000.0, 20000.0, dist));
-          float sparkleFar = 1.0 - 0.55 * smoothstep(3000.0, 60000.0, dist);
-          // The glitter path: tight highlights where wave facets mirror the sun, a soft sheen around them.
-          float spec = (pow(nh, 220.0) * 3.2 * sparkle * sparkleFar + pow(nh, 40.0) * 0.18 + pow(nh, 8.0) * 0.05) * term * (1.0 - foam);
-          float fres = pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 4.0);
-          col += sunCol * uStarColor * eclL * spec * uSunIntensity * 0.6;
-          col += vec3(0.30, 0.45, 0.70) * fres * 0.35 * (0.15 + 0.85 * term) * (1.0 - foam);
+          float nvS = clamp(dot(N, V), 0.0, 1.0);
+          float nvR = clamp(dot(R, V), 0.0, 1.0);
+          float eps = smoothstep(150.0, 3000.0, dist);
+          // Smooth sphere normal far away: facet noise at grazing angles would shimmer the reflection.
+          float nvF = mix(nvS, nvR, eps);
+          float fres = 0.02 + 0.98 * pow(1.0 - nvF, 5.0);
+          float dayAmt = smoothstep(-0.28, 0.12, sunR);
+          float dusk = 1.0 - smoothstep(0.08, 0.55, sunR);
+          // Sky seen in the mirror, from the atmosphere colours: zenith to horizon, reddened toward a low sun.
+          vec3 Rf = reflect(-V, N);
+          float elev = clamp(dot(Rf, R), 0.0, 1.0);
+          vec3 T = exp(-uSkyDepth * 0.9 / max(sunR + 0.07, 0.03));
+          vec3 sunTint = T / max(max(T.r, T.g), max(T.b, 1e-3));
+          vec3 sky = mix(uSkyHorizon, uSkyZenith, pow(elev, 0.55));
+          float toSunR = max(dot(Rf, L), 0.0);
+          float glow = pow(toSunR, 5.0) * 0.9 + pow(toSunR, 1.6) * 0.3 * dusk;
+          float hz = pow(1.0 - elev, 3.0);
+          sky = sky * mix(1.0, 0.55, dusk * (1.0 - toSunR)) + sunTint * (glow * (0.4 + 0.8 * hz) + 0.35 * dusk * hz * (0.3 + 0.7 * toSunR)) * (uSkyHorizon * 1.6 + 0.12);
+          sky *= dayAmt * uWaterB.z;
+          // Night sky: faint cool light only.
+          sky += vec3(0.28, 0.4, 0.8) * uNightAmb * 0.45 * (1.0 - dayAmt) * (uSkyZenith.b > 0.0 ? 1.0 : 0.0) * (0.4 + 0.6 * hz);
+          sky *= mix(vec3(1.0), uStarColor, 0.6) * (0.25 + 0.75 * dot(eclL, vec3(0.2126, 0.7152, 0.0722)));
+          vec3 body = col;
+          // Turquoise shallows: lighter, more saturated water where the sea floor is near.
+          float shallowT = (1.0 - smoothstep(0.0, 9.0, shore)) * uWaterA.w * (1.0 - smoothstep(4000.0, 40000.0, dist));
+          body = mix(body, uSssColor * lightIn * 0.75 + body * 0.35, shallowT * 0.55 * (1.0 - foam));
           // Light through the crests: turquoise glow, stronger in shallows and looking toward the sun.
           float shallow = 1.0 - smoothstep(0.0, 3.5, shore);
           float toSun = clamp(dot(-V, L) * 0.5 + 0.5, 0.0, 1.0);
           // Crest light is a close range effect: far away the chevrons of the fine swells alias into a hard edged zigzag disc.
           float sssNear = 1.0 - smoothstep(120.0, 700.0, dist);
           float sssK = mix(0.32, crest, sssNear) * (0.35 + 0.65 * toSun) * (0.7 + 0.8 * shallow) * term * (1.0 - foam);
-          col += uSssColor * sunCol * uStarColor * eclL * uSunIntensity * sssK * 0.2;
+          body += uSssColor * sunCol * uStarColor * eclL * uSunIntensity * sssK * 0.2;
+          float refl = fres * uWaterA.x * (1.0 - foam * 0.85);
+          col = mix(body, sky, clamp(refl, 0.0, 1.0));
+          // Sun glint: a smooth lobe whose width grows with the waves that are too fine to see and with distance,
+          // modulated by twinkling cells so it sparkles instead of banding.
+          float rough = uWaterB.x;
+          float sig2 = rough * rough + fadedVar + 0.03 * smoothstep(3000.0, 4.0e5, dist);
+          float sig = sqrt(sig2);
+          float sa = sig * uWaterB.y;
+          float sparkleMix = uWaterA.z * (1.0 - smoothstep(25000.0, 90000.0, dist));
+          float tw = mix(1.0, glitter(glUV, glFw, uTime), sparkleMix);
+          float vh = clamp(dot(V, H), 0.0, 1.0);
+          float Fg = 0.02 + 0.98 * pow(1.0 - vh, 5.0);
+          float D = glintLobe(N, H, L, sa, sig);
+          float spec = D * Fg * tw / (4.0 * (0.12 + 0.88 * max(nvF, 0.0))) * term * (1.0 - foam) * uWaterA.y;
+          col += sunCol * uStarColor * eclL * spec * uSunIntensity * 2.4;
+          // Moonlit sea: a dim glint path under a moon above the horizon.
+          if (uMoonLit > 0.0) {
+            vec3 Hm = normalize(uMoonDir + V);
+            float up = smoothstep(0.0, 0.12, dot(uMoonDir, R));
+            float Dm = glintLobe(N, Hm, uMoonDir, sa * 1.2, sig * 1.2);
+            float vm = clamp(dot(V, Hm), 0.0, 1.0);
+            float Fm = 0.02 + 0.98 * pow(1.0 - vm, 5.0);
+            float sm = Dm * Fm * mix(1.0, glitter(glUV, glFw, uTime), sparkleMix) / (4.0 * (0.12 + 0.88 * nvF));
+            col += vec3(0.55, 0.68, 1.0) * sm * up * uMoonLit * (1.0 - term) * 0.05 * uWaterB.w * (1.0 - foam);
+          }
         }
         // Self light (settlements, lava): fades in through twilight by the local sun elevation.
         // The atmosphere pass multiplies scene colour by transmittance and adds no night inscatter.
