@@ -7,11 +7,11 @@ import type { PostStack } from '../post';
 import { lightningSettings } from './settings';
 import { weatherAmount } from './weatherMap';
 
-const MAX_SEGMENTS = 900;
+const MAX_SEGMENTS = 1800;
 const RANGE_TO_LAYER = 200_000;
 const STRIKE_RADIUS = 40_000;
 const FLASH_TIME = 0.45;
-const BOLT_TIME = 0.22;
+const BOLT_TIME = 0.6;
 
 /** Lightning: cloud flashes (via the cloud effect) and the occasional visible bolt. */
 export class Lightning {
@@ -104,9 +104,13 @@ export class Lightning {
       this.tmp.copy(this.boltGround).applyQuaternion(b.rotation).add(b.position);
       placeRelative(this.object, this.tmp, ctx.cameraWorld);
       this.object.quaternion.copy(b.rotation);
-      const f = 1 - this.boltT / BOLT_TIME;
-      const flicker = 0.55 + 0.45 * Math.sin(this.boltT * 140);
-      this.material.uniforms.uAlpha!.value = Math.max(0, f) * flicker;
+      // Return strokes re-light the channel, between them it holds a fading afterglow that flickers.
+      let e = 0.3 * Math.exp(-this.boltT * 6) * (0.6 + 0.4 * Math.sin(this.boltT * 170));
+      for (const p of this.pulses) {
+        const x = this.boltT - p.t;
+        if (x >= 0) e = Math.max(e, p.a * Math.exp(-x * 20));
+      }
+      this.material.uniforms.uAlpha!.value = Math.max(0, e) * lightningSettings.intensity;
       this.object.visible = this.boltT < BOLT_TIME;
     } else if (this.object.visible) {
       this.object.visible = false;
@@ -114,7 +118,11 @@ export class Lightning {
 
     if (!lightningSettings.enabled) return;
     const found = this.findBody(ctx);
-    if (!found) return;
+    if (!found) {
+      this.orbitStrikes(ctx, dt);
+      return;
+    }
+    this.post.clouds.flashRadius = 1;
     const { body, def } = found;
 
     const simDt = Number.isNaN(this.lastSim) ? 0 : Math.max(0, ctx.simTime - this.lastSim);
@@ -143,6 +151,55 @@ export class Lightning {
       }
     }
     this.nextIn = 1 + this.rnd() * 2;
+  }
+
+  /** From above the atmosphere: flashes pop inside storm systems on the night side. */
+  private orbitStrikes(ctx: FrameContext, dt: number): void {
+    const cam = ctx.cameraWorld;
+    let body: Body | null = null;
+    let def: WeatherDef | undefined;
+    for (const b of ctx.world.universe.bodies) {
+      const d = b.def.atmosphere?.weather?.find((w) => w.kind === 'lightning');
+      if (!d || !b.def.atmosphere?.clouds) continue;
+      const alt = b.position.distanceTo(cam) - b.radius;
+      if (alt > b.atmosphereHeight && alt < b.radius * 8) {
+        body = b;
+        def = d;
+        break;
+      }
+    }
+    if (!body || !def) return;
+    const simDt = Number.isNaN(this.lastSim) ? 0 : Math.max(0, ctx.simTime - this.lastSim);
+    this.lastSim = ctx.simTime;
+    this.nextIn -= Math.min(simDt, dt * 6);
+    if (this.nextIn > 0) return;
+    this.nextIn = (0.25 + this.rnd() * 1.1) / Math.max(0.2, lightningSettings.intensity * (0.5 + def.intensity));
+    const camDir = _up.copy(cam).sub(body.position);
+    const dist = camDir.length();
+    camDir.divideScalar(dist);
+    const sun = _su.copy(ctx.world.universe.root.position).sub(body.position).normalize();
+    const R = body.radius;
+    const clouds = body.def.atmosphere!.clouds!;
+    const base = clouds.altitude * body.atmosphereHeight;
+    const mid = base + clouds.thickness * body.atmosphereHeight * 0.5;
+    const rnd = this.rnd;
+    for (let i = 0; i < 60; i++) {
+      const dw = _dir.set(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).normalize();
+      if (dw.dot(camDir) < (R / dist) * 1.05 + 0.05 || dw.dot(sun) > 0) continue;
+      body.worldToLocalDir(dw, this.dirLocal);
+      if (weatherAmount(def, this.dirLocal, ctx.simTime, body) < 0.15) continue;
+      this.post.clouds.flashPos.copy(this.dirLocal).multiplyScalar(R + mid);
+      this.post.clouds.flashRadius = R * 0.08;
+      this.flashT = 0;
+      this.pulses = [{ t: 0, a: 1 }];
+      const n = Math.floor(rnd() * 3);
+      let t = 0;
+      for (let k = 0; k < n; k++) {
+        t += 0.06 + rnd() * 0.12;
+        this.pulses.push({ t, a: 0.4 + rnd() * 0.6 });
+      }
+      return;
+    }
   }
 
   private anyBody(ctx: FrameContext): Body | null {
@@ -253,7 +310,7 @@ export class Lightning {
     }
     for (let i = 0; i < legs; i++) jag(main[i]!, main[i + 1]!, 0.16, 3);
     // Branches.
-    const branches = 3 + Math.floor(rnd() * 4);
+    const branches = 5 + Math.floor(rnd() * 5);
     for (let k = 0; k < branches; k++) {
       const i = 1 + Math.floor(rnd() * (legs - 2));
       const start = main[i]!;
@@ -265,6 +322,18 @@ export class Lightning {
         .addScaledVector(b, Math.sin(ang) * len * 0.8)
         .addScaledVector(dir, -len * 0.7);
       jag(start, end, 0.2, 3);
+      // A fork off the branch.
+      if (rnd() < 0.6) {
+        const mid = new Vector3().lerpVectors(start, end, 0.4 + rnd() * 0.3);
+        const ang2 = rnd() * Math.PI * 2;
+        const l2 = len * (0.35 + rnd() * 0.3);
+        const e2 = new Vector3()
+          .copy(mid)
+          .addScaledVector(a, Math.cos(ang2) * l2 * 0.8)
+          .addScaledVector(b, Math.sin(ang2) * l2 * 0.8)
+          .addScaledVector(dir, -l2 * 0.6);
+        jag(mid, e2, 0.22, 2);
+      }
     }
     // Fatten the channel: two offset copies, about a pixel apart at this distance.
     const w = Math.max(1, dist * 0.0014);

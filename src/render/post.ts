@@ -13,6 +13,7 @@ import type { GameRenderer } from './renderer';
 import { AtmosphereEffect } from './atmosphere/atmosphereEffect';
 import { CloudEffect } from './clouds/cloudEffect';
 import { PerfStats } from './perf';
+import { VeilEffect, VeilPass } from './weather/veilPass';
 import { quality, type QualitySettings } from './quality';
 import { VolumetricComposite, VolumetricPass } from './volumetricPass';
 import { SunView } from './bodies/sunView';
@@ -38,6 +39,8 @@ export class PostStack {
   readonly scorch = new Scorch();
   readonly godRays = new GodRays();
   readonly flare = new LensFlare();
+  /** Transparent weather veils drawn after the atmosphere (see weather/veilPass.ts). */
+  readonly veil: VeilPass;
   readonly bloom: BloomEffect;
   readonly toneMapping: ToneMappingEffect;
   readonly vignette: VignetteEffect;
@@ -53,6 +56,9 @@ export class PostStack {
     this.composer.addPass(scenePass);
     this.vol = new VolumetricPass([this.clouds.uniforms, this.atmosphere.uniforms]);
     this.composer.addPass(this.vol);
+    this.veil = new VeilPass(gfx.camera);
+    this.composer.addPass(this.veil);
+    const veilFx = new VeilEffect(this.veil);
     this.perf.addStage('scene', scenePass);
     this.perf.addStage('volumetric', this.vol);
     this.perf.addStage('godRays', this.godRays.pass);
@@ -68,8 +74,8 @@ export class PostStack {
     });
     this.toneMapping = new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC });
     this.vignette = new VignetteEffect({ darkness: 0.38, offset: 0.32 });
-    this.passWithBloom = new EffectPass(gfx.camera, this.shimmer, this.composite, this.godRays.effect, this.flare.effect, this.bloom, this.toneMapping, this.vignette);
-    this.passNoBloom = new EffectPass(gfx.camera, this.shimmer, this.composite, this.godRays.effect, this.flare.effect, this.toneMapping, this.vignette);
+    this.passWithBloom = new EffectPass(gfx.camera, this.shimmer, this.composite, veilFx, this.godRays.effect, this.flare.effect, this.bloom, this.toneMapping, this.vignette);
+    this.passNoBloom = new EffectPass(gfx.camera, this.shimmer, this.composite, veilFx, this.godRays.effect, this.flare.effect, this.toneMapping, this.vignette);
     this.finalPass = this.passWithBloom;
     this.composer.addPass(this.finalPass);
     // Cheap edge AA on the tone mapped image, for presets that run without MSAA.

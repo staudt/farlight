@@ -30,6 +30,7 @@ uniform vec3 uCloudColor;
 uniform float uCSunI;
 uniform float uFlash;        // lightning flash 0..1
 uniform vec3 uFlashPos;      // body fixed flash position (m)
+uniform float uFlashR;       // flash reach in far mode (m)
 uniform float uFrame;
 uniform float uCStruct;       // weather structure strength (latitude bands, fronts, cyclones), 0 = plain noise
 uniform vec4 uCyc[4];         // cyclones: body fixed direction xyz, cos of the angular radius w (2 = off)
@@ -186,6 +187,7 @@ vec4 farClouds(vec3 d, float tScene, float rIn, float thickness, out float tHit)
   float shade = (1.0 - 0.55 * shadowed * dens) * (0.88 + 0.2 * edgeLit);
   vec3 grey = mix(vec3(1.0), vec3(0.62, 0.7, 0.86), uCLit.z * dens * shadowed);
   vec3 col = uCloudColor * (sunCol * uStarColor * eclL * uCSunI * 1.15 * lambert * (0.72 + 0.3 * dens) * shade * grey + vec3(0.03, 0.04, 0.06) * day * mix(vec3(1.0), uStarColor, 0.6));
+  if (uFlash > 0.0) col += vec3(0.75, 0.8, 1.0) * uFlash * 12.0 * dens * exp(-length(pl - uFlashPos) / uFlashR);
   // Grazing angles near the limb thicken the layer visually.
   float graze = 1.0 - abs(dot(d, up));
   float a = clamp(dens * (0.85 + 0.6 * graze), 0.0, 0.97);
@@ -326,7 +328,7 @@ void cloudCompute(vec3 d, vec3 dView, float tScene, out float T, out vec3 L, out
       // Lightning lights the cloud from inside.
       if (uFlash > 0.0) {
         float fd = length(pl - uFlashPos);
-        col += vec3(0.75, 0.8, 1.0) * uFlash * 6.0 * exp(-fd / (thickness * 1.5));
+        col += vec3(0.75, 0.8, 1.0) * uFlash * 6.0 * exp(-fd / max(thickness * 1.5, uFlashR));
       }
       float a = 1.0 - exp(-dens * sigma * stepLen);
       light += trans * a * col;

@@ -34,6 +34,8 @@ export class CloudEffect {
   body: Body | null = null;
   readonly flashPos = new Vector3();
   flash = 0;
+  /** Reach of the flash in the far (orbit) cloud mode, meters. */
+  flashRadius = 1;
 
   constructor() {
     this.uniforms = new Map<string, Uniform>([
@@ -57,6 +59,7 @@ export class CloudEffect {
         ['uCloudSelf', new Uniform(-1)],
         ['uFlash', new Uniform(0)],
         ['uFlashPos', new Uniform(new Vector3())],
+        ['uFlashR', new Uniform(1)],
         ['uFrame', new Uniform(0)],
         ['uCStruct', new Uniform(1)],
         ['uCMoonDir', new Uniform(new Vector3(0, 1, 0))],
@@ -119,6 +122,7 @@ export class CloudEffect {
     u.get('uCSunI')!.value = this.sunIntensity;
     u.get('uCloudSelf')!.value = eclipse.idOf(best);
     u.get('uFlash')!.value = this.flash;
+    u.get('uFlashR')!.value = this.flashRadius;
     (u.get('uFlashPos')!.value as Vector3).copy(this.flashPos);
     u.get('uFrame')!.value = this.frame++;
     u.get('uCStruct')!.value = cloudStructure(c);
