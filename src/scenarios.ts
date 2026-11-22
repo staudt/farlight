@@ -495,6 +495,32 @@ export const SCENARIOS: Record<string, Scenario> = {
       w.placeInSpace('saturn', saturn.radius * 3.2, flat.clone().multiplyScalar(0.85).addScaledVector(side, 0.25).addScaledVector(pole, -0.4 * sign));
     },
   },
+  'saturn-ring-flythrough': {
+    description: 'Drifting just above the ring plane inside the B ring, rocks and ice chunks all around, Saturn filling the sky',
+    apply: (w) => {
+      const { saturn, pole, flat } = ringFrame(w);
+      const def = saturn.def.rings!;
+      const rad = saturn.radius * (def.innerRadius + 0.45 * (def.outerRadius - def.innerRadius));
+      const radial = flat.clone();
+      const tangent = new Vector3().crossVectors(pole, radial).normalize();
+      const pos = radial.clone().multiplyScalar(rad).addScaledVector(pole, 140);
+      w.placeInSpace('saturn', pos.length(), pos.clone().normalize());
+      const fwd = tangent.clone().multiplyScalar(0.9).addScaledVector(radial, -0.25).addScaledVector(pole, 0.005).normalize();
+      w.ship.quat.setFromRotationMatrix(new Matrix4().lookAt(new Vector3(), fwd, pole));
+      w.ship.vel.set(0, 0, 0);
+      w.ship.throttle = 0.00003;
+    },
+  },
+  'saturn-rings-backlit': {
+    description: "Under the unlit face of Saturn's rings with the sun behind them, the thin parts glowing and the dense B ring dark",
+    apply: (w) => {
+      const { saturn, pole, sun, flat, side } = ringFrame(w);
+      // Camera on the dark side of the ring plane, the sun beyond the rings and well off the view axis.
+      const below = sun.dot(pole) >= 0 ? -1 : 1;
+      const dir = flat.clone().multiplyScalar(-0.35).addScaledVector(side, 0.9).addScaledVector(pole, 0.3 * below);
+      w.placeInSpace('saturn', saturn.radius * 3.4, dir);
+    },
+  },
   // --- Eclipses and moon shadows (one block) ---
   'earth-solar-eclipse': {
     description: 'Gliding low inside the Moon\'s shadow at totality: the sun a black disc in a dark sky, a sunset glow all round the horizon',
@@ -1542,6 +1568,17 @@ export const DEFAULT_SCENARIO = 'earth-low-morning';
 // Space scenery scenarios
 
 const _up = new Vector3(0, 1, 0);
+
+/** Saturn's pole, the sun direction and a ring plane basis (flat toward the sun, side across). */
+function ringFrame(w: World): { saturn: Body; pole: Vector3; sun: Vector3; flat: Vector3; side: Vector3 } {
+  w.universe.update(w.clock.time);
+  const saturn = w.universe.get('saturn');
+  const pole = new Vector3(0, 1, 0).applyQuaternion(saturn.rotation);
+  const sun = w.universe.root.position.clone().sub(saturn.position).normalize();
+  const flat = sun.clone().addScaledVector(pole, -sun.dot(pole)).normalize();
+  const side = new Vector3().crossVectors(pole, flat);
+  return { saturn, pole, sun, flat, side };
+}
 
 /** Orientation that looks along `fwd` (ship convention: forward is -Z). */
 function lookQuat(fwd: Vector3): Quaternion {
