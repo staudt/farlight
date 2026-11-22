@@ -193,6 +193,36 @@ function mesa(): BufferGeometry {
   return b.build();
 }
 
+/** Distant versions: a handful of triangles that keep the silhouette and the tint (no trunks, no caps). */
+function lowCone(r: number, h: number, seg: number, mix = 1): BufferGeometry {
+  const b = new Builder();
+  const base = ring(seg, 0, r, 0.3);
+  const apex: V3 = [0, h, 0];
+  for (let i = 0; i < seg; i++) b.tri(base[i]!, apex, base[(i + 1) % seg]!, WHITE, mix, 0, 0, 0, 0.7 + 0.35 * hash01(i, seg));
+  return b.build();
+}
+
+function lowBlob(r: number, cy: number, squash: number): BufferGeometry {
+  const b = new Builder();
+  const top: V3 = [0, cy + r * squash, 0];
+  const bot: V3 = [0, cy - r * squash, 0];
+  const eq = ring(4, cy, r, 0.4);
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4;
+    b.tri(eq[i]!, top, eq[j]!, WHITE, 1, 0, 0, 0, 1.0 - 0.04 * i);
+    b.tri(eq[j]!, bot, eq[i]!, WHITE, 1, 0, 0, 0, 0.78);
+  }
+  return b.build();
+}
+
+const LOW_BUILDERS: Record<PropKind, (() => BufferGeometry)[]> = {
+  tree: [() => lowCone(0.3, 1, 4), () => lowBlob(0.4, 0.6, 0.95)],
+  rock: [() => lowBlob(0.5, 0.3, 0.62)],
+  spire: [() => lowCone(0.12, 1, 4)],
+  crystal: [() => lowCone(0.12, 1, 5)],
+  mesa: [() => lowBlob(1.3, 0.5, 0.5)],
+};
+
 const BUILDERS: Record<PropKind, (() => BufferGeometry)[]> = {
   tree: [conifer, broadleaf],
   rock: [rock],
@@ -211,6 +241,20 @@ export function propGeometry(kind: PropKind, variant: number): BufferGeometry {
     const list = BUILDERS[kind];
     g = list[Math.min(variant, list.length - 1)]!();
     cache.set(key, g);
+  }
+  return g;
+}
+
+const lowCache = new Map<string, BufferGeometry>();
+
+/** Shared low poly geometry for a kind and variant. */
+export function propGeometryLow(kind: PropKind, variant: number): BufferGeometry {
+  const key = `${kind}:${variant}`;
+  let g = lowCache.get(key);
+  if (!g) {
+    const list = LOW_BUILDERS[kind];
+    g = list[Math.min(variant, list.length - 1)]!();
+    lowCache.set(key, g);
   }
   return g;
 }
@@ -338,6 +382,16 @@ export function createPropMeshes(batches: readonly PropBatch[], materialFor: (ba
     m.instanceMatrix.onUpload(releaseArray);
     m.instanceColor.onUpload(releaseArray);
     out.push(m);
+    // The low poly twin shares the instance buffers; the planet view shows one of the two per chunk.
+    const lo = new InstancedMesh(propGeometryLow(b.kind, b.variant), materialFor(b), b.count);
+    lo.instanceMatrix = m.instanceMatrix;
+    lo.instanceColor = m.instanceColor;
+    lo.matrixAutoUpdate = false;
+    lo.name = `props:${b.kind}:lod`;
+    lo.userData.lod = true;
+    lo.boundingSphere = m.boundingSphere;
+    lo.visible = false;
+    out.push(lo);
   }
   return out;
 }
