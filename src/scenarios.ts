@@ -78,6 +78,9 @@ export const SCENARIOS: Record<string, Scenario> = {
   'ocean-skim': surface('Skimming 30 m over the open Pacific toward a low morning sun: glitter path, spray and wake', {
     body: 'earth', lat: 5, lon: -150, localHour: 8.4, altitude: 30, heading: 90, pitch: 0, throttle: 0.9,
   }),
+  'ocean-golden-hour': surface('Golden hour, 50 m over open sea toward the low sun: sparkling glitter path and a warm sky in the water', {
+    body: 'earth', lat: 6, localHour: 17.75, altitude: 50, heading: 270, pitch: 0, throttle: 0.3,
+  }),
   'ocean-coast': {
     description: 'Along the Portuguese coast at 150 m: surf lines and foam where the sea meets the shore',
     apply: (w) => {
