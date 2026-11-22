@@ -196,8 +196,11 @@ vec3 deckColor(vec3 d, float depth) {
     // A thin dark moat, then the bright collar.
     col *= 1.0 - 0.3 * smoothstep(0.62, 0.9, r) * (1.0 - smoothstep(0.9, 1.0, r)) * (1.0 - mask);
     col = mix(col, inner, mask * 0.93);
-    float collar = smoothstep(0.92, 1.1, r) * (1.0 - smoothstep(1.1, 1.55, r));
-    col = mix(col, vec3(1.0, 0.92, 0.8) * (dot(col, vec3(0.33)) + 0.25), collar * (0.2 + 0.25 * s.y));
+    // The collar is a partial, uneven companion cloud on one side (like Neptune's), not a full ring.
+    float collar = smoothstep(0.85, 1.2, r) * (1.0 - smoothstep(1.2, 1.9, r));
+    float side = smoothstep(-0.1, 0.85, cos(ang - 2.4 + (dn - 0.5) * 2.2 + (s.x - 0.5) * 1.5));
+    float patchy = 0.35 + 0.65 * smoothstep(0.3, 0.75, s.y * 0.6 + dn * 0.5 + 0.12 * sin(ang * 5.0 + r * 4.0));
+    col = mix(col, vec3(1.0, 0.92, 0.8) * (dot(col, vec3(0.33)) + 0.25), collar * side * patchy * (0.22 + 0.3 * s.y));
     // Turbulent wake trailing west.
     if (!kTop) continue;
     float wk = smoothstep(-4.5, -1.0, q.x) * (1.0 - smoothstep(-1.2, -0.6, q.x)) * (1.0 - smoothstep(0.7, 1.8, abs(q.y)));
