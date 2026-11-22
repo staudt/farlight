@@ -129,16 +129,16 @@ export const SCENARIOS: Record<string, Scenario> = {
     apply: (w) => w.place({ body: 'earth', lat: -0.5, lon: 36.5, altitude: 0, heading: 0, landed: true, time: findLocalHourTime(w, 'earth', 36.5, 13) }),
   },
   'earth-surface-night': {
-    description: 'Parked low over the Colorado foothills on a moonlit night',
-    apply: (w) => w.place({ body: 'earth', lat: 39.5, lon: -104, altitude: 60, heading: 180, pitch: 8, throttle: 0, time: findMoonNight(w, 'earth', -104, 23.5, 0.5) }),
+    description: 'Over the Colorado foothills at night, moon behind you lighting the slopes',
+    apply: (w) => w.place({ body: 'earth', lat: 39.5, lon: -104, altitude: 400, heading: 25, pitch: 10, throttle: 0.15, time: findMoonNight(w, 'earth', -104, 23.5, 1) }),
   },
   'earth-full-moon-night': {
     description: 'Landed in the Rockies under a full moon: cool silver light picks out every hill and ridge',
-    apply: (w) => w.place({ body: 'earth', lat: 39.5, lon: -104, altitude: 60, heading: 205, pitch: 12, throttle: 0, time: findMoonNight(w, 'earth', -104, 23.8, 1) }),
+    apply: (w) => w.place({ body: 'earth', lat: 39.5, lon: -104, altitude: 400, heading: 205, pitch: 14, throttle: 0.15, time: findMoonNight(w, 'earth', -104, 23.8, 1) }),
   },
   'earth-milky-way': {
     description: 'Landed on a moonless night looking up at the Milky Way, dust lanes and nebula glows over the hills',
-    apply: (w) => w.place({ body: 'earth', lat: 39.5, lon: -104, altitude: 60, heading: 200, pitch: 40, throttle: 0, time: findMoonNight(w, 'earth', -104, 1.5, 0) }),
+    apply: (w) => w.place({ body: 'earth', lat: 39.5, lon: -104, altitude: 400, heading: 200, pitch: 35, throttle: 0.15, time: findMoonNight(w, 'earth', -104, 1.5, 0) }),
   },
   'earth-sunset': surface('Gliding over the sea at sunset', {
     body: 'earth', lat: 10, localHour: 18.2, altitude: 900, heading: 270, pitch: 0, throttle: 0.5,

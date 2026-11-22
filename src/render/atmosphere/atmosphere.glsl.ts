@@ -91,16 +91,22 @@ vec3 nightExtras(int i, vec3 d, vec3 c, float R, float H, float h, float t0, flo
       float night = 1.0 - smoothstep(-0.22, 0.08, dot(normalize(p), uSunDir));
       // Chord relative to the horizon chord of a ground observer (planets are small: the curve matters).
       float y = chord / (sqrt(2.0 * R * H * 0.44) - sqrt(2.0 * R * H * 0.33));
-      float g = min(0.35 * pow(y, 6.0), 1.0);
-      float o = min(0.3 * pow(y, 4.0), 1.0) * (1.0 - 0.5 * min(g, 1.0));
+      // Limb (seen from outside the air): the chord grows toward the rim. Inside the air: a faint band a few degrees tall.
+      float far = smoothstep(0.3, 1.0, h / H);
+      float e = max(dot(d, -normalize(c)), 0.0);
+      float gIn = exp(-e / 0.03);
+      float oIn = exp(-e / 0.07);
+      float gOut = min(0.3 * pow(y, 8.0), 1.0);
+      float g = mix(gIn * 0.4, gOut, far);
+      float o = mix(oIn * 0.15, 0.0, far);
       // Patchy, like real bands.
       float patchy = 0.8 + 0.2 * sin(8.0 * d.x + 5.0 * d.z + 2.0 * d.y);
       g *= patchy;
-      vec3 glow = vec3(0.03, 0.15, 0.06) * g + vec3(0.14, 0.055, 0.015) * o;
+      vec3 glow = vec3(0.02, 0.1, 0.04) * g + vec3(0.14, 0.055, 0.015) * o;
       // Seen from outside the air, only the rays grazing the shell make the thin bright limb line.
       float ringAlt = length(p) - R;
       float ring = exp(-pow((ringAlt - 0.385 * H) / (0.06 * H), 2.0));
-      glow *= mix(1.0, ring, smoothstep(0.3, 1.0, h / H));
+      glow *= mix(1.0, ring * 3.0, far);
       add += glow * night * uNightK.x * sqrt(tr);
     }
   }

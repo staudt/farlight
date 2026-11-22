@@ -18,6 +18,7 @@ import { mulberry32 } from '../../core/rng';
 import { Simplex3, fbm } from '../../core/noise';
 import type { ScaleProfile } from '../../data/scale';
 import type { FrameContext } from '../context';
+import { nightLight } from '../nightLight';
 import { type Rock, ROCK_LEVELS, type ScaledBelt, beltDensity, rockInCell } from './spaceData';
 
 const AU = 1.495978707e11;
@@ -190,7 +191,7 @@ export class AsteroidBelts {
     for (const m of this.dustMaterials) {
       m.uniforms.uTime!.value = ctx.simTime;
       // Big soft dust blobs read far more than star points: fade them much faster by day.
-      m.uniforms.uBright!.value = config.space.beltDust * skyDim * skyDim * skyDim;
+      m.uniforms.uBright!.value = config.space.beltDust * skyDim * skyDim * skyDim * (1 - nightLight.night * 0.85);
       m.uniforms.uPixelRatio!.value = ctx.renderer.getPixelRatio();
     }
     this.updateRocks(ctx);
