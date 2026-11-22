@@ -49,9 +49,9 @@ const RAMP_GLSL = /* glsl */ `
   // Shock layer colour by position along the body: s is 0 at the stagnation point, 1 at the tail.
   vec3 shockColor(float s) {
     vec3 stag = vec3(3.4, 2.7, 2.0);
-    vec3 orange = vec3(2.5, 0.95, 0.16);
-    vec3 pink = vec3(2.3, 0.42, 1.15);
-    vec3 violet = vec3(1.0, 0.3, 2.1);
+    vec3 orange = vec3(1.55, 0.5, 0.05);
+    vec3 pink = vec3(1.35, 0.14, 0.75);
+    vec3 violet = vec3(0.55, 0.1, 1.3);
     vec3 c = mix(stag, orange, smoothstep(0.0, 0.22, s));
     c = mix(c, pink, smoothstep(0.2, 0.55, s));
     return mix(c, violet, smoothstep(0.5, 0.95, s));
@@ -82,11 +82,11 @@ function shellMaterial(): ShaderMaterial {
         float s = clamp((vL.z + 1.0) * 0.5, 0.0, 1.0);
         // Stagnation cap: a hard bright spot on the nose, orange white.
         float cap = pow(smoothstep(0.35, 1.0, -vL.z), 2.0);
-        float a = uHeat * (fres * (0.35 + 0.65 * n) * (0.35 + 0.65 * front) + 0.08 * front * n + cap * (0.45 + 0.4 * n));
+        float a = uHeat * (0.6 * (fres * (0.35 + 0.65 * n) * (0.35 + 0.65 * front) + 0.08 * front * n) + cap * (0.5 + 0.4 * n));
         vec3 col = shockColor(clamp(s * (1.5 - 0.6 * uHeat) + (n - 0.5) * 0.12, 0.0, 1.0));
         col *= 0.6 + 0.6 * uHeat;
         a = clamp(a, 0.0, 1.0) * uView;
-        gl_FragColor = vec4(col * a, a * 0.5);
+        gl_FragColor = vec4(col * a, a * 0.9);
       }`,
     transparent: true,
     depthWrite: false,
@@ -141,10 +141,10 @@ function trailMaterial(): ShaderMaterial {
         float near = smoothstep(3.0, 16.0, dist);
         float a = uHeat * fade * (0.5 + 0.5 * pow(face, 1.3)) * (0.4 + 1.0 * n) * 0.9 * near;
         float h = clamp(uHeat * (1.1 - t) * (0.5 + 0.7 * n), 0.0, 1.0);
-        vec3 col = plasma(h * 0.85);
+        vec3 col = shockColor(clamp(0.1 + t * 0.85, 0.0, 1.0));
         // Streamers: bright orange at the wing, pink then violet as they stretch away.
-        col = mix(col, shockColor(clamp(0.25 + t * 0.9, 0.0, 1.0)) * (0.6 + 0.5 * (1.0 - t)), uPink);
-        gl_FragColor = vec4(col * clamp(a, 0.0, 1.0), clamp(a, 0.0, 1.0) * 0.5);
+        
+        gl_FragColor = vec4(col * clamp(a, 0.0, 1.0), clamp(a, 0.0, 1.0) * 0.9);
       }`,
     transparent: true,
     depthWrite: false,
@@ -216,10 +216,10 @@ function streamerMaterial(): ShaderMaterial {
         #include <logdepthbuf_fragment>
         float across = 1.0 - vSide * vSide;
         float n = fxNoise(vec2(vT * 9.0 - uTime * 12.0, vSide * 1.5)) * 0.6 + 0.4;
-        float a = uHeat * across * across * pow(1.0 - vT, 1.2) * smoothstep(0.0, 0.05, vT + 0.05) * (0.55 + 0.7 * n);
-        a = clamp(a, 0.0, 1.0);
-        vec3 col = shockColor(clamp(0.2 + vT * 0.7, 0.0, 1.0)) * 0.9;
-        gl_FragColor = vec4(col * a, a * 0.5);
+        float a = uHeat * across * across * pow(1.0 - vT, 0.9) * smoothstep(0.0, 0.05, vT + 0.05) * (0.8 + 0.7 * n);
+        a = clamp(a * 1.7, 0.0, 1.0);
+        vec3 col = shockColor(clamp(0.2 + vT * 0.7, 0.0, 1.0)) * 1.0;
+        gl_FragColor = vec4(col * a, a * 0.9);
       }`,
     transparent: true,
     depthWrite: false,
@@ -248,7 +248,7 @@ export class Reentry {
   private shellMat = shellMaterial();
   private trailMat = trailMaterial();
   private light = new PointLight(0xff8a40, 0, 70, 1.6);
-  /** Always in the scene (intensity 0 when idle) so the light count never changes and nothing recompiles. */
+  /** Hidden while there is no heat, so three.js does not light with it at all. */
   readonly lightHolder = new Group();
 
   constructor() {
@@ -279,6 +279,7 @@ export class Reentry {
     this.object.visible = false;
     this.light.position.set(0, 1.5, -13);
     this.lightHolder.add(this.light);
+    this.lightHolder.visible = false;
   }
 
   /** Returns the 0..1 plasma glow for the screen edges. */
@@ -294,6 +295,7 @@ export class Reentry {
     if (heat < 0.003) {
       this.object.visible = false;
       this.light.intensity = 0;
+      this.lightHolder.visible = false;
       shake.x = 0;
       shake.y = 0;
       plasmaShimmer.amount = 0;
@@ -301,11 +303,12 @@ export class Reentry {
       return 0;
     }
     this.object.visible = true;
+    this.lightHolder.visible = true;
     placeRelative(this.object, w.shipWorldPos, ctx.cameraWorld);
     this.object.quaternion.copy(w.shipWorldQuat);
     placeRelative(this.lightHolder, w.shipWorldPos, ctx.cameraWorld);
     this.lightHolder.quaternion.copy(w.shipWorldQuat);
-    this.light.intensity = heat * heat * 2600 * c.plasmaLight;
+    this.light.intensity = heat * heat * 700 * c.plasmaLight;
 
     const t = ctx.realTime;
     this.shellMat.uniforms.uTime!.value = t;
@@ -328,7 +331,7 @@ export class Reentry {
     su.uTime!.value = t;
     su.uHeat!.value = Math.min(1.3, sAmt * 1.2);
     su.uLen!.value = 90 + 190 * heat;
-    su.uWidth!.value = 0.8 + 1.2 * heat;
+    su.uWidth!.value = 1.2 + 1.6 * heat;
 
     // Shimmer behind the ship (chase) or along the frame edges (cockpit).
     const cam = ctx.camera;

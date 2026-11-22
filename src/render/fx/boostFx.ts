@@ -17,8 +17,8 @@ import { NOISE_GLSL } from './noiseGlsl';
 import { smooth, VaporPulse } from './speedFx';
 
 /** Ship space: the nose and the length the cone covers. */
-const NOSE_Z = -9.5;
-const CONE_LEN = 24;
+const NOSE_Z = -1.5;
+const CONE_LEN = 22;
 const CONE_R = 9;
 const NOZZLES: [number, number, number][] = [
   [2.9, 0.05, 10.9],
@@ -58,11 +58,12 @@ function coneMaterial(): ShaderMaterial {
         float rim = pow(1.0 - face, 1.3);
         float n = fxNoise(vec2(atan(vL.x, vL.y) * 3.0, v * 6.0 - uTime * 3.0));
         // Wispy skin, thicker toward the base, and a bright shock ring that sweeps back.
-        float skin = (0.2 + 0.8 * rim) * (0.15 + 0.85 * n) * smoothstep(0.0, 0.25, v);
+        float streak = smoothstep(0.35, 0.8, n);
+        float skin = pow(rim, 2.2) * streak * pow(v, 2.5);
         float ring = exp(-pow((v - uProg) * 9.0, 2.0)) * (0.6 + 0.6 * n);
-        float a = uAmt * (skin * (0.3 + 0.5 * v) + ring * 0.9);
+        float a = uAmt * (skin * 1.1 + ring * 0.45 * rim);
         vec3 col = mix(vec3(0.85, 0.95, 1.15), vec3(1.6, 1.7, 1.8), ring);
-        gl_FragColor = vec4(col, clamp(a, 0.0, 0.6));
+        gl_FragColor = vec4(col, clamp(a, 0.0, 0.45));
       }`,
     transparent: true,
     depthWrite: false,
