@@ -65,7 +65,7 @@ float cloudCover(vec3 pl) {
     float lon = atan(-dir.z, dir.x + 1e-6);
     float al = abs(lat + s * (0.1 * sin(lon * 4.0 + w1 * 9.0) + (w2 - 0.5) * 0.25));
     float a0 = al / 0.13, a1 = (al - 0.45) / 0.14, a2 = (al - 0.95) / 0.2;
-    cov += s * (0.4 * exp(-a0 * a0) * (0.4 + 1.2 * w1) - 0.4 * exp(-a1 * a1) + 0.22 * exp(-a2 * a2) * (0.4 + 1.1 * w1) - 0.1 * smoothstep(1.2, 1.5, al));
+    cov += s * (0.7 * exp(-a0 * a0) * smoothstep(0.34, 0.72, w1) - 0.4 * exp(-a1 * a1) + 0.36 * exp(-a2 * a2) * smoothstep(0.34, 0.72, w1) - 0.1 * smoothstep(1.2, 1.5, al));
     for (int i = 0; i < 4; i++) {
       vec4 cy = uCyc[i];
       float cd = dot(dir, cy.xyz);

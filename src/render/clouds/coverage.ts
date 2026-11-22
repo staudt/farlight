@@ -74,7 +74,7 @@ export function weatherCover(c: CloudDef, radius: number, px: number, py: number
     const sub = Math.exp(-(((al - 0.45) / 0.14) ** 2));
     const storm = Math.exp(-(((al - 0.95) / 0.2) ** 2));
     const polar = smoothstep(1.2, 1.5, al);
-    cov += s * (0.4 * itcz * (0.4 + 1.2 * w1) - 0.4 * sub + 0.22 * storm * (0.4 + 1.1 * w1) - 0.1 * polar);
+    cov += s * (0.7 * itcz * smoothstep(0.34, 0.72, w1) - 0.4 * sub + 0.36 * storm * smoothstep(0.34, 0.72, w1) - 0.1 * polar);
     const cy = cycloneData(_cyc);
     for (let i = 0; i < MAX_CYCLONES; i++) {
       const cx = cy[i * 4]!, cyy = cy[i * 4 + 1]!, cz = cy[i * 4 + 2]!, cr = cy[i * 4 + 3]!;
