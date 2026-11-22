@@ -143,7 +143,7 @@ export const NIGHT_LIGHT_GLSL = /* glsl */ `
   }
   vec3 nightPurkinje(vec3 col, vec3 lightIn) {
     float ll = dot(lightIn, vec3(0.2126, 0.7152, 0.0722));
-    float k = (1.0 - smoothstep(0.03, 0.45, ll)) * uNLPurk;
+    float k = (1.0 - smoothstep(0.03, 0.9, ll)) * uNLPurk;
     float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
     return mix(col, vec3(lum) * vec3(0.62, 0.82, 1.25), k * 0.8);
   }
@@ -153,7 +153,7 @@ export const NIGHT_LIGHT_GLSL = /* glsl */ `
 export const nightUniforms = {
   uNLDir: nightLight.dirView,
   uNLCol: nightLight.color,
-  uNLPurk: { value: 0.6 },
+  uNLPurk: { value: 0.8 },
 };
 
 /** Keeps the Purkinje uniform in step with config (call once per frame). */

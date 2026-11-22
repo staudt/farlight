@@ -97,8 +97,8 @@ vec3 nightExtras(int i, vec3 d, vec3 c, float R, float H, float h, float t0, flo
       float gIn = exp(-e / 0.03);
       float oIn = exp(-e / 0.07);
       float gOut = min(0.3 * pow(y, 8.0), 1.0);
-      float g = mix(gIn * 0.4, gOut, far);
-      float o = mix(oIn * 0.15, 0.0, far);
+      float g = mix(gIn * 0.22, gOut, far);
+      float o = mix(oIn * 0.04, 0.0, far);
       // Patchy, like real bands.
       float patchy = 0.8 + 0.2 * sin(8.0 * d.x + 5.0 * d.z + 2.0 * d.y);
       g *= patchy;

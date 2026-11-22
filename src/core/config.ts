@@ -256,9 +256,9 @@ export const config = {
     /** Directional light from the biggest moon (or the parent planet for a moon), 1 = a full, close moon. */
     moonLight: 1,
     /** Strength of the moon light in terrain units (sun is about 1.25). */
-    moonStrength: 0.34,
+    moonStrength: 0.28,
     /** Blue tint and desaturation of dark scenes (Purkinje), 0 off. */
-    purkinje: 0.6,
+    purkinje: 0.8,
     /** Moonlit sky glow in the atmosphere (blue wash) and how much a bright moon washes out stars. */
     moonSky: 1,
     starWash: 0.5,
