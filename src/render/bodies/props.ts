@@ -436,7 +436,8 @@ export function createPropMeshes(batches: readonly PropBatch[], materialFor: (ba
   const out: InstancedMesh[] = [];
   for (const b of batches) {
     if (b.count === 0) continue;
-    const mat = b.kind === 'tuft' || b.kind === 'pebble' ? clutterMaterial(materialFor(b)) : materialFor(b);
+    const isClutter = b.kind === 'tuft' || b.kind === 'pebble';
+    const mat = isClutter ? clutterMaterial(materialFor(b)) : materialFor(b);
     const m = new InstancedMesh(propGeometry(b.kind, b.variant), mat, b.count);
     m.instanceMatrix = new InstancedBufferAttribute(b.matrices, 16);
     m.instanceColor = new InstancedBufferAttribute(b.colors, 3);
@@ -446,6 +447,11 @@ export function createPropMeshes(batches: readonly PropBatch[], materialFor: (ba
     m.instanceMatrix.onUpload(releaseArray);
     m.instanceColor.onUpload(releaseArray);
     out.push(m);
+    // Ground clutter has no distant form: it is hidden past its own short range (see the planet view).
+    if (isClutter) {
+      m.userData.clutter = true;
+      continue;
+    }
     // The low poly twin shares the instance buffers; the planet view shows one of the two per chunk.
     const lo = new InstancedMesh(propGeometryLow(b.kind, b.variant), mat, b.count);
     lo.instanceMatrix = m.instanceMatrix;
