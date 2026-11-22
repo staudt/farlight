@@ -393,6 +393,36 @@ export const config = {
     /** The visible sun shrinks to the shadow sun while a body crosses it, so the cover is total. */
     discMatch: true,
   },
+  /** Star surface, corona and prominences (render/bodies/sunView.ts, render/bodies/sun/). */
+  sun: {
+    enabled: true,
+    /** Pixel radius of the disc where surface detail starts to fade in, and where it is full. From a planet's sky the sun stays a clean disc. */
+    detailStart: 40,
+    detailFull: 200,
+    /** Disc brightness (HDR) in the sky, and when the surface is fully detailed. A big disc needs less or it blows out to white. */
+    skyGain: 6,
+    closeGain: 1.9,
+    /** How much of the base glow is removed when the disc is big (0..1). */
+    closeHalo: 0.15,
+    /** Granule cells across a radius, and how fast they churn (1 = slow). */
+    granuleScale: 24,
+    churn: 1,
+    /** Strengths, 1 = default look. */
+    granulation: 1,
+    limb: 1,
+    spots: 1,
+    faculae: 1,
+    streamers: 1,
+    prominences: 1,
+    /** Extra corona size and strength while a body covers the sun (totality). */
+    totalityCorona: 2.6,
+    /** Per quality level: noise octaves of the surface and the most prominence arcs drawn. */
+    byQuality: {
+      low: { octaves: 1, arcs: 2 },
+      medium: { octaves: 2, arcs: 4 },
+      high: { octaves: 3, arcs: 6 },
+    },
+  },
   debug: {
     showPanel: false,
   },

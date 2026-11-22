@@ -509,6 +509,8 @@ export interface StarDef {
   intensity: number;
   /** Glow sprite size as a multiple of the radius. */
   coronaSize: number;
+  /** 0..1: how spotted and stormy the surface is (sunspots, faculae, prominences). Derived from the body seed when absent. */
+  activity?: number;
 }
 
 export interface BodyInfo {

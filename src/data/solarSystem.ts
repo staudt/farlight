@@ -17,7 +17,7 @@ const sun: BodyDef = {
   seed: 1,
   physical: { radius: 6.957e8, surfaceGravity: 28, rotationPeriod: 25.4 * DAY, axialTilt: 7.25 * DEG },
   visual: { color: [1.0, 0.92, 0.78], minApparentSize: 0.02 },
-  star: { color: [1.0, 0.93, 0.8], intensity: 1.0, coronaSize: 6 },
+  star: { color: [1.0, 0.93, 0.8], intensity: 1.0, coronaSize: 6, activity: 0.55 },
   info: {
     type: 'Star',
     atmosphere: 'Plasma',

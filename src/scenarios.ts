@@ -25,6 +25,7 @@ import { findLifeSpot } from './render/life/spots';
 import { whalePlan } from './render/life/skyWhales';
 import { Flock } from './render/life/boids';
 import { flockPlan } from './render/life/birds';
+import { prominenceArcs } from './render/bodies/sun/starLook';
 import { findTransit, type Transit } from './sim/shadowSearch';
 
 export interface Scenario {
@@ -151,6 +152,16 @@ export const SCENARIOS: Record<string, Scenario> = {
   'space-sun-flare': {
     description: 'In space with the sun rising at the edge of the Earth: lens flare, half covered by the limb',
     apply: (w) => spaceSunFlare(w, 'earth', 4),
+  },
+  'sun-closeup': {
+    description: 'A few radii from the sun: granulation, spots and a glowing prominence arc standing on the limb, corona streamers around the disc',
+    generic: true,
+    apply: (w) => starCloseup(w, 3.4),
+  },
+  'red-dwarf-closeup': {
+    description: 'Close to a red dwarf (use system=s18aqq4h): a deep red disc with dark spots, a prominence on the limb and a faint corona',
+    generic: true,
+    apply: (w) => starCloseup(w, 3.4),
   },
   'cockpit-night': {
     description: 'Cockpit view low over dark land at night',
@@ -1591,6 +1602,28 @@ function spaceSunFlare(w: World, bodyId: string, radii: number): void {
   w.placeInSpace(bodyId, body.radius * radii, toBody.clone().negate());
   const fwd = sun.clone().multiplyScalar(0.8).addScaledVector(toBody, 0.2).normalize();
   w.ship.quat.copy(lookQuat(fwd));
+  w.refresh();
+}
+
+/** Puts the ship a few radii from the root star with the first prominence arc standing on the limb at the right of the frame. */
+function starCloseup(w: World, radii: number): void {
+  w.clock.time = 0;
+  w.universe.update(0);
+  const star = w.universe.root;
+  const arc = prominenceArcs(star.def.seed, 1)[0]!;
+  const P = new Vector3(...arc.centre).applyQuaternion(star.rotation).normalize();
+  // Image up is the arc's own direction (across P), the view axis is across both: the arc stands on the right limb, seen face on.
+  const U = new Vector3(...arc.tangent).applyQuaternion(star.rotation);
+  U.addScaledVector(P, -U.dot(P)).normalize();
+  const fwd = new Vector3().crossVectors(U, P).normalize();
+  // Camera so that P sits exactly on the limb: P . V = 1 / radii.
+  const k = 1 / radii;
+  const V = P.clone().multiplyScalar(k).addScaledVector(fwd, -Math.sqrt(1 - k * k));
+  w.placeInSpace(star.id, star.radius * radii, V);
+  // Aim a little toward the limb so the arc and the corona are well inside the frame.
+  const look = fwd.clone().multiplyScalar(star.radius * radii).addScaledVector(P, star.radius * 0.45).normalize();
+  const m = new Matrix4().makeBasis(new Vector3().crossVectors(look, U).normalize(), U, look.clone().negate());
+  w.ship.quat.setFromRotationMatrix(m);
   w.refresh();
 }
 

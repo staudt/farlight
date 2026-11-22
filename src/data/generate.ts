@@ -259,6 +259,12 @@ const STAR_SPECS: Record<StarClass, StarSpec> = {
 const SOLAR_MASS = 1.989e30;
 const SOLAR_RADIUS = 6.957e8;
 
+/** Surface activity on its own random stream, so adding it never reshuffles the rest of a system. Small cool stars are the stormiest. */
+function starActivity(star: GalaxyStar): number {
+  const base = { M: 0.7, K: 0.6, G: 0.5, F: 0.4, A: 0.25, B: 0.15 }[star.starClass];
+  return round(Math.min(1, Math.max(0.05, base + (mulberry32(hashInts(star.seed, 0x5b07))() - 0.5) * 0.4)), 2);
+}
+
 function buildStar(rng: Rng, star: GalaxyStar, spec: StarSpec): BodyDef {
   const radius = rng.range(spec.radiusSolar[0], spec.radiusSolar[1]) * SOLAR_RADIUS;
   const color = jit(spec.color, rng, 0.04);
@@ -269,7 +275,7 @@ function buildStar(rng: Rng, star: GalaxyStar, spec: StarSpec): BodyDef {
     seed: rng.seed(),
     physical: { radius, surfaceGravity: round(28 * spec.massSolar / Math.pow(radius / SOLAR_RADIUS, 2), 1), rotationPeriod: rng.range(8, 40) * DAY, axialTilt: rng.range(0, 10) * DEG },
     visual: { color, minApparentSize: 0.02 },
-    star: { color, intensity: spec.intensity, coronaSize: round(rng.range(5, 7.5), 1) },
+    star: { color, intensity: spec.intensity, coronaSize: round(rng.range(5, 7.5), 1), activity: starActivity(star) },
     info: {
       type: 'Star',
       atmosphere: 'Plasma',
