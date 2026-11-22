@@ -353,8 +353,8 @@ export const SCENARIOS: Record<string, Scenario> = {
       w.placeInSpace('earth', moon.orbit!.a * 0.5);
     },
   },
-  'earth-aurora-night': surface('Landed under the northern lights', {
-    body: 'earth', lat: 58, localHour: 0, altitude: 0, heading: 0, pitch: 24, landed: true, time: POLAR_NIGHT,
+  'earth-aurora-night': surface('Over the north Atlantic under the northern lights', {
+    body: 'earth', lat: 58, localHour: 0, altitude: 600, heading: 0, pitch: 6, throttle: 0.05, time: POLAR_NIGHT,
   }),
   'earth-aurora-orbit': {
     description: 'Over the north pole on the night side, aurora ring below',

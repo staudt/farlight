@@ -29,7 +29,11 @@ export const auroraSettings = {
   enabled: true,
   intensity: 1,
   /** Curtain height as a fraction of the body radius. */
-  height: 0.16,
+  height: 0.08,
+  /** Sideways folding of the curtains. */
+  fold: 1,
+  /** Strength of the glowing ring seen from orbit. */
+  shell: 1,
 };
 
 export const acidRainSettings = {
