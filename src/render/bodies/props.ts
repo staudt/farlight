@@ -7,12 +7,16 @@ import {
   InstancedMesh,
   type IUniform,
   ShaderMaterial,
+  Vector2,
 } from 'three';
 import type { PropKind } from '../../data/types';
 import type { PropBatch } from '../../terrain/props';
 import { NIGHT_LIGHT_GLSL, nightUniforms } from '../nightLight';
 import { starLight } from '../starLight';
 import { ECLIPSE_GLSL, eclipse } from '../eclipse';
+import { config } from '../../core/config';
+import { quality } from '../quality';
+import { MIST_GLSL } from './landLook';
 
 type V3 = [number, number, number];
 
@@ -103,8 +107,8 @@ function conifer(): BufferGeometry {
   return b.build();
 }
 
-function icoBlob(b: Builder, cx: number, cy: number, cz: number, r: number, squashY: number, seed: number, mix: number, jitter: number, color: V3 = WHITE): void {
-  const g = new IcosahedronGeometry(1, 1);
+function icoBlob(b: Builder, cx: number, cy: number, cz: number, r: number, squashY: number, seed: number, mix: number, jitter: number, color: V3 = WHITE, detail = 1): void {
+  const g = new IcosahedronGeometry(1, detail);
   const p = g.getAttribute('position');
   const vtx: V3[] = [];
   for (let i = 0; i < p.count; i++) {
@@ -139,6 +143,32 @@ function rock(): BufferGeometry {
   const b = new Builder();
   // Squashed, lumpy icosahedron resting on the ground.
   icoBlob(b, 0, 0.3, 0, 0.5, 0.62, 29, 1, 0.55, [0.95, 0.95, 0.95]);
+  return b.build();
+}
+
+/** Grass tuft: a fan of thin leaning blades, darker at the root. */
+function tuft(): BufferGeometry {
+  const b = new Builder();
+  const blades = 6;
+  for (let i = 0; i < blades; i++) {
+    const a = (i / blades) * Math.PI * 2 + 0.4 * hash01(i, 3);
+    const h = 0.7 + 0.5 * hash01(i, 5);
+    const lean = 0.18 + 0.2 * hash01(i, 7);
+    const w = 0.07;
+    const ca = Math.cos(a);
+    const sa = Math.sin(a);
+    const tip: V3 = [ca * lean, h, sa * lean];
+    const l: V3 = [ca * 0.1 - sa * w, 0, sa * 0.1 + ca * w];
+    const r: V3 = [ca * 0.1 + sa * w, 0, sa * 0.1 - ca * w];
+    b.tri(l, tip, r, WHITE, 1, 0, 0, 0, 0.8 + 0.3 * hash01(i, 9));
+  }
+  return b.build();
+}
+
+/** Pebble: a squashed, lumpy 20 face stone. */
+function pebble(): BufferGeometry {
+  const b = new Builder();
+  icoBlob(b, 0, 0.25, 0, 0.5, 0.5, 41, 1, 0.5, [0.95, 0.95, 0.95], 0);
   return b.build();
 }
 
@@ -221,6 +251,8 @@ const LOW_BUILDERS: Record<PropKind, (() => BufferGeometry)[]> = {
   spire: [() => lowCone(0.12, 1, 4)],
   crystal: [() => lowCone(0.12, 1, 5)],
   mesa: [() => lowBlob(1.3, 0.5, 0.5)],
+  tuft: [() => lowCone(0.3, 0.8, 3)],
+  pebble: [() => lowBlob(0.5, 0.25, 0.5)],
 };
 
 const BUILDERS: Record<PropKind, (() => BufferGeometry)[]> = {
@@ -229,6 +261,8 @@ const BUILDERS: Record<PropKind, (() => BufferGeometry)[]> = {
   spire: [spire],
   crystal: [crystal],
   mesa: [mesa],
+  tuft: [tuft],
+  pebble: [pebble],
 };
 
 const cache = new Map<string, BufferGeometry>();
@@ -263,8 +297,9 @@ export function propGeometryLow(kind: PropKind, variant: number): BufferGeometry
  * Flat shaded prop material. `shared` carries the terrain material uniforms (sun, body center,
  * sky ambient) by reference, so the planet view updates both with one write.
  */
-export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0): ShaderMaterial {
-  return new ShaderMaterial({
+export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0, clutter = false): ShaderMaterial {
+  const mat = new ShaderMaterial({
+    defines: clutter ? { CLUTTER: '' } : {},
     side: 2,
     uniforms: {
       uSunDirView: shared.uSunDirView!,
@@ -277,6 +312,9 @@ export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0
       uEclSelf: shared.uEclSelf!,
       uFadeNear: { value: 900 },
       uFadeFar: { value: 1900 },
+      uClutter: { value: new Vector2(150, 300) },
+      uMist: shared.uMist!,
+      uBodyRadius: shared.uBodyRadius!,
       uEmissive: { value: 2.2 },
       /** Night glow weight of the instance colour (bioluminescence), per material. */
       uBioGlow: { value: bioGlow },
@@ -291,6 +329,7 @@ export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0
       attribute float aEmit;
       uniform float uFadeNear;
       uniform float uFadeFar;
+      uniform vec2 uClutter;
       varying vec3 vColor;
       varying vec3 vViewPos;
       varying float vEmit;
@@ -301,6 +340,10 @@ export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0
         // Distance fade: props shrink into the ground instead of popping.
         float d = length(mvi[3].xyz);
         float fade = 1.0 - smoothstep(uFadeNear, uFadeFar, d);
+        // Ground clutter (a metre or less tall) shrinks into the ground much sooner than trees and rocks.
+        #ifdef CLUTTER
+          fade = 1.0 - smoothstep(uClutter.x, uClutter.y, d);
+        #endif
         vec3 inst = vec3(1.0);
         #ifdef USE_INSTANCING_COLOR
           inst = instanceColor;
@@ -328,6 +371,7 @@ export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0
       uniform float uBioGlow;
       uniform float uNightGlow;
       uniform float uNightAmb;
+      ${MIST_GLSL}
       ${NIGHT_LIGHT_GLSL}
       varying vec3 vColor;
       varying vec3 vViewPos;
@@ -352,6 +396,7 @@ export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0
         amb *= 0.25 + 0.75 * dot(eclL, vec3(0.2126, 0.7152, 0.0722));
         vec3 lightIn = sunCol * uStarColor * eclL * uSunIntensity * diffuse + amb + nightMoon(N, R, term);
         vec3 col = nightPurkinje(vColor * lightIn, lightIn);
+        col = landMist(col, vec3(0.82, 0.87, 0.95) * (amb + sunCol * uStarColor * eclL * uSunIntensity * 0.5 * term), 0.6, sunR, vViewPos, uBodyCenterView);
         // Crystal glow: brighter at night, still readable by day.
         col += vInst * vEmit * uEmissive * (0.35 + 0.65 * (1.0 - term)) * uNightGlow;
         // Bioluminescence: the tinted parts (foliage, not bark) glow once the sun is down.
@@ -362,6 +407,12 @@ export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0
         #include <colorspace_fragment>
       }`,
   });
+  mat.onBeforeRender = () => {
+    const c = config.terrain;
+    const range = quality.settings.propRange;
+    (mat.uniforms.uClutter!.value as Vector2).set(c.clutter ? c.clutterNear * range : 0, c.clutter ? Math.max(c.clutterFar * range, c.clutterNear * range + 1) : 1e-3);
+  };
+  return mat;
 }
 
 /** Builds the instanced meshes for one chunk's prop batches (children of the chunk mesh). */
@@ -369,11 +420,24 @@ function releaseArray(this: InstancedBufferAttribute): void {
   (this as unknown as { array: null }).array = null;
 }
 
+const clutterMats = new WeakMap<ShaderMaterial, ShaderMaterial>();
+
+/** Ground clutter shrinks away much sooner than trees: it draws with a twin of the prop material (same uniforms). */
+function clutterMaterial(base: ShaderMaterial): ShaderMaterial {
+  let m = clutterMats.get(base);
+  if (!m) {
+    m = createPropMaterial(base.uniforms, (base.uniforms.uBioGlow?.value as number) ?? 0, true);
+    clutterMats.set(base, m);
+  }
+  return m;
+}
+
 export function createPropMeshes(batches: readonly PropBatch[], materialFor: (batch: PropBatch) => ShaderMaterial): InstancedMesh[] {
   const out: InstancedMesh[] = [];
   for (const b of batches) {
     if (b.count === 0) continue;
-    const m = new InstancedMesh(propGeometry(b.kind, b.variant), materialFor(b), b.count);
+    const mat = b.kind === 'tuft' || b.kind === 'pebble' ? clutterMaterial(materialFor(b)) : materialFor(b);
+    const m = new InstancedMesh(propGeometry(b.kind, b.variant), mat, b.count);
     m.instanceMatrix = new InstancedBufferAttribute(b.matrices, 16);
     m.instanceColor = new InstancedBufferAttribute(b.colors, 3);
     m.matrixAutoUpdate = false;
@@ -383,7 +447,7 @@ export function createPropMeshes(batches: readonly PropBatch[], materialFor: (ba
     m.instanceColor.onUpload(releaseArray);
     out.push(m);
     // The low poly twin shares the instance buffers; the planet view shows one of the two per chunk.
-    const lo = new InstancedMesh(propGeometryLow(b.kind, b.variant), materialFor(b), b.count);
+    const lo = new InstancedMesh(propGeometryLow(b.kind, b.variant), mat, b.count);
     lo.instanceMatrix = m.instanceMatrix;
     lo.instanceColor = m.instanceColor;
     lo.matrixAutoUpdate = false;

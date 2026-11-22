@@ -142,7 +142,7 @@ test('a body without props returns nothing, the Moon scatters boulders', () => {
   const level = maxLevelFor(R, 400);
   const c = center(0, level, 5, 5, R);
   const batches = scatterProps(moon, ms, { face: 0, level, x: 5, y: 5, radius: R, gridLevel: level + PROP_GRID_EXTRA, center: c });
-  expect(batches.every((b) => b.kind === 'rock')).toBe(true);
+  expect(batches.every((b) => b.kind === 'rock' || b.kind === 'pebble')).toBe(true);
   expect(chunkEdgeLength(R, level)).toBeGreaterThan(0);
   expect(batches.reduce((n, b) => n + b.count, 0)).toBeGreaterThan(0);
   const bare = { ...moon, terrain: { ...moon.terrain!, props: undefined } };

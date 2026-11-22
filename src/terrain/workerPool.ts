@@ -1,3 +1,4 @@
+import { config } from '../core/config';
 import type { ChunkRequest, ChunkResult } from './chunkBuild';
 
 type Job = { req: ChunkRequest; cb: (r: ChunkResult) => void };
@@ -28,6 +29,7 @@ export class ChunkWorkerPool {
   }
 
   request(req: ChunkRequest, cb: (r: ChunkResult) => void): void {
+    req.look ??= { ...config.terrain };
     req.mapBase ??= typeof document !== 'undefined' ? document.baseURI : undefined;
     this.queue.push({ req, cb });
     this.pump();

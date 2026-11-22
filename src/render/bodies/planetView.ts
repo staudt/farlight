@@ -107,7 +107,7 @@ export class PlanetView implements BodyView {
   constructor(body: Body) {
     this.body = body;
     this.object.name = `planet:${body.id}`;
-    this.material = createTerrainMaterial(body.def);
+    this.material = createTerrainMaterial(body.def, body.radius);
     this.waterLook = waterLook(body.def);
     this.setupLights();
     this.propMaterial = createPropMaterial(this.material.uniforms);

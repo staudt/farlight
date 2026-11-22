@@ -422,7 +422,8 @@ export interface BiomeEmissiveDef {
   day?: number;
 }
 
-export type PropKind = 'tree' | 'rock' | 'spire' | 'crystal' | 'mesa';
+/** `tuft` and `pebble` are ground clutter (a metre or less): they only show within a few hundred meters. */
+export type PropKind = 'tree' | 'rock' | 'spire' | 'crystal' | 'mesa' | 'tuft' | 'pebble';
 
 export interface PropDef {
   kind: PropKind;
