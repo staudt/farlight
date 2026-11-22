@@ -158,7 +158,7 @@ export function updateWaveUniforms(u: WaveUniforms, look: WaterLook, ctx: FrameC
   if (!look.hasWater) return;
   const lowQ = quality.settings.fxScale < 0.5;
   u.uWaterA.value.set(look.sky.has ? c.reflection : 0, c.glint, lowQ ? 0 : c.sparkle, c.shallows);
-  u.uWaterB.value.set(c.glintRoughness, c.glintStretch, c.skyGain, c.moonGlint);
+  u.uWaterB.value.set(c.glintRoughness * (lowQ ? c.glintSoft : 1), c.glintStretch, c.skyGain, c.moonGlint);
   updateMoon(u, ctx, body);
   _camBody.copy(camBody);
   ctx.camera.getWorldQuaternion(_qc);

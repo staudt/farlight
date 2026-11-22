@@ -238,6 +238,8 @@ export const config = {
     glintStretch: 1.7,
     /** Twinkle of the glitter path, 0 smooth, 1 full sparkle. */
     sparkle: 1,
+    /** Without sparkle (low quality) the glint lobe is this much broader and dimmer, same energy. */
+    glintSoft: 2.4,
     /** Turquoise shallows, 0 off. */
     shallows: 1,
     /** Moon glint on the night sea. */
