@@ -9,6 +9,7 @@ export enum Mode {
   Steam = 2,
   Water = 3,
   Glow = 4,
+  Rainbow = 5,
 }
 
 export function hash01(a: number, b = 0, c = 0): number {

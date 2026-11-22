@@ -617,6 +617,21 @@ export const SCENARIOS: Record<string, Scenario> = {
     description: 'Gliding low toward Victoria Falls, the river stepping off the land into mist',
     apply: (w) => landmarkApproach(w, 'earth', 'victoria_falls', { distance: 3200, altitude: 420, heading: 180, hour: 10.5, lookLift: 90, throttle: 0.1 }),
   },
+  'landmark-falls-rainbow': {
+    description: 'Victoria Falls with the late sun behind the glider, a rainbow in the spray',
+    apply: (w) => {
+      const o = { distance: 2600, altitude: 330, heading: 150, hour: 15.3, lookLift: 80, throttle: 0.05 };
+      landmarkApproach(w, 'earth', 'victoria_falls', o);
+      // Put the sun behind and to one side of the glider, so the bow in the spray shows.
+      const lm = w.landmarks.all.find((l) => l.body.id === 'earth' && l.def.id === 'victoria_falls')!;
+      w.universe.update(w.clock.time);
+      const sun = lm.body.worldToLocalDir(w.universe.root.position.clone().sub(lm.body.position).normalize(), new Vector3());
+      const east = new Vector3(-Math.sin(lm.def.lon), 0, -Math.cos(lm.def.lon));
+      const north = new Vector3().crossVectors(lm.dir, east).normalize();
+      const az = Math.atan2(sun.dot(east), sun.dot(north)) / DEG2RAD;
+      landmarkApproach(w, 'earth', 'victoria_falls', { ...o, heading: az + 180 + 37 });
+    },
+  },
   'landmark-olympus': {
     description: 'Over the slopes of Olympus Mons, the summit caldera ahead',
     apply: (w) => landmarkApproach(w, 'mars', 'olympus_caldera', { distance: 22000, altitude: 3500, heading: 90, hour: 10, lookLift: 200 }),

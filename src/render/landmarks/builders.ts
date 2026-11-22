@@ -25,6 +25,8 @@ const mixc = (a: RGB, b: RGB, t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] 
 const TAU = Math.PI * 2;
 /** Stones and posts start this far below the sampled ground so slopes never show gaps. */
 const BURY = 6;
+/** Columns across the falls. The material's streak hash reads the same count. */
+const FALL_COLS = 44;
 
 function seedOf(id: string): number {
   let h = 2166136261;
@@ -153,16 +155,19 @@ const crystalCanyon: Builder = (s, _f, { r, h, ground }, color, seed) => {
   }
 };
 
-/** Falling water ribbon, a river lip and mist at the foot. */
-const waterfall: Builder = (_s, f, { r, ground }, color, seed) => {
+/** Falling water: several white streaked curtains over a jagged rock wall, a river on top, a rising mist plume and a rainbow in the spray. */
+const waterfall: Builder = (s, f, { r, h, ground }, color, seed) => {
   const w = r * 0.02;
   const hw = r * 0.28;
-  const cols = 22;
+  const cols = FALL_COLS;
+  const ext = 10;
   const white: V3 = [0.95, 1, 1];
+  const rock: V3 = [0.3, 0.24, 0.19];
+  const xOf = (j: number): number => ((j / cols) * 2 - 1) * hw;
   const top: number[] = [];
   const bot: number[] = [];
-  for (let i = 0; i <= cols; i++) {
-    const x = ((i / cols) * 2 - 1) * hw;
+  for (let j = -ext; j <= cols + ext; j++) {
+    const x = xOf(j);
     let t = -Infinity;
     for (const z of [0.3 * w, 0.7 * w, 1.2 * w]) t = Math.max(t, ground(x, z));
     let b = Infinity;
@@ -170,35 +175,106 @@ const waterfall: Builder = (_s, f, { r, ground }, color, seed) => {
     top.push(t);
     bot.push(b);
   }
+  const T = (j: number): number => top[j + ext]!;
+  const B = (j: number): number => bot[j + ext]!;
+  // Which columns carry water: runs of falling sheets separated by bare rock.
+  const on: boolean[] = [];
+  const edgeW: number[] = [];
+  for (let j = 0; j < cols; j++) {
+    on.push(false);
+    edgeW.push(1);
+  }
+  let j0 = 1 + Math.floor(hash01(seed, 0, 1) * 3);
+  let state = true;
+  while (j0 < cols - 1) {
+    const len = state ? 5 + Math.floor(hash01(seed, j0, 2) * 8) : 2 + Math.floor(hash01(seed, j0, 3) * 3);
+    const end = Math.min(cols - 1, j0 + len);
+    if (state) {
+      for (let j = j0; j < end; j++) {
+        on[j] = true;
+        const d = Math.min(j - j0, end - 1 - j);
+        edgeW[j] = d === 0 ? 0.35 : d === 1 ? 0.7 : 1;
+      }
+    }
+    j0 = end;
+    state = !state;
+  }
   const zTop = 0.35 * w;
   const zBot = -1.5 * w;
   for (let i = 0; i < cols; i++) {
-    const x0 = ((i / cols) * 2 - 1) * hw;
-    const x1 = (((i + 1) / cols) * 2 - 1) * hw;
-    const edge0 = 1 - Math.pow(Math.abs((i / cols) * 2 - 1), 4) * 0.35;
-    const edge1 = 1 - Math.pow(Math.abs(((i + 1) / cols) * 2 - 1), 4) * 0.35;
-    const y0t = top[i]! + 1.5;
-    const y1t = top[i + 1]! + 1.5;
-    const y0b = bot[i]! + 2;
-    const y1b = bot[i + 1]! + 2;
-    f.quad([x0, y0t, zTop], [x1, y1t, zTop], [x1, y1b, zBot * edge1], [x0, y0b, zBot * edge0], white, 0.1, 1, Mode.Fall, [i / cols, 0], [(i + 1) / cols, 0], [(i + 1) / cols, 1], [i / cols, 1]);
+    if (!on[i]) continue;
+    const x0 = xOf(i);
+    const x1 = xOf(i + 1);
+    // Sheets flare toward the foot, a little differently per column.
+    const f0 = 1 + 0.35 * hash01(seed, i, 4);
+    const f1 = 1 + 0.35 * hash01(seed, i + 1, 4);
+    f.quad([x0, T(i) + 1.5, zTop], [x1, T(i + 1) + 1.5, zTop], [x1, B(i + 1) + 2, zBot * f1], [x0, B(i) + 2, zBot * f0], white, edgeW[i]!, 1, Mode.Fall, [i / cols, 0], [(i + 1) / cols, 0], [(i + 1) / cols, 1], [i / cols, 1]);
   }
-  // River above the lip, flat strips of white water.
-  const rivW = r * 0.12;
+  // Jagged rock wall: dark stratified blocks of uneven height in the bare gaps and past both ends.
+  for (let j = -ext; j < cols + ext; j++) {
+    if (j >= 0 && j < cols && on[j]) continue;
+    const x = (xOf(j) + xOf(j + 1)) / 2;
+    const cw = (hw * 2) / cols;
+    const yb = Math.min(B(j), B(j + 1)) - BURY;
+    const yt = Math.max(T(j), T(j + 1)) + (hash01(seed, j, 5) - 0.35) * h * 0.06;
+    const zc = -0.5 * w + (hash01(seed, j, 6) - 0.5) * w * 0.7;
+    const ym = yb + (yt - yb) * (0.45 + 0.2 * hash01(seed, j, 7));
+    const lean = (hash01(seed, j, 8) - 0.5) * w * 0.5;
+    const sh = 0.8 + 0.4 * hash01(seed, j, 9);
+    frustum(s, { cx: x, cz: zc, y0: yb, y1: ym, rx0: cw * 0.78, rz0: w * 1.1, rx1: cw * 0.7, rz1: w * 0.95, lz: lean, seg: 5, rot: seed % 7, jitter: 0.28, seed: seed + j }, rock, 0, sh * 0.85);
+    frustum(s, { cx: x, cz: zc + lean, y0: ym - 1, y1: yt, rx0: cw * 0.7, rz0: w * 0.95, rx1: cw * 0.34, rz1: w * 0.6, lz: lean * 0.6, seg: 5, rot: seed % 5, jitter: 0.32, seed: seed + j * 3 }, mixc(rock, [0.42, 0.34, 0.26], 0.4), 0, sh);
+  }
+  // Boulders where the water lands.
   for (let i = 0; i < cols; i += 2) {
-    const x0 = ((i / cols) * 2 - 1) * hw;
-    const x1 = (((i + 2) / cols) * 2 - 1) * hw;
-    const y = Math.max(top[i]!, top[i + 1]!, top[Math.min(cols, i + 2)]!) + 1.2;
-    f.quad([x0, y, zTop], [x1, y, zTop], [x1, y, zTop + rivW], [x0, y, zTop + rivW], mixc(color, white, 0.5), 0, 1, Mode.Fall, [i / cols, 0.9], [(i + 2) / cols, 0.9], [(i + 2) / cols, 1], [i / cols, 1]);
+    const x = xOf(i) + (hash01(seed, i, 10) - 0.5) * 20;
+    const z = zBot - w * (0.8 + 1.8 * hash01(seed, i, 11));
+    blob(s, x, ground(x, z) + w * 0.15, z, w * (0.5 + 0.7 * hash01(seed, i, 12)), w * 0.4, w * 0.6, seed + i, mixc(rock, [0.5, 0.45, 0.4], hash01(seed, i, 13) * 0.4), { jitter: 0.5, detail: 0 });
   }
-  // Mist rolling at the base.
+  // River above the lip: a wide ribbon of water running back along the plateau.
+  const rivN = 6;
+  const rivL = r * 0.4;
+  const riverCol: V3 = mixc(color, [0.25, 0.45, 0.55], 0.7);
+  for (let k = 0; k < rivN; k++) {
+    for (let i = 0; i < cols; i += 2) {
+      const sx0 = k / rivN;
+      const sx1 = (k + 1) / rivN;
+      const z0 = zTop + sx0 * rivL;
+      const z1 = zTop + sx1 * rivL;
+      // The river narrows upstream.
+      const n0 = 1 - 0.45 * sx0;
+      const n1 = 1 - 0.45 * sx1;
+      const xa = xOf(i) * n0;
+      const xb = xOf(Math.min(cols, i + 2)) * n0;
+      const xc = xOf(Math.min(cols, i + 2)) * n1;
+      const xd = xOf(i) * n1;
+      const y = (x: number, z: number): number => Math.max(ground(x, z), ground(x - 25, z), ground(x + 25, z), ground(x, z - 25), ground(x, z + 25)) + 3.5;
+      s.quad([xa, y(xa, z0), z0], [xb, y(xb, z0), z0], [xc, y(xc, z1), z1], [xd, y(xd, z1), z1], riverCol, 0, 1, Mode.Water);
+    }
+  }
+  // Mist: low rolling puffs at the foot and a plume that rises and widens up the face.
+  const yBase = (() => {
+    let m = 0;
+    for (let i = 0; i < cols; i++) m += B(i);
+    return m / cols;
+  })();
   for (let i = 0; i < 9; i++) {
     const x = ((i / 8) * 2 - 1) * hw * 0.85;
     const z = zBot - w * (1.2 + hash01(seed, i, 1) * 1.6);
     const y = ground(x, z) + w * 0.5;
-    const rad = w * (0.9 + hash01(seed, i, 2) * 0.9);
+    const rad = w * (0.6 + hash01(seed, i, 2) * 0.6);
     blob(f, x, y + rad * 0.5, z, rad * 1.4, rad * 0.9, rad * 1.4, seed + i, white, { mode: Mode.Steam, jitter: 0.4, detail: 1 });
   }
+  const plume = 9;
+  for (let k = 0; k < plume; k++) {
+    const t = k / (plume - 1);
+    const x = (hash01(seed, k, 20) - 0.5) * hw * (0.9 + 0.5 * t);
+    const z = zBot - w * (1.5 + 2.5 * t + hash01(seed, k, 21) * 1.5);
+    const rad = w * (1.0 + 1.6 * t) * (0.8 + 0.4 * hash01(seed, k, 22));
+    blob(f, x, yBase + h * (0.1 + 0.75 * t), z, rad * 1.4, rad * 1.1, rad * 1.4, seed + 40 + k, white, { mode: Mode.Steam, jitter: 0.45, detail: 1 });
+  }
+  // Rainbow in the spray: a quad over the plume, the shader draws the 42 degree bow where it matches the sun.
+  const rz = zBot - w * 2.2;
+  f.quad([-hw * 1.1, yBase - h * 0.05, rz], [hw * 1.1, yBase - h * 0.05, rz], [hw * 1.1, yBase + h * 1.1, rz], [-hw * 1.1, yBase + h * 1.1, rz], white, 0, 1, Mode.Rainbow, [0, 0], [1, 0], [1, 1], [0, 1]);
 };
 
 /** Flat water (or glowing liquid) filling the lowest ground, fitted to the shore by ray marching. */

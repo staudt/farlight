@@ -4,7 +4,7 @@ import { ECLIPSE_GLSL, eclipse } from '../eclipse';
 
 /**
  * Flat shaded landmark material. `fx` builds the transparent variant (waterfalls, steam, mist).
- * aFx selects the surface: 0 stone, 1 falling water, 2 steam, 3 water, 4 glowing liquid.
+ * aFx selects the surface: 0 stone, 1 falling water, 2 steam, 3 water, 4 glowing liquid, 5 rainbow.
  */
 export function createLandmarkMaterial(fx: boolean): ShaderMaterial {
   return new ShaderMaterial({
@@ -107,16 +107,26 @@ export function createLandmarkMaterial(fx: boolean): ShaderMaterial {
         float day = 0.35 + 0.65 * term;
         #ifdef FX
         if (vFx > 0.5 && vFx < 1.5) {
-          // Falling water: bright streaks of different speeds sliding down the ribbon.
-          float colId = floor(vUv.x * 22.0);
+          // Falling water: bright streaks of different speeds sliding down each column of the sheet.
+          float colId = floor(vUv.x * 44.0);
           float hh = fract(sin(colId * 91.7) * 437.5);
           float n = fract(vUv.y * (2.0 + 3.0 * hh) - uTime * (0.7 + 1.1 * hh) + hh * 7.0);
           float streak = smoothstep(0.05, 0.45, n) * smoothstep(1.0, 0.6, n);
-          // Seen from afar the column streaks only alias into blocks: settle on a soft, steady curtain.
-          streak = mix(streak, 0.6, smoothstep(250.0, 1800.0, length(vViewPos)));
-          float edge = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
-          alpha = mix(0.16, 0.78, streak) * edge * (0.55 + 0.45 * smoothstep(0.0, 0.12, vUv.y)) * (1.0 - 0.35 * smoothstep(0.7, 1.0, vUv.y));
+          // Seen from afar the column streaks only alias into blocks: soften toward a steady curtain, keeping some column variation.
+          streak = mix(streak, 0.55, 0.6 * smoothstep(250.0, 1800.0, length(vViewPos)));
+          // vEmit carries the soft edge weight of a sheet.
+          alpha = mix(0.12, 0.8, streak) * (0.65 + 0.7 * hh) * vEmit * (0.55 + 0.45 * smoothstep(0.0, 0.12, vUv.y)) * (1.0 - 0.35 * smoothstep(0.7, 1.0, vUv.y));
+          alpha = min(alpha, 0.85);
           col = vColor * (0.32 + 0.5 * day) * vec3(0.82, 0.93, 1.0) + uStarColor * 0.05;
+        } else if (vFx > 4.5) {
+          // Rainbow in the spray: the primary bow sits 42 degrees from the antisolar point, red outside.
+          float x = (dot(V, L) - 0.743) / 0.06;
+          float band = smoothstep(1.0, 0.55, abs(x));
+          float hue = clamp(x * 0.5 + 0.5, 0.0, 1.0) * 0.72;
+          vec3 rb = clamp(abs(fract(hue + vec3(1.0, 0.6667, 0.3333)) * 6.0 - 3.0) - 1.0, 0.0, 1.0);
+          float mist = smoothstep(0.0, 0.12, vUv.x) * smoothstep(1.0, 0.88, vUv.x) * (1.0 - smoothstep(0.1, 0.95, vUv.y));
+          alpha = band * mist * 0.6 * smoothstep(0.1, 0.4, sunR);
+          col = rb * (0.7 + 0.5 * day);
         } else if (vFx > 1.5 && vFx < 2.5) {
           float pulse = 0.75 + 0.25 * sin(uTime * 1.4 - vUv.y * 7.0 + vUv.x * 12.0);
           pulse = mix(pulse, 0.85, smoothstep(300.0, 2000.0, length(vViewPos)));
@@ -125,8 +135,8 @@ export function createLandmarkMaterial(fx: boolean): ShaderMaterial {
         }
         #endif
         // Self light: crystals and seams glow, brighter at night.
-        float glowAmt = vEmit * uGlow * (0.4 + 0.6 * night);
-        if (vFx > 3.5) {
+        float glowAmt = (vFx > 0.5 && vFx < 1.5 ? 0.0 : vEmit) * uGlow * (0.4 + 0.6 * night);
+        if (vFx > 3.5 && vFx < 4.5) {
           // Glowing liquid: slow drifting cracks of brighter and darker crust.
           float flow = sin(vUv.x * 21.0 + sin(vUv.y * 17.0 + uTime * 0.35) * 2.2) * sin(vUv.y * 19.0 - sin(vUv.x * 13.0 - uTime * 0.28) * 2.0);
           float breathe = 0.78 + 0.3 * flow + 0.1 * sin(uTime * 1.1);
