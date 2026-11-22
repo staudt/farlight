@@ -187,3 +187,63 @@ export function biomeNameAt(def: TerrainDef, s: TerrainSample, slope: number): s
   if (s.ice > 0.5) return 'ice';
   return best;
 }
+
+/** Chunk bake parameters for the land look (mirrors `config.terrain`, sent with each chunk request). */
+export interface TerrainLook {
+  facetValue: number;
+  facetHue: number;
+  patch: number;
+  rockSlope: number;
+  rock: number;
+  strata: number;
+  strataPeriod: number;
+  ao: number;
+  ridge: number;
+}
+
+export const DEFAULT_LOOK: TerrainLook = { facetValue: 0.2, facetHue: 0.09, patch: 0.08, rockSlope: 0.7, rock: 0.85, strata: 1, strataPeriod: 0.006, ao: 1, ridge: 1 };
+
+/** How much of a face is bare rock: 0 below `rockSlope` (tan of the facet angle), 1 well above it. */
+export function rockAmount(slope: number, rockSlope: number): number {
+  return smoothstep(rockSlope, rockSlope * 1.8, slope);
+}
+
+/** 1 for bright, nearly colourless ground (snow, ice, pale dust), 0 for anything with colour or depth. */
+export function snowiness(r: number, g: number, b: number): number {
+  const lum = 0.3 * r + 0.55 * g + 0.15 * b;
+  const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+  return smoothstep(0.38, 0.6, lum) * (1 - smoothstep(0.07, 0.2, chroma / Math.max(lum, 1e-3)));
+}
+
+/** Rock colour for ground of colour (r, g, b): darker, warmer and less saturated. */
+export function rockColor(r: number, g: number, b: number): RGB {
+  const lum = 0.3 * r + 0.55 * g + 0.15 * b;
+  const base = Math.min(0.42, lum * 0.55 + 0.1);
+  // Keep a quarter of the ground hue so a red world gets red cliffs and a grey one grey cliffs.
+  return [base * 1.03 + (r - lum) * 0.25, base * 0.98 + (g - lum) * 0.25, base * 0.9 + (b - lum) * 0.25];
+}
+
+function hash1(n: number): number {
+  let h = Math.imul(n | 0, 374761393) ^ 0x9e3779b9;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+
+/**
+ * Rock strata: layered value and warmth bands by altitude `alt` (meters). Layers are `period` thick, each with
+ * its own random tone, with a thin dark seam between them. `warp` bends the layers (meters). Returns [value, warm].
+ */
+export function strataBand(alt: number, period: number, warp: number): [number, number] {
+  const u = (alt + warp) / Math.max(period, 1e-3);
+  const i = Math.floor(u);
+  const f = u - i;
+  const tone = hash1(i);
+  const seam = 1 - 0.18 * (1 - smoothstep(0.0, 0.14, f));
+  return [(0.8 + 0.4 * tone) * seam, (hash1(i + 977) - 0.5) * 0.12];
+}
+
+/** Baked occlusion and ridge light from a normalized concavity (positive in hollows, negative on crests). */
+export function occlusion(concavity: number, ao: number, ridge: number): number {
+  const c = Math.max(-1, Math.min(1, concavity));
+  return 1 - Math.max(0, c) * 0.4 * ao + Math.max(0, -c) * 0.1 * ridge;
+}

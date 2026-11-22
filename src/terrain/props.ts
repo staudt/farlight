@@ -42,11 +42,11 @@ export const TREE_CONIFER = 0;
 export const TREE_BROADLEAF = 1;
 
 /** Wavelength in meters of the low frequency noise that gathers props into groves and fields. */
-const CLUMP_SCALE: Record<PropKind, number> = { tree: 240, rock: 160, spire: 320, crystal: 220, mesa: 700 };
+const CLUMP_SCALE: Record<PropKind, number> = { tree: 240, rock: 160, spire: 320, crystal: 220, mesa: 700, tuft: 90, pebble: 60 };
 /** Fraction of its size a prop sinks into the ground. */
-const SINK: Record<PropKind, number> = { tree: 0.03, rock: 0.14, spire: 0.04, crystal: 0.05, mesa: 0.02 };
+const SINK: Record<PropKind, number> = { tree: 0.03, rock: 0.14, spire: 0.04, crystal: 0.05, mesa: 0.02, tuft: 0.05, pebble: 0.3 };
 /** Tilt (radians) of the up axis away from the surface normal. */
-const TILT: Record<PropKind, number> = { tree: 0.04, rock: 0.35, spire: 0.08, crystal: 0.2, mesa: 0 };
+const TILT: Record<PropKind, number> = { tree: 0.04, rock: 0.35, spire: 0.08, crystal: 0.2, mesa: 0, tuft: 0.15, pebble: 0.5 };
 
 const clumpNoise = new Map<number, Simplex3>();
 

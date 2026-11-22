@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * One off screenshot with live quality overrides, for visual A/B checks.
- *   node scripts/shot.mjs <scenario> <out.png> [--dist=dist] [--quality=high] [--set=volScale:1,msaa:0]
+ *   node scripts/shot.mjs <scenario> <out.png> [--dist=dist] [--quality=high] [--set=volScale:1,msaa:0] [--cfg=terrain.mist:2,terrain.rim:0]
  */
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -13,6 +13,7 @@ const opt = (k, d) => args.find((a) => a.startsWith(`--${k}=`))?.split('=')[1] ?
 const [scenario, out] = args.filter((a) => !a.startsWith('--'));
 const dist = opt('dist', 'dist');
 const quality = opt('quality', 'high');
+const cfgs = opt('cfg', '').split(',').filter(Boolean).map((s) => s.split(':'));
 const sets = opt('set', '').split(',').filter(Boolean).map((s) => s.split(':'));
 const port = await new Promise((res) => {
   const s = createServer();
@@ -46,6 +47,12 @@ await page.evaluate(
   },
   [quality, sets],
 );
+await page.evaluate((kv) => {
+  for (const [path, v] of kv) {
+    const [a, b] = path.split('.');
+    window.__game.config[a][b] = Number(v);
+  }
+}, cfgs);
 await page.waitForTimeout(1500);
 await page.waitForFunction(() => !(window.__game.getState().pending > 0), null, { timeout: 30000 }).catch(() => {});
 await page.waitForTimeout(2500);
