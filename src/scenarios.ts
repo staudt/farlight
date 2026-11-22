@@ -129,8 +129,16 @@ export const SCENARIOS: Record<string, Scenario> = {
     apply: (w) => w.place({ body: 'earth', lat: -0.5, lon: 36.5, altitude: 0, heading: 0, landed: true, time: findLocalHourTime(w, 'earth', 36.5, 13) }),
   },
   'earth-surface-night': {
-    description: 'Landed in the Colorado plains at night',
-    apply: (w) => w.place({ body: 'earth', lat: 39.5, lon: -104, altitude: 0, heading: 180, landed: true, time: findLocalHourTime(w, 'earth', -104, 23) }),
+    description: 'Over the Colorado foothills at night, moon behind you lighting the slopes',
+    apply: (w) => w.place({ body: 'earth', lat: 39.5, lon: -104, altitude: 400, heading: 25, pitch: 10, throttle: 0.15, time: findMoonNight(w, 'earth', -104, 23.5, 1) }),
+  },
+  'earth-full-moon-night': {
+    description: 'Landed in the Rockies under a full moon: cool silver light picks out every hill and ridge',
+    apply: (w) => w.place({ body: 'earth', lat: 39.5, lon: -104, altitude: 400, heading: 205, pitch: 14, throttle: 0.15, time: findMoonNight(w, 'earth', -104, 23.8, 1) }),
+  },
+  'earth-milky-way': {
+    description: 'Landed on a moonless night looking up at the Milky Way, dust lanes and nebula glows over the hills',
+    apply: (w) => w.place({ body: 'earth', lat: 39.5, lon: -104, altitude: 400, heading: 200, pitch: 35, throttle: 0.15, time: findMoonNight(w, 'earth', -104, 1.5, 0) }),
   },
   'earth-sunset': surface('Gliding over the sea at sunset', {
     body: 'earth', lat: 10, localHour: 18.2, altitude: 900, heading: 270, pitch: 0, throttle: 0.5,
@@ -1290,6 +1298,35 @@ function faceLatLon(w: World, bodyId: string, latDeg: number, lonDeg: number, ra
 /** Sim time when a tidally locked moon's longitude has the given local solar hour. */
 function findLockedMorning(w: World, bodyId: string, lonDeg: number, hour: number): number {
   return findLocalHourTime(w, bodyId, lonDeg, hour);
+}
+
+/**
+ * Sim time when a longitude has the given local solar hour and the biggest moon is at the target phase (1 full, 0 new, 0.5 half).
+ * Steps whole days so the local hour stays put while the phase walks through the month.
+ */
+function findMoonNight(w: World, bodyId: string, lonDeg: number, hour: number, target: number): number {
+  const body = w.universe.get(bodyId);
+  const moon = body.children.reduce((a, b) => (b.radius > a.radius ? b : a), body.children[0]!);
+  const t0 = findLocalHourTime(w, bodyId, lonDeg, hour);
+  const day = Math.abs(body.def.physical.rotationPeriod);
+  const month = Math.abs(moon.orbit?.period ?? day * 30);
+  const sunToBody = new Vector3();
+  const toMoon = new Vector3();
+  let best = t0;
+  let bestScore = -Infinity;
+  for (let k = 0; k * day < month * 1.05; k++) {
+    const t = t0 + k * day;
+    w.universe.update(t);
+    sunToBody.copy(w.universe.root.position).sub(body.position).normalize();
+    toMoon.copy(moon.position).sub(body.position).normalize();
+    const phase = 0.5 - 0.5 * toMoon.dot(sunToBody); // 1 full, 0 new
+    const score = -Math.abs(phase - target);
+    if (score > bestScore) {
+      bestScore = score;
+      best = t;
+    }
+  }
+  return best;
 }
 
 /**

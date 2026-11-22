@@ -57,6 +57,18 @@ export class DebugPanel {
     props.add(config.props, 'emissive', 0, 8);
     props.add(config.props, 'nightAmbient', 0, 0.3);
     props.add(config.props, 'nightGlow', 0, 4);
+    const night = this.gui.addFolder('Night').close();
+    night.add(config.night, 'enabled');
+    night.add(config.night, 'moonLight', 0, 3);
+    night.add(config.night, 'moonStrength', 0, 0.6);
+    night.add(config.night, 'purkinje', 0, 1);
+    night.add(config.night, 'moonSky', 0, 3);
+    night.add(config.night, 'starWash', 0, 1);
+    night.add(config.night, 'milkyWay', 0, 4);
+    night.add(config.night, 'twinkle', 0, 2);
+    night.add(config.night, 'zodiacal', 0, 3);
+    night.add(config.night, 'airglow', 0, 4);
+    night.add(config.night, 'twilightBand', 0, 4);
     const ecl = this.gui.addFolder('Eclipse').close();
     const gg = this.gui.addFolder('Gas giants').close();
     gg.add(config.gasGiant, 'flowSpeed', 0, 5);

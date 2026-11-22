@@ -1,5 +1,6 @@
 import { Color, ShaderMaterial, Texture, Vector3 } from 'three';
 import { starLight } from '../starLight';
+import { NIGHT_LIGHT_GLSL, nightUniforms } from '../nightLight';
 import { ECLIPSE_GLSL, eclipse } from '../eclipse';
 import { WAVE_COUNT, createWaveUniforms, waterLook } from './waterWaves';
 import type { BodyDef } from '../../data/types';
@@ -16,6 +17,7 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
       uTime: { value: 0 },
       uSunIntensity: { value: 1.25 },
       uStarColor: starLight.uniform,
+      ...nightUniforms,
       ...eclipse.uniforms,
       uEclSelf: { value: -1 },
       uGlow: { value: 1 },
@@ -80,6 +82,7 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
       uniform vec4 uWaterB;
       uniform vec3 uMoonDir;
       uniform float uMoonLit;
+      ${NIGHT_LIGHT_GLSL}
       varying vec4 vDir;
       varying vec4 vEmit;
       varying vec3 vColor;
@@ -205,16 +208,15 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
         vec3 sunCol = mix(vec3(1.0, 0.5, 0.25), vec3(1.0, 0.96, 0.88), smoothstep(0.0, 0.45, sunR));
         float skyTerm = 0.35 + 0.65 * clamp(dot(N, R), 0.0, 1.0);
         vec3 amb = (vec3(0.025) + uSkyAmbient * skyTerm * (0.25 + 0.75 * term)) * mix(vec3(1.0), uStarColor, 0.6);
-        // Moonlight and starlight: a cool, faint light from a tilted direction so facets still shade.
-        vec3 Mn = normalize(R * 0.6 + normalize(cross(R, L) + vec3(1e-5)) * 0.6);
-        amb += vec3(0.35, 0.5, 1.0) * uNightAmb * (1.0 - term) * (0.3 + 0.7 * clamp(dot(N, Mn), 0.0, 1.0));
+        // Starlight and airglow floor: cool, faint, from the whole sky so silhouettes always read.
+        amb += vec3(0.3, 0.42, 0.9) * uNightAmb * (1.0 - term) * (0.45 + 0.55 * clamp(dot(N, R), 0.0, 1.0));
         // Eclipses: other bodies shadow the sun here (camera relative world position).
         vec3 eclL = eclipseLight(vViewPos * mat3(viewMatrix), uEclSelf);
         // No sun means no skylight either: the shadow darkens the ambient too.
         amb *= 0.25 + 0.75 * dot(eclL, vec3(0.2126, 0.7152, 0.0722));
-        vec3 lightIn = sunCol * uStarColor * eclL * uSunIntensity * diffuse + amb;
+        vec3 lightIn = sunCol * uStarColor * eclL * uSunIntensity * diffuse + amb + nightMoon(N, R, term);
         vec3 albedo = mix(vColor, uFoamColor, foam * 0.92);
-        vec3 col = albedo * lightIn;
+        vec3 col = nightPurkinje(albedo * lightIn, lightIn);
         if (isWater > 0.5) {
           vec3 H = normalize(L + V);
           float nvS = clamp(dot(N, V), 0.0, 1.0);

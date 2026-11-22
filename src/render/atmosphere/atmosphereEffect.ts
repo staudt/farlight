@@ -3,6 +3,8 @@ import type { Body } from '../../sim/universe';
 import { MAX_ATMOS } from './atmosphere.glsl';
 import { eclipse } from '../eclipse';
 import { config } from '../../core/config';
+import { nightLight } from '../nightLight';
+import { quality } from '../quality';
 
 /** Mie haze hugs the ground: its scale height is this fraction of the Rayleigh one. */
 const MIE_SCALE = 0.22;
@@ -42,6 +44,10 @@ export class AtmosphereEffect {
       ['uAtmoSteps', new Uniform(14)],
       ['uAtmoLight', new Uniform(5)],
       ['uAtmoAdaptive', new Uniform(0.5)],
+      ['uNightFx', new Uniform(2)],
+      ['uNightK', new Uniform(new Vector3(1, 1, 0))],
+      ['uMoonSky', nightLight.skyColor as Uniform],
+      ['uMoonDirW', new Uniform(nightLight.dirWorld)],
     ]);
     const u = this.uniforms;
     u.set('uCenter', new Uniform(this.centers));
@@ -68,6 +74,9 @@ export class AtmosphereEffect {
     (u.get('uCamToWorld')!.value as Matrix4).copy(camera.matrixWorld);
     u.get('uLogFar')!.value = Math.log2(camera.far + 1);
     u.get('uAtmoAdaptive')!.value = config.render.atmoAdaptive;
+    const nc = config.night;
+    u.get('uNightFx')!.value = nc.enabled ? quality.settings.nightFx : 0;
+    (u.get('uNightK')!.value as Vector3).set(nc.airglow, nc.twilightBand, 0);
 
     // The MAX_ATMOS nearest shells, kept sorted far to near, without allocating.
     const cand = this.cand;
