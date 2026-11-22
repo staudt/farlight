@@ -697,6 +697,14 @@ const saturn: BodyDef = {
     color: [0.85, 0.78, 0.62],
     opacity: 0.85,
     bands: 40,
+    gaps: [
+      { at: 0.19, width: 0.012, depth: 0.55 },
+      { at: 0.275, width: 0.008, depth: 0.45 },
+      { at: 0.705, width: 0.085, depth: 0.94 },
+      { at: 0.915, width: 0.016, depth: 0.82 },
+      { at: 0.975, width: 0.007, depth: 0.7 },
+    ],
+    spokes: 0.5,
   },
   atmosphere: {
     height: 0.04,
