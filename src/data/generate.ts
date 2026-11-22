@@ -1051,6 +1051,7 @@ function buildGas(rng: Rng): Built {
     bands,
     bandFrequency: round(rng.range(8, 22), 1),
     turbulence: round(rng.range(0.15, 0.7), 2),
+    polar: 0.5,
     storms: storms.length ? storms : undefined,
     cloudDeckDepth: 0.02,
   };
@@ -1095,7 +1096,7 @@ function buildIceGiant(rng: Rng): Built {
     kind: 'gas',
     radiusEarth: rng.range(2.5, 4.5),
     color: bands[1]!,
-    gas: { bands, bandFrequency: round(rng.range(5, 9), 1), turbulence: round(rng.range(0.1, 0.4), 2), storms, cloudDeckDepth: 0.02 },
+    gas: { bands, bandFrequency: round(rng.range(5, 9), 1), turbulence: round(rng.range(0.1, 0.4), 2), polar: 0.2, storms, cloudDeckDepth: 0.02 },
     atmosphere,
     greenhouse: 0,
     atmosphereText: 'Hydrogen, helium and methane',

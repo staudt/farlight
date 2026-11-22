@@ -280,6 +280,23 @@ export const config = {
     /** HDR strength of landmark glows (pools, monolith, crystals). */
     glow: 1,
   },
+  /** Gas giant look (read every frame, live in the debug panel). */
+  gasGiant: {
+    /** Differential rotation speed multiplier (bands and ovals drift, storms spin). */
+    flowSpeed: 1,
+    /** Kelvin-Helmholtz curls and festoons along band edges. */
+    curls: 1,
+    /** Fine sub-bands inside the main bands. */
+    subBands: 1,
+    /** White ovals and dark barges. */
+    ovals: 1,
+    /** Multiplier on the per body polar strength. */
+    polar: 1,
+    /** Soft atmospheric limb glow, tinted by the palette. */
+    limbGlow: 0.55,
+    /** Warm band along the terminator. */
+    terminatorWarm: 0.35,
+  },
   /** Eclipses and moon shadows: bodies shadow each other from the sun. */
   eclipse: {
     enabled: true,

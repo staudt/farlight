@@ -453,6 +453,7 @@ const jupiter: BodyDef = {
     ],
     bandFrequency: 14,
     turbulence: 0.6,
+    polar: 0.7,
     storms: [{ lat: -22 * DEG, lon: 1.2, size: 0.12, color: [0.6, 0.15, 0.08] }],
     cloudDeckDepth: 0.02,
   },
@@ -686,6 +687,8 @@ const saturn: BodyDef = {
     ],
     bandFrequency: 18,
     turbulence: 0.3,
+    polar: 0.6,
+    polarSides: 6,
     cloudDeckDepth: 0.02,
   },
   rings: {
@@ -799,6 +802,7 @@ const uranus: BodyDef = {
     ],
     bandFrequency: 6,
     turbulence: 0.1,
+    polar: 0.15,
     cloudDeckDepth: 0.02,
   },
   rings: {
@@ -853,6 +857,7 @@ const neptune: BodyDef = {
     ],
     bandFrequency: 8,
     turbulence: 0.35,
+    polar: 0.3,
     storms: [{ lat: -28 * DEG, lon: 0.6, size: 0.1, color: [0.05, 0.08, 0.25] }],
     cloudDeckDepth: 0.02,
   },

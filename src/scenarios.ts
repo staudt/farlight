@@ -443,6 +443,10 @@ export const SCENARIOS: Record<string, Scenario> = {
     description: 'Day side of Jupiter from 2.5 radii, Great Red Spot in view',
     apply: (w) => faceSpot(w, 'jupiter', 2.5),
   },
+  'jupiter-storm-closeup': {
+    description: 'Close orbit over the Great Red Spot, its collar and turbulent wake',
+    apply: (w) => faceSpot(w, 'jupiter', 1.45),
+  },
   'jupiter-skim': {
     description: 'Three kilometres below the Jupiter cloud tops, flying level through the cloud sea',
     apply: (w) => {

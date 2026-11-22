@@ -58,6 +58,14 @@ export class DebugPanel {
     props.add(config.props, 'nightAmbient', 0, 0.3);
     props.add(config.props, 'nightGlow', 0, 4);
     const ecl = this.gui.addFolder('Eclipse').close();
+    const gg = this.gui.addFolder('Gas giants').close();
+    gg.add(config.gasGiant, 'flowSpeed', 0, 5);
+    gg.add(config.gasGiant, 'curls', 0, 2);
+    gg.add(config.gasGiant, 'subBands', 0, 2);
+    gg.add(config.gasGiant, 'ovals', 0, 2);
+    gg.add(config.gasGiant, 'polar', 0, 2);
+    gg.add(config.gasGiant, 'limbGlow', 0, 1.5);
+    gg.add(config.gasGiant, 'terminatorWarm', 0, 1);
     ecl.add(config.eclipse, 'enabled');
     ecl.add(config.eclipse, 'sunSizeScale', 0.1, 1).name('sun size (shadows)');
     ecl.add(config.eclipse, 'maxOccluders', 0, 4, 1);

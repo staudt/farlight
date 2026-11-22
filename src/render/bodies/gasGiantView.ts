@@ -13,7 +13,7 @@ import {
   PlaneGeometry,
   RepeatWrapping,
   ClampToEdgeWrapping,
-  RGFormat,
+  RGBAFormat,
   Texture,
   WebGLRenderTarget,
   Quaternion,
@@ -21,6 +21,7 @@ import {
   Vector3,
   Vector4,
 } from 'three';
+import { config } from '../../core/config';
 import { mulberry32 } from '../../core/rng';
 import type { Body } from '../../sim/universe';
 import { type BodyView, type FrameContext, apparentSizeBoost, placeRelative } from '../context';
@@ -31,6 +32,8 @@ import { RING_GLSL, RingMesh, makeRingUniforms } from './ringView';
 
 const MAX_BANDS = 8;
 const MAX_STORMS = 4;
+/** Angular size (radians) of one flow texture texel at 4096 wide: the footprint where analytic detail fades in. */
+const TEX_ANG = 0.0015;
 /** Period of the flow cross-fade (sim seconds). Bounds how far the zonal jets can shear the noise. */
 const FLOW_PERIOD = 43200;
 /** Cloud-deck shell depths as fractions of the full deck depth. */
@@ -43,12 +46,20 @@ const PUFF_RANGE = 22000;
 const GAS_GLSL = /* glsl */ `
 uniform vec3 uBands[${MAX_BANDS}];
 uniform float uBandCount, uBandFreq, uTurb, uSeed, uPhase, uStormN, uHasRing;
-uniform sampler2D uFlowTex; // baked flow noise: r = broad warp, g = fine detail, equirect, wraps in longitude
+uniform float uPolar, uPolarSides, uCurls, uSubBands, uOvals;
+uniform sampler2D uFlowTex; // baked flow: r broad warp, g fine detail, b white ovals, a dark barges. Equirect, wraps in longitude
 uniform vec4 uStorm[${MAX_STORMS}];
 uniform vec3 uStormCol[${MAX_STORMS}];
 ${RING_GLSL}
 
 float gHash(float n) { return fract(sin(n * 91.3458) * 47453.5453); }
+/** Smooth 1D value noise. */
+float gN1(float x) {
+  float i = floor(x);
+  float f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(gHash(i + uSeed), gHash(i + 1.0 + uSeed), f);
+}
 vec3 palette(float i) {
   int n = int(uBandCount);
   int idx = int(floor(gHash(i + uSeed) * float(n)));
@@ -57,22 +68,44 @@ vec3 palette(float i) {
   if (idx == prev) idx = (idx + 1) % n;
   return uBands[idx];
 }
-/** Zonal wind (rad/s): alternating jets at band centers, strong equatorial flow. */
+/** Per band brightness, blended with the palette so band edges have no steps. */
+float bandBright(float i) {
+  return (0.72 + 0.5 * gHash(i * 1.7 + uSeed)) * (1.0 + 0.12 * (1.0 - 2.0 * mod(i, 2.0)));
+}
+/** Zonal wind (rad/s): alternating jets at band centers, a second harmonic, strong equatorial flow. */
 float zonalJet(float lat) {
   float b = lat / 3.14159265 * uBandFreq;
-  return (sin(b * 3.14159265) * 0.6 + 0.5 * exp(-lat * lat * 10.0)) * 2.4e-5;
+  return (sin(b * 3.14159265) * 0.6 + 0.22 * sin(b * 7.2 + uSeed) + 0.5 * exp(-lat * lat * 10.0)) * 2.4e-5;
 }
 /** Baked noise at longitude u (0..1, wraps) and latitude v. Picks the seam-free u for mip derivatives. */
-vec2 flowTap(float lon, float lat, float off) {
+vec4 flowTap(float lon, float lat, float off) {
   float u = (lon + off) * 0.15915494 + 0.5;
   float v = lat * 0.31830989 + 0.5;
   float u2 = fract(u + 0.5);
   vec2 dx = vec2(dFdx(fract(u)), dFdy(fract(u)));
   vec2 dx2 = vec2(dFdx(u2), dFdy(u2));
   vec2 g = dot(dx, dx) < dot(dx2, dx2) ? dx : dx2;
-  return textureGrad(uFlowTex, vec2(u, v), vec2(g.x, dFdx(v)), vec2(g.y, dFdy(v))).rg;
+  return textureGrad(uFlowTex, vec2(u, v), vec2(g.x, dFdx(v)), vec2(g.y, dFdy(v)));
 }
-vec2 flowSample(float lon, float lat, float off) { return flowTap(lon, lat, off); }
+
+float dHash(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
+float dNoise(vec3 x) {
+  vec3 i = floor(x);
+  vec3 f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(dHash(i), dHash(i + vec3(1, 0, 0)), f.x), mix(dHash(i + vec3(0, 1, 0)), dHash(i + vec3(1, 1, 0)), f.x), f.y),
+             mix(mix(dHash(i + vec3(0, 0, 1)), dHash(i + vec3(1, 0, 1)), f.x), mix(dHash(i + vec3(0, 1, 1)), dHash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+/** Flow aligned fine noise (stretched along longitude), drifting with the band at longitude offset off. */
+float flowDetail(float lon, float lat, float off) {
+  float l = lon + off;
+  vec3 q = vec3(cos(lat) * cos(l), sin(lat), -cos(lat) * sin(l)) + uSeed;
+  vec3 f = q * vec3(26.0, 190.0, 26.0);
+  float n = dNoise(f);
+  n += 0.55 * dNoise(f * vec3(2.1, 2.3, 2.1) + 5.3 + n * 0.8);
+  n += 0.3 * dNoise(f * vec3(4.3, 4.6, 4.3) + 9.1);
+  return n / 1.85;
+}
 
 /** Albedo of the cloud deck seen in direction d (unit, body fixed). depth: 0 tops .. 1 floor. */
 vec3 deckColor(vec3 d, float depth) {
@@ -82,16 +115,33 @@ vec3 deckColor(vec3 d, float depth) {
   float ph0 = uPhase;
   float ph1 = fract(uPhase + 0.5);
   float w0 = 1.0 - abs(2.0 * ph0 - 1.0);
-  vec2 s0 = flowSample(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph0 - 0.5));
-  vec2 s1 = flowSample(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph1 - 0.5));
-  vec2 s = mix(s1, s0, w0);
+  vec4 s0 = flowTap(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph0 - 0.5));
+  vec4 s1 = flowTap(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph1 - 0.5));
+  vec4 s = mix(s1, s0, w0);
+  // Close up the baked texture is magnified: add flow aligned filaments, faded by screen footprint.
+  float dfade = 1.0 - smoothstep(1.0, 2.5, length(fwidth(d)) / ${TEX_ANG});
+  float dn = 0.5;
+  if (dfade > 0.01) {
+    float da = flowDetail(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph0 - 0.5));
+    float db = flowDetail(lon, lat, jt * ${FLOW_PERIOD.toFixed(1)} * (ph1 - 0.5));
+    dn = mix(0.5, mix(db, da, w0), dfade);
+  }
+
+  // Polar caps: more chaotic, darker, with a vortex (uPolar is the data strength).
+  float colat = 1.5707963 - abs(lat);
+  float pw = (1.0 - smoothstep(0.25, 0.8, colat)) * uPolar;
+  float turb = uTurb * (1.0 + 1.5 * pw);
 
   float b0 = lat / 3.14159265 * uBandFreq + 0.37;
   float f0 = fract(b0);
   float edgeW = exp(-pow(min(f0, 1.0 - f0) * 4.0, 2.0));
-  float b = b0 + (s.x - 0.5) * uTurb * (0.3 + 1.1 * edgeW) * 1.9 + (s.y - 0.5) * 0.1 * uTurb;
+  float b = b0 + (s.x - 0.5) * turb * (0.3 + 1.1 * edgeW) * 1.9 + (s.y - 0.5) * 0.1 * turb;
+  // Kelvin-Helmholtz curls and festoons along the band boundaries (integer wavenumbers: no seam).
+  float kh = sin(lon * 9.0 + s.x * 7.0 + b0 * 2.0) * 0.6 + sin(lon * 23.0 - s.y * 9.0 + b0 * 5.0) * 0.4;
+  b += uCurls * edgeW * ((0.03 + 0.1 * turb) * kh + (s.x - 0.5) * 0.4 * turb);
+  b += (dn - 0.5) * (0.06 + 0.3 * edgeW) * (0.3 + turb);
 
-  // Storm geometry first so the bands can bend around the ovals.
+  // Storm geometry first so the bands can bend around the ovals and trail a wake.
   vec3 q3[${MAX_STORMS}];
   for (int i = 0; i < ${MAX_STORMS}; i++) {
     if (float(i) >= uStormN) break;
@@ -101,40 +151,80 @@ vec3 deckColor(vec3 d, float depth) {
     vec2 q = vec2(dl * cos(S.x) / S.z, (lat - S.x) / S.w);
     q3[i] = vec3(q, length(q));
     b += 0.5 * exp(-q3[i].z * q3[i].z * 0.45) * clamp(q.y, -1.2, 1.2) * smoothstep(3.0, 0.5, q3[i].z);
+    float wk = smoothstep(-4.5, -1.0, q.x) * (1.0 - smoothstep(-1.2, -0.6, q.x)) * (1.0 - smoothstep(0.7, 1.8, abs(q.y)));
+    b += wk * uCurls * (s.x - 0.5) * 1.6;
   }
 
   float i0 = floor(b);
-  float f = fract(b);
-  vec3 col = mix(palette(i0 - 1.0), palette(i0), smoothstep(0.0, 0.32 + 0.12 * uTurb, f));
-  col *= (0.72 + 0.5 * gHash(i0 * 1.7 + uSeed)) * (1.0 + 0.12 * (1.0 - 2.0 * mod(i0, 2.0)));
+  float f = clamp(fract(b) + (s.y - 0.5) * 0.14 * turb, 0.0, 1.0);
+  float tt = smoothstep(0.0, 0.5 + 0.1 * uTurb, f);
+  vec3 col = mix(palette(i0 - 1.0) * bandBright(i0 - 1.0), palette(i0) * bandBright(i0), tt);
   col = pow(max(col, vec3(0.0)), vec3(1.7)) * 1.5;
   col = mix(vec3(dot(col, vec3(0.3, 0.55, 0.15))), col, 1.35);
-  col *= 0.8 + 0.4 * s.y;
-  col = mix(col, vec3(1.0, 0.95, 0.86) * dot(col, vec3(0.33)) * 1.6, smoothstep(0.66, 0.92, s.y) * 0.22 * (0.4 + uTurb));
+  // Sub-bands and a warm/cool drift inside the bands.
+  float sb = 0.5 * gN1(b * 6.0) + 0.5 * gN1(b * 13.0 + 4.0);
+  float sv = uSubBands * (0.3 + turb);
+  col *= 1.0 + sv * (sb - 0.5) * 0.7;
+  col *= 1.0 + sv * vec3(0.2 * (s.x - 0.5), 0.0, -0.24 * (s.x - 0.5));
+  col *= (0.8 + 0.4 * s.y) * (1.0 + (dn - 0.5) * 0.7 * (0.4 + turb));
+  float lum = dot(col, vec3(0.33));
+  col = mix(col, vec3(1.0, 0.95, 0.86) * lum * 1.6, smoothstep(0.66, 0.92, s.y) * 0.22 * (0.4 + turb));
+  // White ovals and dark barges.
+  col = mix(col, vec3(1.0, 0.96, 0.88) * (lum + 0.45), clamp(s.b * 0.85 * uOvals, 0.0, 1.0));
+  col = mix(col, col * vec3(0.5, 0.32, 0.22), clamp(s.a * 0.8 * uOvals, 0.0, 1.0));
 
   for (int i = 0; i < ${MAX_STORMS}; i++) {
     if (float(i) >= uStormN) break;
     vec3 q = q3[i];
     float r = q.z;
     float ang = atan(q.y, q.x);
-    float spiral = sin(ang * 2.0 + log(r + 0.06) * 5.0 - uPhase * 12.566 + (s.x - 0.5) * 2.0);
-    float mask = 1.0 - smoothstep(0.74, 1.0, r + (s.y - 0.5) * 0.28);
-    vec3 inner = pow(uStormCol[i], vec3(1.5)) * 1.3 * (0.8 + 0.35 * spiral) * (0.8 + 0.35 * r);
+    // Oval storm: layered rings (dark core, red body, pale outer ring) with turbulent filaments wrapped around.
+    float rw = r + (s.y - 0.5) * 0.2 + (dn - 0.5) * 0.12;
+    float mask = 1.0 - smoothstep(0.74, 1.0, rw);
+    float fil = sin(ang * 3.0 + r * 3.0 - uPhase * 18.85 + (s.x - 0.5) * 8.0 + (dn - 0.5) * 5.0);
+    float fil2 = sin(ang * 7.0 - r * 9.0 + uPhase * 43.98 + (s.y - 0.5) * 9.0);
+    vec3 body = pow(uStormCol[i], vec3(1.5)) * 1.3;
+    vec3 core = body * 0.62;
+    vec3 pale = mix(body, col * 1.15 + 0.05, 0.6);
+    vec3 inner = mix(core, body, smoothstep(0.18, 0.5, rw));
+    inner = mix(inner, pale, smoothstep(0.58, 0.9, rw));
+    inner *= 0.86 + 0.14 * sin(rw * 34.0 + (s.x - 0.5) * 10.0 + (dn - 0.5) * 6.0);
+    inner = mix(inner, inner * 0.6, smoothstep(0.25, 0.9, fil) * 0.75 * smoothstep(0.1, 0.4, rw));
+    inner = mix(inner, pale * 1.15, smoothstep(0.6, 0.95, fil2 * (0.5 + 0.5 * fil)) * 0.4 * smoothstep(0.55, 0.9, rw));
+    // A thin dark moat, then the bright collar.
+    col *= 1.0 - 0.3 * smoothstep(0.62, 0.9, r) * (1.0 - smoothstep(0.9, 1.0, r)) * (1.0 - mask);
     col = mix(col, inner, mask * 0.93);
-    float collar = smoothstep(0.92, 1.1, r) * (1.0 - smoothstep(1.1, 1.5, r));
-    col = mix(col, vec3(1.0, 0.92, 0.8) * (dot(col, vec3(0.33)) + 0.25), collar * 0.28);
+    float collar = smoothstep(0.92, 1.1, r) * (1.0 - smoothstep(1.1, 1.55, r));
+    col = mix(col, vec3(1.0, 0.92, 0.8) * (dot(col, vec3(0.33)) + 0.25), collar * (0.2 + 0.25 * s.y));
+    // Turbulent wake trailing west.
+    float wk = smoothstep(-4.5, -1.0, q.x) * (1.0 - smoothstep(-1.2, -0.6, q.x)) * (1.0 - smoothstep(0.7, 1.8, abs(q.y)));
+    float lw = dot(col, vec3(0.33));
+    col = mix(col, col * (0.62 + 0.8 * s.y), wk * 0.65);
+    col = mix(col, vec3(1.0, 0.93, 0.82) * (lw + 0.3), wk * smoothstep(0.58, 0.82, s.x) * 0.45);
   }
 
-  // Polar haze: cooler, flatter and a little darker.
-  float pole = smoothstep(0.62, 1.0, abs(d.y));
+  // Polar region: darker and cooler, a vortex inside a jet stream ring (a polygon if the data says so).
   vec3 avg = vec3(0.0);
   for (int i = 0; i < ${MAX_BANDS}; i++) { if (float(i) >= uBandCount) break; avg += uBands[i]; }
   avg /= uBandCount;
-  col = mix(col, avg * vec3(0.72, 0.82, 0.98) * 0.8, pole * 0.55);
+  vec3 pcol = pow(avg, vec3(1.5)) * vec3(0.62, 0.74, 1.0) * 1.1;
+  col = mix(col, pcol * (0.6 + 0.7 * s.y), pw * 0.55);
+  float shape = colat;
+  if (uPolarSides > 2.5) {
+    float a = mod(lon, 6.2831853 / uPolarSides) - 3.14159265 / uPolarSides;
+    shape = colat * cos(a) / cos(3.14159265 / uPolarSides);
+  }
+  shape += (s.x - 0.5) * 0.05;
+  float vortex = (1.0 - smoothstep(0.16, 0.23, shape)) * uPolar;
+  float swirl = 0.5 + 0.5 * sin(lon * 3.0 - log(shape + 0.03) * 6.0 - uPhase * 18.85 + (s.y - 0.5) * 2.0);
+  col = mix(col, pcol * (0.55 + 0.6 * swirl) * (0.8 + 0.4 * s.y), clamp(vortex * 0.75, 0.0, 1.0));
+  float ring = exp(-pow((shape - 0.235) / 0.03, 2.0)) * uPolar;
+  col = mix(col, col * 1.55 + 0.04, clamp(ring * 0.55, 0.0, 1.0));
+  col *= 1.0 - 0.45 * exp(-shape * shape / 0.003) * uPolar;
 
   // Deeper decks are darker, warmer and moodier.
   col = mix(col, col * vec3(1.05, 0.62, 0.4) * 0.5 + vec3(1.1, 0.42, 0.14) * (0.5 + 0.5 * s.y), depth);
-  return col;
+  return max(col, vec3(0.0));
 }
 `;
 
@@ -160,14 +250,55 @@ float gFbm(vec3 p) {
   for (int i = 0; i < 4; i++) { if (i >= uGasOct) break; s += a * gNoise(p); p = p * 2.03 + 11.7; a *= 0.5; }
   return s / (1.0 - a * 2.0); // a has halved once per octave: normalizes any octave count
 }
+vec3 sph(float lon, float lat) {
+  return vec3(cos(lat) * cos(lon), sin(lat), -cos(lat) * sin(lon));
+}
+/** Jittered grid of elongated ovals: x white ovals, y dark barges. Wraps in longitude. */
+vec2 ovals(float lon, float lat) {
+  const float NX = 56.0;
+  const float NY = 28.0;
+  float x = (lon / 6.2831853 + 0.5) * NX;
+  float y = (lat / 3.14159265 + 0.5) * NY;
+  float ix = floor(x);
+  float iy = floor(y);
+  float prob = 0.12 * uTurb + 0.01;
+  vec2 res = vec2(0.0);
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      float cx = ix + float(i);
+      float cy = iy + float(j);
+      float wx = mod(cx, NX);
+      float h1 = gH31(vec3(wx, cy + 40.0, uSeed));
+      if (h1 > prob) continue;
+      float h2 = gH31(vec3(wx + 17.0, cy + 43.0, uSeed + 1.0));
+      float h3 = gH31(vec3(wx + 5.0, cy + 51.0, uSeed + 2.0));
+      float h4 = gH31(vec3(wx + 29.0, cy + 47.0, uSeed + 3.0));
+      vec2 c = vec2(cx + 0.25 + 0.5 * h2, cy + 0.25 + 0.5 * h3);
+      float sz = 0.7 + 0.8 * h4;
+      vec2 d = vec2((x - c.x) / (1.1 * sz), (y - c.y) / (0.45 * sz));
+      float m = 1.0 - smoothstep(0.45, 1.0, length(d));
+      m *= cos(lat) * cos(lat);
+      if (h4 < 0.35) res.y = max(res.y, m); else res.x = max(res.x, m);
+    }
+  }
+  return res;
+}
 
 void main() {
   float lon = vNdc.x * 3.14159265;
   float lat = vNdc.y * 1.5707963;
-  vec3 q = vec3(cos(lat) * cos(lon), sin(lat), -cos(lat) * sin(lon));
+  vec3 q = sph(lon, lat);
   float w = gFbm(q * vec3(2.2, 4.5, 2.2) + uSeed);
-  float v = gFbm(q * vec3(5.5, 24.0, 5.5) + vec3(w * 1.7, 0.0, w * 1.7) * (0.4 + uTurb) + 7.0);
-  gl_FragColor = vec4(w, v, 0.0, 1.0);
+  // Eddies advect the longitude (curl-like shear: streaks and swirls stretched along the flow).
+  float dl = (gFbm(q * vec3(3.0, 9.0, 3.0) + 31.0) - 0.5) * 0.9 * (0.4 + uTurb);
+  float dt = (gFbm(q * vec3(5.0, 5.0, 5.0) + 53.0) - 0.5) * 0.05 * uTurb;
+  vec3 q2 = sph(lon + dl, lat + dt);
+  float v = gFbm(q2 * vec3(8.0, 32.0, 8.0) + vec3(w * 1.7, 0.0, w * 1.7) * (0.4 + uTurb) + 7.0);
+  // Second warp, then fine latitude filaments.
+  vec3 q3 = sph(lon + dl + (v - 0.5) * 0.14 * uTurb, lat);
+  float fil = gFbm(q3 * vec3(4.0, 90.0, 4.0) + 19.0);
+  vec2 ov = ovals(lon + dl * 0.3, lat) * clamp(uTurb * 2.0 - 0.4, 0.0, 1.0);
+  gl_FragColor = vec4(w, mix(v, fil, 0.5), ov);
 }`;
 
 const FULLSCREEN_VERT = /* glsl */ `
@@ -191,6 +322,8 @@ uniform mat3 uViewToLocal;
 uniform vec3 uCamLocal, uSunLocal, uFogColor, uStarColor;
 uniform float uEclSelf;
 ${ECLIPSE_GLSL}
+uniform vec3 uGlowCol;
+uniform float uLimbGlow, uTermWarm;
 uniform float uScale, uShellR, uDepth, uAlpha, uPixAng, uInside, uFogLen, uSunI, uCamDepth, uCeil;
 varying vec2 vNdc;
 ${GAS_GLSL}
@@ -233,11 +366,20 @@ void main() {
     diff *= 1.0 - 0.92 * rs;
     vec3 sunCol = mix(vec3(1.0, 0.5, 0.28), vec3(1.0, 0.95, 0.86), smoothstep(0.0, 0.5, lam));
     vec3 alb = deckColor(N, uDepth);
+    // Seen from below the cloud tops: warm, saturated, deeper.
+    if (c < 0.0) alb = mix(alb, pow(max(alb, vec3(0.0)), vec3(1.0, 1.7, 2.6)) * vec3(1.05, 0.8, 0.6), uInside);
     float mu = abs(dot(N, rd));
-    float limb = mix(0.55, 1.0, pow(mu, 0.3));
+    float limb = mix(0.5, 1.0, pow(mu, 0.38));
     vec3 night = vec3(0.012, 0.014, 0.022) + vec3(0.02, 0.016, 0.014) * smoothstep(-0.5, 0.0, lam);
     vec3 eclL = eclipseLight(vd * dist * mat3(viewMatrix), uEclSelf);
-    col = alb * (sunCol * uStarColor * eclL * uSunI * diff * limb + night);
+    vec3 sunLit = uStarColor * eclL * uSunI;
+    // Warm band along the terminator, and a soft palette tinted limb glow (outside views only).
+    float warm = exp(-pow((lam - 0.04) / 0.16, 2.0));
+    float rim = pow(1.0 - mu, 3.0) * uCeil * (1.0 - uInside) * (c > 0.0 ? 1.0 : 0.0);
+    float lit = smoothstep(-0.25, 0.5, lam);
+    col = alb * (sunCol * sunLit * diff * limb + night);
+    col += alb * vec3(1.0, 0.4, 0.14) * sunLit * warm * uTermWarm * 0.5;
+    col += uGlowCol * sunCol * sunLit * rim * lit * uLimbGlow * 0.35;
     col = mix(col, uFogColor, fog);
   }
 
@@ -339,6 +481,14 @@ type SharedUniforms = {
   uStormN: U<number>;
   uStorm: U<Vector4[]>;
   uStormCol: U<Vector3[]>;
+  uPolar: U<number>;
+  uPolarSides: U<number>;
+  uCurls: U<number>;
+  uSubBands: U<number>;
+  uOvals: U<number>;
+  uGlowCol: U<Vector3>;
+  uLimbGlow: U<number>;
+  uTermWarm: U<number>;
   uHasRing: U<number>;
   uEclSelf: U<number>;
 } & ReturnType<typeof makeRingUniforms>;
@@ -395,6 +545,8 @@ export class GasGiantView implements BodyView {
       this.avgColor.g += c[1] / gas.bands.length;
       this.avgColor.b += c[2] / gas.bands.length;
     }
+    // Limb glow tint: the palette average, pulled toward white blue.
+    const glow = new Vector3(this.avgColor.r, this.avgColor.g, this.avgColor.b).lerp(new Vector3(0.75, 0.85, 1.0), 0.35);
     const stormVec = Array.from({ length: MAX_STORMS }, () => new Vector4());
     const stormCol = Array.from({ length: MAX_STORMS }, () => new Vector3());
     const storms = (gas.storms ?? []).slice(0, MAX_STORMS);
@@ -427,6 +579,14 @@ export class GasGiantView implements BodyView {
       uStormN: { value: storms.length },
       uStorm: { value: stormVec },
       uStormCol: { value: stormCol },
+      uPolar: { value: 0 },
+      uPolarSides: { value: gas.polarSides ?? 0 },
+      uCurls: { value: 1 },
+      uSubBands: { value: 1 },
+      uOvals: { value: 1 },
+      uGlowCol: { value: glow },
+      uLimbGlow: { value: 0.5 },
+      uTermWarm: { value: 0.3 },
       uHasRing: { value: body.def.rings ? 1 : 0 },
       ...eclipse.uniforms,
       uEclSelf: { value: -1 },
@@ -536,7 +696,15 @@ export class GasGiantView implements BodyView {
     sh.uScale.value = scale;
     const fov = (cam.fov * Math.PI) / 180;
     sh.uPixAng.value = (2 * Math.tan(fov / 2)) / (ctx.viewportHeight * ctx.renderer.getPixelRatio());
-    sh.uPhase.value = (ctx.simTime / FLOW_PERIOD) % 1;
+    const cfg = config.gasGiant;
+    const gasDef = this.body.def.gas!;
+    sh.uPhase.value = ((ctx.simTime * cfg.flowSpeed) / FLOW_PERIOD) % 1;
+    sh.uPolar.value = Math.min(1.5, (gasDef.polar ?? 0.3 + 0.5 * gasDef.turbulence) * cfg.polar);
+    sh.uCurls.value = cfg.curls;
+    sh.uSubBands.value = cfg.subBands;
+    sh.uOvals.value = cfg.ovals;
+    sh.uLimbGlow.value = cfg.limbGlow;
+    sh.uTermWarm.value = cfg.terminatorWarm;
     this.ensureFlowTexture(ctx);
 
     const sun = ctx.world.universe.root;
@@ -585,11 +753,11 @@ export class GasGiantView implements BodyView {
 
   /** Bakes the band warp and turbulence noise once per body (and again if the quality size changes). */
   private ensureFlowTexture(ctx: FrameContext): void {
-    const w = quality.settings.gasOctaves >= 3 ? 4096 : 2048;
+    const w = quality.settings.gasOctaves >= 4 ? 4096 : 2048;
     if (this.flowRT && this.flowSize === w) return;
     this.flowRT?.dispose();
     const rt = new WebGLRenderTarget(w, w / 2, {
-      format: RGFormat,
+      format: RGBAFormat,
       depthBuffer: false,
       generateMipmaps: true,
       minFilter: LinearMipmapLinearFilter,

@@ -471,6 +471,10 @@ export interface GasDef {
   bandFrequency: number;
   turbulence: number;
   storms?: { lat: number; lon: number; size: number; color: RGB }[];
+  /** Polar region strength 0..1: darker, more chaotic caps with a vortex (default from turbulence). */
+  polar?: number;
+  /** Sides of a polar jet stream polygon (6 = Saturn hexagon); 0 or absent for a round vortex. */
+  polarSides?: number;
   /** Depth below the cloud tops where the pressure floor pushes back, fraction of radius. */
   cloudDeckDepth: number;
 }
