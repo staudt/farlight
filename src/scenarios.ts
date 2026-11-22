@@ -1,3 +1,4 @@
+import { config } from './core/config';
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { weatherAmount } from './render/weather/weatherMap';
 import { cloudCoverage, cloudRayOpticalDepth } from './render/clouds/coverage';
@@ -36,6 +37,26 @@ export interface Scenario {
 
 /** Sim time (half a year in) when the north pole leans away from the sun. */
 const POLAR_NIGHT = 182.6 * 86400;
+
+/** Places the ship between a planet and its moon, heading for the moon at full throttle and a time warp. */
+function cruiseToMoon(w: World, fraction: number, warp: number): void {
+  const moon = w.universe.get('moon');
+  w.universe.update(w.clock.time);
+  const earth = w.universe.get('earth');
+  const toMoon = moon.position.clone().sub(earth.position).normalize();
+  w.placeInSpace('earth', moon.orbit!.a * fraction, toMoon);
+  const ship = w.ship;
+  const m = new Matrix4().lookAt(new Vector3(), toMoon, new Vector3(0, 1, 0));
+  ship.quat.setFromRotationMatrix(m);
+  // Slow enough that the warp auto drop (next boundary at least 4 real seconds away) keeps the full warp.
+  const remaining = moon.position.distanceTo(w.shipWorldPos);
+  const speed = remaining / (warp * 4 * 1.3);
+  const cap = Math.max(config.flight.minSpeedCap, Math.min(config.flight.maxSpeedCap, w.env.surfaceDistance / config.flight.impactTime));
+  ship.throttle = Math.min(1, speed / cap);
+  ship.vel.copy(toMoon).multiplyScalar(speed);
+  const idx = w.clock.levels.indexOf(warp);
+  if (idx >= 0) w.clock.warpIndex = idx;
+}
 
 const surface = (description: string, p: ShipPlacement): Scenario => ({
   description,
@@ -110,6 +131,9 @@ export const SCENARIOS: Record<string, Scenario> = {
   'ocean-skim': surface('Skimming 30 m over the open Pacific toward a low morning sun: glitter path, spray and wake', {
     body: 'earth', lat: 5, lon: -150, localHour: 8.4, altitude: 30, heading: 90, pitch: 0, throttle: 0.9,
   }),
+  'ocean-rooster': surface('Hugging the sea 12 m up at speed: a rooster tail of spray flung up behind the ship (press C for the chase view)', {
+    body: 'earth', lat: 5, lon: -150, localHour: 9.5, altitude: 12, heading: 90, pitch: 0, throttle: 0.5,
+  }),
   'ocean-golden-hour': surface('Golden hour, 50 m over open sea toward the low sun: sparkling glitter path and a warm sky in the water', {
     body: 'earth', lat: 6, localHour: 17.75, altitude: 50, heading: 270, pitch: 0, throttle: 0.3,
   }),
@@ -172,12 +196,21 @@ export const SCENARIOS: Record<string, Scenario> = {
     description: 'Landed on a moonless night looking up at the Milky Way, dust lanes and nebula glows over the hills',
     apply: (w) => w.place({ body: 'earth', lat: 39.5, lon: -104, altitude: 400, heading: 200, pitch: 35, throttle: 0.15, time: findMoonNight(w, 'earth', -104, 1.5, 0) }),
   },
+  'boost-vapour': surface('Low over the Atlantic in thick air, built for boosting (hold Shift): vapour cone, Mach diamonds, wingtip vortices on hard turns', {
+    body: 'earth', lat: 12, lon: -40, localHour: 15, altitude: 700, heading: 90, pitch: 0, throttle: 1,
+  }),
   'earth-sunset': surface('Gliding over the sea at sunset', {
     body: 'earth', lat: 10, localHour: 18.2, altitude: 900, heading: 270, pitch: 0, throttle: 0.5,
   }),
-  'atmo-entry': surface('Diving into Earth from the edge of space', {
-    body: 'earth', lat: 5, localHour: 10, altitude: 58000, heading: 90, pitch: -25, throttle: 0.8,
-  }),
+  'atmo-entry': {
+    description: 'Diving into Earth from the edge of space, boosting in from orbit, far too fast for the air: plasma shock layer and streamers',
+    apply: (w) => {
+      w.place({ body: 'earth', lat: 5, localHour: 10, altitude: 46000, heading: 90, pitch: -25, throttle: 1 });
+      // Arrive boosted from orbit, over twice what the air allows, so the heat builds right away.
+      const fwd = new Vector3(0, 0, -1).applyQuaternion(w.ship.quat);
+      w.ship.vel.copy(fwd).multiplyScalar(80000);
+    },
+  },
   'earth-orbit': {
     description: 'High above Earth',
     apply: (w) => {
@@ -336,11 +369,12 @@ export const SCENARIOS: Record<string, Scenario> = {
     body: 'moon', lat: 5, localHour: 8, altitude: 2000, heading: 0, pitch: -14, throttle: 0.3,
   }),
   'deep-space-warp': {
-    description: 'Between Earth and Moon',
-    apply: (w) => {
-      const moon = w.universe.get('moon');
-      w.placeInSpace('earth', moon.orbit!.a * 0.5);
-    },
+    description: 'Between Earth and Moon, cruising at 1000x time warp: dust and star points stretch into streaks',
+    apply: (w) => cruiseToMoon(w, 0.5, 1000),
+  },
+  'warp-cruise': {
+    description: 'Leaving Earth for the Moon at 1000x time warp: blue streaks ahead, red behind, tunnel vignette',
+    apply: (w) => cruiseToMoon(w, 0.12, 1000),
   },
   'earth-aurora-night': surface('Landed under the northern lights', {
     body: 'earth', lat: 58, localHour: 0, altitude: 0, heading: 0, pitch: 24, landed: true, time: POLAR_NIGHT,

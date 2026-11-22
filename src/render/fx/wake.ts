@@ -68,6 +68,7 @@ const SPRAY_VERT = /* glsl */ `
   varying float vAlpha;
   varying vec2 vDir;
   varying float vHalf;
+  varying float vRound;
   void main() {
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     float d = max(-mv.z, 1.0);
@@ -75,17 +76,20 @@ const SPRAY_VERT = /* glsl */ `
     vec3 dv = (viewMatrix * vec4(aRel, 0.0)).xyz;
     float sp = length(dv);
     vec3 dn = dv / max(sp, 1e-3);
-    float lw = aSize * (1.0 + sp * 0.06);
+    float lw = aSize * (1.0 + min(sp, 140.0) * 0.02);
     vec4 c0 = projectionMatrix * (mv - vec4(dn * lw * 0.5, 0.0));
     vec4 c1 = projectionMatrix * (mv + vec4(dn * lw * 0.5, 0.0));
     vec2 s = c1.xy / max(c1.w, 0.01) - c0.xy / max(c0.w, 0.01);
     s.x *= projectionMatrix[1][1] / projectionMatrix[0][0];
     float len = length(s) * uPx;
     vDir = len > 1e-4 ? s / length(s) : vec2(1.0, 0.0);
-    float px = clamp(len, 4.0, 160.0);
+    // A puff seen head on has no streak to project: its own size sets a round blob.
+    float sizePx = aSize * projectionMatrix[1][1] / d * uPx * 1.6;
+    float px = clamp(max(len, sizePx), 5.0, 150.0);
+    vRound = clamp(sizePx / px, 0.0, 1.0);
     gl_PointSize = px;
     vHalf = 0.5 * px;
-    vAlpha = aAlpha * smoothstep(10.0, 40.0, d);
+    vAlpha = aAlpha * smoothstep(5.0, 24.0, d);
     gl_Position = projectionMatrix * mv;
     #include <logdepthbuf_vertex>
   }`;
@@ -97,15 +101,18 @@ const SPRAY_FRAG = /* glsl */ `
   varying float vAlpha;
   varying vec2 vDir;
   varying float vHalf;
+  varying float vRound;
   void main() {
     #include <logdepthbuf_fragment>
     vec2 c = (gl_PointCoord - 0.5) * 2.0;
     c.y = -c.y;
     float along = dot(c, vDir);
     float perp = dot(c, vec2(-vDir.y, vDir.x));
-    float w = max(0.9 / vHalf, 0.02);
-    float streak = exp(-perp * perp / (w * w)) * (1.0 - along * along);
-    gl_FragColor = vec4(uColor, streak * vAlpha);
+    // Soft mist puffs with a short smear, not hairlines.
+    float w = clamp(2.4 / vHalf, 0.35, 0.8);
+    float streak = exp(-perp * perp / (w * w)) * (1.0 - along * along) * (1.0 - 0.3 * abs(along));
+    float blob = exp(-dot(c, c) * 3.4) * vRound;
+    gl_FragColor = vec4(uColor, max(streak * (1.0 - 0.5 * vRound), blob) * vAlpha);
   }`;
 
 const _l = new Vector3();
@@ -272,6 +279,7 @@ class Spray {
   private size1 = new Float32Array(MAX_PARTICLES);
   private alive = 0;
   private emitAcc = 0;
+  private tailAcc = 0;
   private posA: BufferAttribute;
   private sizeA: BufferAttribute;
   private alphaA: BufferAttribute;
@@ -382,8 +390,37 @@ class Spray {
         this.size0[k] = (0.12 + this.rnd() * 0.25) * big;
         this.size1[k] = (0.3 + this.rnd() * 0.5) * big;
       }
+
+      // Rooster tail: a fan of spray thrown up behind the ship that arcs back down, low and fast only.
+      const tailAmt = config.speedFx.enabled ? config.speedFx.roosterTail * smooth(70, 180, speed) * smooth(0.25, 0.7, strength) : 0;
+      if (tailAmt > 0.01) {
+        this.tailAcc += 900 * tailAmt * dt * (0.4 + 0.6 * Math.min(1, quality.settings.fxScale));
+        // The tail has its own headroom above the mist cap, so a full pool never starves it.
+        let nTail = Math.min(Math.floor(this.tailAcc), Math.max(0, Math.min(cap + 450, MAX_PARTICLES) - this.alive));
+        this.tailAcc -= Math.floor(this.tailAcc);
+        while (nTail-- > 0) {
+          const k = this.alive++;
+          const side = (this.rnd() - 0.5) * 2;
+          const behind = 9 + this.rnd() * 7;
+          this.pos[k * 3] = origin.x + up.x * 0.8 + _r.x * side * 2.2 - fwd.x * behind;
+          this.pos[k * 3 + 1] = origin.y + up.y * 0.8 + _r.y * side * 2.2 - fwd.y * behind;
+          this.pos[k * 3 + 2] = origin.z + up.z * 0.8 + _r.z * side * 2.2 - fwd.z * behind;
+          const vy = 10 + this.rnd() * (14 + sp * 0.05);
+          const vr = side * (2 + this.rnd() * 5);
+          // Slower than the ship, so it hangs behind as a tail.
+          const vf = sp * (0.7 + this.rnd() * 0.25);
+          this.vel[k * 3] = up.x * vy + _r.x * vr + fwd.x * vf;
+          this.vel[k * 3 + 1] = up.y * vy + _r.y * vr + fwd.y * vf;
+          this.vel[k * 3 + 2] = up.z * vy + _r.z * vr + fwd.z * vf;
+          this.age[k] = 0;
+          this.life[k] = 0.6 + this.rnd() * 0.6;
+          this.size0[k] = (2.5 + this.rnd() * 1.5) * big;
+          this.size1[k] = (7 + this.rnd() * 5) * big;
+        }
+      }
     } else {
       this.emitAcc = 0;
+      this.tailAcc = 0;
     }
 
     // Upload camera relative float32.

@@ -115,6 +115,27 @@ export class DebugPanel {
     lm.add(config.landmarks, 'drawRange', 5000, 600000);
     lm.add(config.landmarks, 'glow', 0, 5);
 
+    const sfx = this.gui.addFolder('Speed fx').close();
+    sfx.add(config.speedFx, 'enabled');
+    sfx.add(config.speedFx, 'warpLogMin', 2, 8);
+    sfx.add(config.speedFx, 'warpLogFull', 3, 9);
+    sfx.add(config.speedFx, 'warpMin', 2, 1000);
+    sfx.add(config.speedFx, 'warpStreakLength', 100, 8000);
+    sfx.add(config.speedFx, 'warpStreakAlpha', 0, 2);
+    sfx.add(config.speedFx, 'warpTint', 0, 1);
+    sfx.add(config.speedFx, 'warpTunnel', 0, 1);
+    sfx.add(config.speedFx, 'plasmaEdgeGlow', 0, 2);
+    sfx.add(config.speedFx, 'plasmaLight', 0, 3);
+    sfx.add(config.speedFx, 'plasmaStreamers', 0, 2);
+    sfx.add(config.speedFx, 'plasmaShimmer', 0, 2);
+    sfx.add(config.speedFx, 'vaporCone', 0, 2);
+    sfx.add(config.speedFx, 'vaporDensity', 0.01, 1);
+    sfx.add(config.speedFx, 'vaporCapFraction', 0.3, 1);
+    sfx.add(config.speedFx, 'machDiamonds', 0, 2);
+    sfx.add(config.speedFx, 'vortices', 0, 2);
+    sfx.add(config.speedFx, 'vortexTurnRate', 0.05, 1.5);
+    sfx.add(config.speedFx, 'roosterTail', 0, 2);
+
     const touch = this.gui.addFolder('Touch').close();
     touch.add(config.touch, 'stickRadius', 30, 120);
     touch.add(config.touch, 'deadzone', 0, 0.4);

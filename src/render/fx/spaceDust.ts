@@ -1,6 +1,7 @@
 import { AdditiveBlending, BufferGeometry, Float32BufferAttribute, LineSegments, ShaderMaterial, Vector3 } from 'three';
 import { mulberry32 } from '../../core/rng';
 import { frameToWorldDir } from '../../sim/frames';
+import { config } from '../../core/config';
 import type { FrameContext } from '../context';
 
 const COUNT = 1400;
@@ -53,6 +54,8 @@ export class SpaceDust {
         uAlpha: { value: 0.4 },
         uSize: { value: SIZE },
         uColor: { value: new Vector3(0.7, 0.82, 1.0) },
+        uDir: { value: this.dir },
+        uTint: { value: 0 },
       },
       vertexShader: /* glsl */ `
         #include <common>
@@ -61,13 +64,18 @@ export class SpaceDust {
         attribute float aRand;
         uniform vec3 uAnchor;
         uniform vec3 uStreak;
-        uniform float uSize, uAlpha;
+        uniform float uSize, uAlpha, uTint;
+        uniform vec3 uColor, uDir;
         varying float vAlpha;
+        varying vec3 vCol;
         void main() {
           vec3 p = mod(position - uAnchor, uSize) - 0.5 * uSize;
           float edge = max(max(abs(p.x), abs(p.y)), abs(p.z)) / (0.5 * uSize);
           float dist = length(p);
           vAlpha = uAlpha * aRand * (1.0 - smoothstep(0.65, 1.0, edge)) * smoothstep(8.0, 30.0, dist) * (1.0 - 0.85 * aEnd);
+          // Warp tint: blue ahead, red behind.
+          vec3 tint = mix(vec3(1.7, 0.55, 0.4), vec3(0.55, 0.8, 1.7), smoothstep(-0.25, 0.45, dot(normalize(p), uDir)));
+          vCol = mix(uColor, tint, uTint);
           vec4 mv = modelViewMatrix * vec4(p + aEnd * uStreak, 1.0);
           gl_Position = projectionMatrix * mv;
           #include <logdepthbuf_vertex>
@@ -75,11 +83,11 @@ export class SpaceDust {
       fragmentShader: /* glsl */ `
         #include <common>
         #include <logdepthbuf_pars_fragment>
-        uniform vec3 uColor;
         varying float vAlpha;
+        varying vec3 vCol;
         void main() {
           #include <logdepthbuf_fragment>
-          gl_FragColor = vec4(uColor, vAlpha);
+          gl_FragColor = vec4(vCol, vAlpha);
         }`,
       transparent: true,
       depthWrite: false,
@@ -90,7 +98,8 @@ export class SpaceDust {
     this.object.renderOrder = -5;
   }
 
-  update(ctx: FrameContext): void {
+  /** `k` is the warp travel level 0..1: streaks stretch and tint, the dust brightens. */
+  update(ctx: FrameContext, k = 0): void {
     const w = ctx.world;
     const ship = w.ship;
     // Ship velocity relative to the local body, in world axes.
@@ -104,13 +113,16 @@ export class SpaceDust {
     this.anchor.y = ((this.anchor.y % SIZE) + SIZE) % SIZE;
     this.anchor.z = ((this.anchor.z % SIZE) + SIZE) % SIZE;
 
-    const len = Math.min(MAX_STREAK, Math.max(MIN_STREAK, speed * STREAK_TIME));
+    const c = config.speedFx;
+    const base = Math.min(MAX_STREAK, Math.max(MIN_STREAK, speed * STREAK_TIME));
+    const len = base + (c.warpStreakLength * 0.1 - base) * k;
     const u = this.material.uniforms;
     (u.uStreak!.value as Vector3).copy(this.dir).multiplyScalar(len);
 
     // Space: faint bluish dust. Atmosphere: very faint, fading as the sky brightens.
     const d = w.atmosphereDepth;
     const air = 1 - Math.min(1, d * 1.15);
-    u.uAlpha!.value = 0.3 * air * air + 0.025 * air;
+    u.uAlpha!.value = 0.3 * air * air + 0.025 * air + 0.3 * k * air;
+    u.uTint!.value = k * c.warpTint;
   }
 }

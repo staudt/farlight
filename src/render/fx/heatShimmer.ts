@@ -1,10 +1,11 @@
 import { Effect, EffectAttribute } from 'postprocessing';
-import { Uniform, Vector3 } from 'three';
+import { Uniform, Vector3, Vector4 } from 'three';
 import { findEffect } from '../../data/types';
 import type { Body } from '../../sim/universe';
 import { quality } from '../quality';
 import { heatShimmerSettings } from '../weather/settings';
 import { smooth } from '../weather/weatherMap';
+import { plasmaShimmer } from './reentry';
 
 /**
  * Screen space heat refraction. Pixels whose depth is terrain within a few km wobble sideways
@@ -30,8 +31,20 @@ uniform float uShimTime;
 uniform float uShimLogFar;
 uniform float uShimHaze;
 uniform float uShimAspect;
+uniform vec4 uPlasma;
+uniform float uPlasmaEdge;
 
 void mainUv(inout vec2 uv) {
+  if (uPlasma.w > 0.001 || uPlasmaEdge > 0.001) {
+    // Re-entry: hot air wobble behind the ship (chase) or along the frame edges (cockpit).
+    vec2 d = (uv - uPlasma.xy) * vec2(uShimAspect, 1.0);
+    float m = uPlasma.w * (1.0 - smoothstep(0.0, uPlasma.z, length(d)));
+    vec2 c = (uv - 0.5) * vec2(1.0, 0.8);
+    m += uPlasmaEdge * smoothstep(0.25, 0.62, length(c));
+    float t = uShimTime;
+    uv.x += sin(uv.y * 60.0 - t * 17.0 + sin(uv.x * 9.0 + t * 3.0) * 2.0) * 0.007 * m;
+    uv.y += sin(uv.x * 48.0 - t * 13.0 + 1.3) * 0.0045 * m;
+  }
   if (uShimAmount <= 0.001) return;
   float raw = texture2D(depthBuffer, uv).r;
   if (raw >= 0.99999) return;
@@ -60,6 +73,8 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
           ['uShimLogFar', new Uniform(1)],
           ['uShimHaze', new Uniform(1)],
           ['uShimAspect', new Uniform(1.7)],
+          ['uPlasma', new Uniform(new Vector4())],
+          ['uPlasmaEdge', new Uniform(0)],
         ]),
       },
     );
@@ -94,5 +109,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     u.get('uShimLogFar')!.value = logFar;
     u.get('uShimHaze')!.value = s.haze;
     u.get('uShimAspect')!.value = aspect;
+    (u.get('uPlasma')!.value as Vector4).set(plasmaShimmer.x, plasmaShimmer.y, plasmaShimmer.radius, plasmaShimmer.amount);
+    u.get('uPlasmaEdge')!.value = plasmaShimmer.edge;
   }
 }
