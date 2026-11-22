@@ -73,9 +73,9 @@ export class PostStack {
     this.finalPass = this.passWithBloom;
     this.composer.addPass(this.finalPass);
     // Cheap edge AA on the tone mapped image, for presets that run without MSAA.
+    // It is linked into the chain only while on: the composer renders to screen from the LAST pass, so a
+    // disabled pass at the end would leave the canvas black.
     this.fxaaPass = new EffectPass(gfx.camera, new FXAAEffect());
-    this.fxaaPass.enabled = false;
-    this.composer.addPass(this.fxaaPass);
     this.perf.addStage('fxaa', this.fxaaPass);
     this.perf.addStage('finalBloom', this.passWithBloom);
     this.perf.addStage('finalNoBloom', this.passNoBloom);
@@ -134,29 +134,30 @@ export class PostStack {
     a.get('uAtmoLight')!.value = q.atmoLight;
     this.bloom.mipmapBlurPass.levels = q.bloomLevels;
     const want = q.bloom ? this.passWithBloom : this.passNoBloom;
-    if (want !== this.finalPass) {
-      this.composer.removePass(this.finalPass);
-      this.composer.removePass(this.fxaaPass);
-      this.composer.addPass(want);
-      this.composer.addPass(this.fxaaPass);
+    const fxaa = q.fxaa && q.msaa === 0;
+    if (want !== this.finalPass || fxaa !== this.fxaaOn) {
       this.finalPass = want;
+      this.fxaaOn = fxaa;
+      this.linkTail(want);
     }
-    this.fxaaPass.enabled = q.fxaa && q.msaa === 0;
+  }
+
+  private fxaaOn = false;
+
+  /** Puts `final` (and FXAA when on) at the end of the chain; the last pass renders to screen. */
+  private linkTail(final: EffectPass): void {
+    for (const p of [this.passWithBloom, this.passNoBloom, this.fxaaPass]) this.composer.removePass(p);
+    this.composer.addPass(final);
+    if (this.fxaaOn) this.composer.addPass(this.fxaaPass);
   }
 
   /** Renders one frame with the bloom variant that is not active, so a later quality switch does not stall on a compile. */
   warmVariants(): void {
     const keep = this.finalPass;
     const other = keep === this.passWithBloom ? this.passNoBloom : this.passWithBloom;
-    this.composer.removePass(keep);
-    this.composer.removePass(this.fxaaPass);
-    this.composer.addPass(other);
-    this.composer.addPass(this.fxaaPass);
+    this.linkTail(other);
     this.composer.render(0);
-    this.composer.removePass(other);
-    this.composer.removePass(this.fxaaPass);
-    this.composer.addPass(keep);
-    this.composer.addPass(this.fxaaPass);
+    this.linkTail(keep);
   }
 
   /** Cheap CPU estimate of how bright the sky around the camera is. */
