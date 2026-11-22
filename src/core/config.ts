@@ -103,9 +103,9 @@ export const config = {
     /** Seconds ignored after load before auto adapts. */
     warmup: 4,
     presets: {
-      low: { pixelRatioMax: 1, msaa: 0, volScale: 0.4, cloudSteps: 14, cloudLight: 2, atmoSteps: 8, atmoLight: 3, cloudShadows: false, bloom: false, bloomLevels: 3, splitFactor: 0.7, gasOctaves: 2, shimmer: false, godRaySamples: 0, godRayScale: 0.25, lensFlare: true, fxScale: 0.35, maxChunks: 700, maxInFlight: 6, propRange: 0.55, propLevels: 1 },
-      medium: { pixelRatioMax: 1.25, msaa: 2, volScale: 0.5, cloudSteps: 22, cloudLight: 3, atmoSteps: 10, atmoLight: 4, cloudShadows: true, bloom: true, bloomLevels: 5, splitFactor: 0.85, gasOctaves: 3, shimmer: true, godRaySamples: 20, godRayScale: 0.25, lensFlare: true, fxScale: 0.65, maxChunks: 1400, maxInFlight: 8, propRange: 0.75, propLevels: 1 },
-      high: { pixelRatioMax: 1.5, msaa: 4, volScale: 0.67, cloudSteps: 30, cloudLight: 3, atmoSteps: 14, atmoLight: 5, cloudShadows: true, bloom: true, bloomLevels: 8, splitFactor: 1, gasOctaves: 4, shimmer: true, godRaySamples: 32, godRayScale: 0.33, lensFlare: true, fxScale: 1, maxChunks: 4500, maxInFlight: 0, propRange: 1, propLevels: 2 },
+      low: { pixelRatioMax: 1, msaa: 0, volScale: 0.4, cloudSteps: 14, cloudLight: 2, atmoSteps: 8, atmoLight: 3, cloudShadows: false, bloom: false, bloomLevels: 3, splitFactor: 0.7, gasOctaves: 2, shimmer: false, godRaySamples: 0, godRayScale: 0.25, lensFlare: true, fxScale: 0.35, maxChunks: 700, maxInFlight: 6, propRange: 0.55, propLevels: 1, nightFx: 1 },
+      medium: { pixelRatioMax: 1.25, msaa: 2, volScale: 0.5, cloudSteps: 22, cloudLight: 3, atmoSteps: 10, atmoLight: 4, cloudShadows: true, bloom: true, bloomLevels: 5, splitFactor: 0.85, gasOctaves: 3, shimmer: true, godRaySamples: 20, godRayScale: 0.25, lensFlare: true, fxScale: 0.65, maxChunks: 1400, maxInFlight: 8, propRange: 0.75, propLevels: 1, nightFx: 2 },
+      high: { pixelRatioMax: 1.5, msaa: 4, volScale: 0.67, cloudSteps: 30, cloudLight: 3, atmoSteps: 14, atmoLight: 5, cloudShadows: true, bloom: true, bloomLevels: 8, splitFactor: 1, gasOctaves: 4, shimmer: true, godRaySamples: 32, godRayScale: 0.33, lensFlare: true, fxScale: 1, maxChunks: 4500, maxInFlight: 0, propRange: 1, propLevels: 2, nightFx: 2 },
     },
   },
   /** God rays (screen space light shafts from the sun, render/fx/godRays.ts). */
@@ -248,7 +248,30 @@ export const config = {
     /** Global scale of night glow: city lights, lava, bioluminescence. */
     nightGlow: 1,
     /** Moonlight and starlight on the night side of a body: cool ambient so terrain still reads. */
-    nightAmbient: 0.08,
+    nightAmbient: 0.13,
+  },
+  /** Nights: moonlight, starlight floor, the night sky and the night limb from orbit (render/nightLight.ts, render/sky). */
+  night: {
+    enabled: true,
+    /** Directional light from the biggest moon (or the parent planet for a moon), 1 = a full, close moon. */
+    moonLight: 1,
+    /** Strength of the moon light in terrain units (sun is about 1.25). */
+    moonStrength: 0.34,
+    /** Blue tint and desaturation of dark scenes (Purkinje), 0 off. */
+    purkinje: 0.6,
+    /** Moonlit sky glow in the atmosphere (blue wash) and how much a bright moon washes out stars. */
+    moonSky: 1,
+    starWash: 0.5,
+    /** Milky Way brightness multiplier (baked band and the extra stars). */
+    milkyWay: 1,
+    /** Star twinkle near the horizon, 0 off. */
+    twinkle: 1,
+    /** Zodiacal light cone after dusk. */
+    zodiacal: 1,
+    /** Airglow band above the horizon and the green limb from orbit. */
+    airglow: 1,
+    /** Orange and red twilight band along the terminator seen from orbit. */
+    twilightBand: 1,
   },
   /** Space scenery: asteroid belts, comets and the nebula backdrop. */
   space: {

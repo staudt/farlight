@@ -60,15 +60,38 @@ const BAKE_FRAG = /* glsl */ `
     float lane = 1.0 - 0.85 * smoothstep(0.5, 0.72, fbm(w * 2.6 + 5.0));
     vec3 neb = uC0 * smoothstep(0.34, 0.85, c1) + uC1 * smoothstep(0.42, 0.9, c2) * 0.75 + uC2 * smoothstep(0.5, 0.95, c3) * 0.5;
     neb *= region * (0.4 + 0.6 * smoothstep(0.35, 0.8, c1)) * uIntensity;
-    // Galactic band: a bright core, a wide halo, clumpy and cut by dust.
+    // Galactic band: a bright core, a wide halo, clumpy and cut by dust lanes.
     float t = dot(d, uBandN);
-    float core = exp(-pow2(t / 0.13));
-    float halo = exp(-pow2(t / 0.42));
-    float clump = 0.35 + 1.1 * fbm(d * 5.0 * uScale + sd + 40.0);
-    vec3 bandCol = mix(vec3(0.55, 0.62, 0.95), vec3(1.0, 0.82, 0.62), core) * (core * 1.0 + halo * 0.22) * clump;
-    bandCol = mix(bandCol, bandCol * (uC0 * 1.4 + 0.3), 0.35);
-    vec3 col = (neb * 0.65 + bandCol * uBand * 0.2 * (0.25 + 0.75 * lane));
-    col *= lane * 0.6 + 0.4;
+    float core = exp(-pow2(t / 0.11));
+    float halo = exp(-pow2(t / 0.38));
+    float clump = 0.3 + 1.2 * fbm(d * 5.0 * uScale + sd + 40.0);
+    // Star clouds: fine grain along the band, so it reads as unresolved stars.
+    float grain = 0.55 + 0.9 * fbm(d * 26.0 + sd);
+    // The great rift: a dark lane splitting the core, with wispy side lanes.
+    float rift = smoothstep(0.35, 0.7, fbm(vec3(d.x * 7.0, d.y * 7.0 + t * 20.0, d.z * 7.0) + sd + 9.0));
+    float riftMask = exp(-pow2((t - 0.012) / 0.05)) * (0.55 + 0.45 * rift);
+    float side = smoothstep(0.52, 0.74, fbm(d * vec3(9.0, 3.0, 9.0) + sd + 19.0)) * halo;
+    float dust = clamp(riftMask * 0.9 + side * 0.65, 0.0, 0.92);
+    vec3 bandCol = mix(vec3(0.5, 0.6, 0.95), vec3(1.0, 0.8, 0.58), core) * (core * 1.0 + halo * 0.3) * clump * grain;
+    bandCol = mix(bandCol, bandCol * (uC0 * 1.4 + 0.3), 0.3);
+    bandCol *= 1.0 - dust;
+    // A few colourful emission glows scattered along the band (hydrogen red, oxygen teal, reflection blue).
+    float ang0 = uSeed * 2.1;
+    vec3 glow = vec3(0.0);
+    for (int k = 0; k < 4; k++) {
+      float a = ang0 + float(k) * 1.57 + sin(float(k) * 2.3 + uSeed) * 0.5;
+      vec3 e1 = normalize(cross(uBandN, vec3(0.0, 0.0, 1.0) + vec3(1e-3, 0.0, 0.0)));
+      vec3 e2 = cross(uBandN, e1);
+      vec3 centre = normalize(e1 * cos(a) + e2 * sin(a) + uBandN * (0.05 * sin(float(k) * 5.0 + uSeed)));
+      float da = acos(clamp(dot(d, centre), -1.0, 1.0));
+      float sz = 0.16 + 0.07 * float(k);
+      float blob = exp(-pow2(da / sz)) * (0.35 + 0.9 * fbm(d * 9.0 + float(k) * 3.7 + sd));
+      vec3 gc = k == 0 ? vec3(1.0, 0.22, 0.3) : (k == 1 ? vec3(0.2, 0.75, 0.8) : (k == 2 ? vec3(0.3, 0.45, 1.0) : vec3(0.9, 0.35, 0.6)));
+      glow += gc * blob;
+    }
+    glow *= 0.5 * (0.35 + 0.65 * halo) * (1.0 - dust * 0.6);
+    vec3 col = neb * 0.65 + bandCol * uBand * 0.42 + glow * uBand * 0.32;
+    col *= lane * 0.5 + 0.5;
     gl_FragColor = vec4(col, 1.0);
   }`;
 

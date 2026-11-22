@@ -10,6 +10,7 @@ import {
 } from 'three';
 import type { PropKind } from '../../data/types';
 import type { PropBatch } from '../../terrain/props';
+import { NIGHT_LIGHT_GLSL, nightUniforms } from '../nightLight';
 import { starLight } from '../starLight';
 import { ECLIPSE_GLSL, eclipse } from '../eclipse';
 
@@ -227,6 +228,7 @@ export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0
       uSkyAmbient: shared.uSkyAmbient!,
       uSunIntensity: shared.uSunIntensity!,
       uStarColor: starLight.uniform,
+      ...nightUniforms,
       ...eclipse.uniforms,
       uEclSelf: shared.uEclSelf!,
       uFadeNear: { value: 900 },
@@ -235,6 +237,7 @@ export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0
       /** Night glow weight of the instance colour (bioluminescence), per material. */
       uBioGlow: { value: bioGlow },
       uNightGlow: { value: 1 },
+      uNightAmb: shared.uNightAmb!,
     },
     vertexShader: /* glsl */ `
       #include <common>
@@ -280,6 +283,8 @@ export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0
       uniform float uEmissive;
       uniform float uBioGlow;
       uniform float uNightGlow;
+      uniform float uNightAmb;
+      ${NIGHT_LIGHT_GLSL}
       varying vec3 vColor;
       varying vec3 vViewPos;
       varying float vEmit;
@@ -298,9 +303,11 @@ export function createPropMaterial(shared: Record<string, IUniform>, bioGlow = 0
         vec3 sunCol = mix(vec3(1.0, 0.5, 0.25), vec3(1.0, 0.96, 0.88), smoothstep(0.0, 0.45, sunR));
         float skyTerm = 0.35 + 0.65 * clamp(dot(N, R), 0.0, 1.0);
         vec3 amb = (vec3(0.05) + uSkyAmbient * skyTerm * (0.25 + 0.75 * term)) * mix(vec3(1.0), uStarColor, 0.6);
+        amb += vec3(0.3, 0.42, 0.9) * uNightAmb * (1.0 - term) * (0.45 + 0.55 * clamp(dot(N, R), 0.0, 1.0));
         vec3 eclL = eclipseLight(vViewPos * mat3(viewMatrix), uEclSelf);
         amb *= 0.25 + 0.75 * dot(eclL, vec3(0.2126, 0.7152, 0.0722));
-        vec3 col = vColor * (sunCol * uStarColor * eclL * uSunIntensity * diffuse + amb);
+        vec3 lightIn = sunCol * uStarColor * eclL * uSunIntensity * diffuse + amb + nightMoon(N, R, term);
+        vec3 col = nightPurkinje(vColor * lightIn, lightIn);
         // Crystal glow: brighter at night, still readable by day.
         col += vInst * vEmit * uEmissive * (0.35 + 0.65 * (1.0 - term)) * uNightGlow;
         // Bioluminescence: the tinted parts (foliage, not bark) glow once the sun is down.

@@ -19,8 +19,10 @@ import type { BodyView, FrameContext } from './context';
 import { ShipCamera } from './camera/shipCamera';
 import { quality } from './quality';
 import { starLight } from './starLight';
+import { nightLight, syncNightUniforms } from './nightLight';
 import { eclipse } from './eclipse';
 import { Starfield } from './sky/starfield';
+import { NightSky } from './sky/nightSky';
 import { SpaceScenery } from './space';
 import { ShipView } from './ship/shipView';
 import { Cockpit } from './ship/cockpit';
@@ -40,6 +42,8 @@ export class GameRenderer {
   readonly camera: PerspectiveCamera;
   readonly shipCamera = new ShipCamera();
   readonly starfield = new Starfield();
+  /** Zodiacal light, star twinkle and moon wash. */
+  readonly nightSky: NightSky;
   /** Asteroid belts, comets and the nebula backdrop (all from the system data). */
   readonly space: SpaceScenery;
   readonly shipView = new ShipView();
@@ -47,6 +51,8 @@ export class GameRenderer {
   readonly bodyViews: BodyView[] = [];
   readonly sunLight = new DirectionalLight(0xffffff, BASE_SUN_LIGHT);
   readonly ambient = new AmbientLight(0x223344, 0.18);
+  /** Moonlight (or planetshine) on the ship, cool and faint; intensity 0 by day. */
+  readonly moonLight = new DirectionalLight(0x9fb8ff, 0);
   /** Planetshine: sky color above, the nearby planet's lit color below. */
   readonly hemi = new HemisphereLight(0x88aaff, 0x332211, 0);
   /** Soft fill from the camera so the ship always reads, even against the sun. */
@@ -73,11 +79,14 @@ export class GameRenderer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, config.render.pixelRatioMax, quality.settings.pixelRatioMax));
 
     this.camera = new PerspectiveCamera(config.camera.fov, 1, config.render.near, config.render.far);
-    this.scene.add(this.camera, this.starfield.object, this.shipView.object, this.cockpit.object, this.sunLight, this.sunLight.target);
+    this.scene.add(this.camera, this.starfield.object, this.shipView.object, this.cockpit.object, this.sunLight, this.sunLight.target, this.moonLight, this.moonLight.target);
     this.scene.add(this.ambient, this.hemi, this.fill, this.fill.target);
     this.space = new SpaceScenery(world, this.starfield);
     this.scene.add(this.space.object);
     this.updaters.push((ctx) => this.space.update(ctx));
+    this.nightSky = new NightSky(this.starfield);
+    this.scene.add(this.nightSky.object);
+    this.updaters.push((ctx) => this.nightSky.update(ctx));
 
     for (const body of world.universe.bodies) {
       let view: BodyView | null = null;
@@ -193,6 +202,20 @@ export class GameRenderer {
     this.hemi.color.setRGB(0.08 + 0.45 * a * day, 0.1 + 0.55 * a * day, 0.16 + 0.75 * a * day);
     this.hemi.intensity = 1.6 * near;
   }
+  /** Moonlight on the ship: a faint cool directional light that follows the night light module. */
+  private updateMoonLight(world: World): void {
+    syncNightUniforms();
+    this.camera.updateMatrixWorld();
+    nightLight.update(world, this.camera.matrixWorldInverse);
+    const up = world.ship.frame.body.kind === 'star' ? 0 : smoothstep(-0.05, 0.14, _up2.copy(world.shipWorldPos).sub(world.ship.frame.body.position).normalize().dot(nightLight.dirWorld));
+    this.moonLight.intensity = nightLight.intensity * nightLight.night * up;
+    this.moonLight.color.setRGB(nightLight.color.value.x, nightLight.color.value.y, nightLight.color.value.z);
+    const m = Math.max(this.moonLight.color.r, this.moonLight.color.g, this.moonLight.color.b, 1e-6);
+    this.moonLight.color.multiplyScalar(1 / m);
+    this.moonLight.position.copy(nightLight.dirWorld).multiplyScalar(1000);
+    this.moonLight.target.position.set(0, 0, 0);
+  }
+
   /** Camera shake in meters along the view right and up axes (re-entry buffeting). */
   cameraShake?: () => { x: number; y: number };
 
@@ -223,6 +246,7 @@ export class GameRenderer {
     this.sunLight.position.copy(_sunDir).multiplyScalar(1000);
     this.sunLight.target.position.set(0, 0, 0);
     this.updateFillLights(world);
+    this.updateMoonLight(world);
 
     for (const v of this.bodyViews) v.update(ctx);
     this.shipView.update(ctx);
@@ -238,6 +262,10 @@ export class GameRenderer {
 }
 
 const _sunDir = new Vector3();
+function smoothstep(a: number, b: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
 const _eclL = new Vector3();
 const _eclColor = new Color();
 const _shake = new Vector3();

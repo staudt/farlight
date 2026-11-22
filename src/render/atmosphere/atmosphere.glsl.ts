@@ -18,6 +18,10 @@ uniform int uAtmoSteps;         // quality: <= ATMO_STEPS
 uniform int uAtmoLight;         // quality: <= ATMO_LIGHT_STEPS
 
 uniform vec3 uSunDir;           // unit, scene space (sun is far: same for every pixel)
+uniform float uNightFx;         // quality: 0 off, 1 airglow and moon sky, 2 plus the twilight band
+uniform vec3 uNightK;           // x airglow, y twilight band, z unused (config)
+uniform vec3 uMoonSky;          // faint blue wash of a moonlit sky, already scaled by phase, size and night
+uniform vec3 uMoonDirW;         // unit direction to the moon, scene space
 uniform int uCount;
 
 uniform vec3 uCenter[MAX_ATMOS];     // planet center relative to camera
@@ -59,6 +63,63 @@ float phaseR(float mu) { return 3.0 / (16.0 * PI_) * (1.0 + mu * mu); }
 float phaseM(float mu, float g) {
   float g2 = g * g;
   return 3.0 / (8.0 * PI_) * ((1.0 - g2) * (1.0 + mu * mu)) / ((2.0 + g2) * pow(1.0 + g2 - 2.0 * g * mu, 1.5));
+}
+
+// Length of the ray (origin at the camera) inside the sphere of altitude hs, clipped to [t0, t1].
+float insideLen(vec3 d, vec3 c, float R, float h, float hs, float t0, float t1, out float ta0, out float tb0) {
+  float dh = h - hs;
+  vec2 q = hitSphere(d, c, dh * (2.0 * (R + hs) + dh));
+  ta0 = max(q.x, t0);
+  tb0 = min(q.y, t1);
+  return max(0.0, tb0 - ta0);
+}
+
+// Night extras for atmosphere i: a faint moonlit sky, the airglow shell (a green line on the limb,
+// a green and orange band above the horizon) and the orange and red twilight band on the terminator.
+vec3 nightExtras(int i, vec3 d, vec3 c, float R, float H, float h, float t0, float t1, vec3 tr) {
+  vec3 add = vec3(0.0);
+  float opa = 1.0 - dot(tr, vec3(0.3333));
+  float mm = max(dot(d, uMoonDirW), 0.0);
+  add += uMoonSky * opa * (0.55 + 2.0 * pow(mm, 8.0) + pow(mm, 64.0));
+  if (uNightK.x > 0.0) {
+    float a1, b1, a2, b2, a3, b3;
+    float outer = insideLen(d, c, R, h, H * 0.44, t0, t1, a2, b2);
+    float inner = insideLen(d, c, R, h, H * 0.33, t0, t1, a1, b1);
+    float chord = max(outer - inner, 0.0);
+    if (chord > 0.0) {
+      vec3 p = d * (0.5 * (a2 + b2)) - c;
+      float night = 1.0 - smoothstep(-0.22, 0.08, dot(normalize(p), uSunDir));
+      // Chord relative to the horizon chord of a ground observer (planets are small: the curve matters).
+      float y = chord / (sqrt(2.0 * R * H * 0.44) - sqrt(2.0 * R * H * 0.33));
+      float g = min(0.35 * pow(y, 6.0), 1.0);
+      float o = min(0.3 * pow(y, 4.0), 1.0) * (1.0 - 0.5 * min(g, 1.0));
+      // Patchy, like real bands.
+      float patchy = 0.8 + 0.2 * sin(8.0 * d.x + 5.0 * d.z + 2.0 * d.y);
+      g *= patchy;
+      vec3 glow = vec3(0.03, 0.15, 0.06) * g + vec3(0.14, 0.055, 0.015) * o;
+      // Seen from outside the air, only the rays grazing the shell make the thin bright limb line.
+      float ringAlt = length(p) - R;
+      float ring = exp(-pow((ringAlt - 0.385 * H) / (0.06 * H), 2.0));
+      glow *= mix(1.0, ring, smoothstep(0.3, 1.0, h / H));
+      add += glow * night * uNightK.x * sqrt(tr);
+    }
+  }
+  if (uNightFx > 1.5 && uNightK.y > 0.0) {
+    float up = smoothstep(0.15, 0.8, h / H);
+    if (up > 0.0) {
+      float a4, b4;
+      float chord = insideLen(d, c, R, h, H * 0.3, t0, t1, a4, b4);
+      if (chord > 0.0) {
+        vec3 p = d * (0.5 * (a4 + b4)) - c;
+        float s = dot(normalize(p), uSunDir);
+        float w = exp(-pow((s - 0.0) / 0.12, 2.0));
+        vec3 col = mix(vec3(0.75, 0.1, 0.05), vec3(1.0, 0.45, 0.1), smoothstep(-0.12, 0.12, s));
+        float y2 = chord / (2.0 * sqrt(2.0 * R * H * 0.3));
+        add += col * w * (0.3 + 0.7 * smoothstep(0.1, 0.9, y2)) * 0.22 * up * uNightK.y;
+      }
+    }
+  }
+  return add;
 }
 
 // Atmosphere i along direction d up to distance tScene, as out = scene * trans + inscatter.
@@ -131,6 +192,7 @@ void applyAtmosphere(int i, vec3 d, float tScene, out vec3 outTrans, out vec3 ou
   vec3 inscatter = uSunI[i] * uStarColor * (sumR * uBetaR[i] * phaseR(mu) + sumM * uBetaM[i] * phaseM(mu, uMieG[i]));
   outTrans = exp(-(uBetaR[i] * odR + uBetaM[i] * 1.1 * odM + uBetaA[i] * odR));
   outInscatter = inscatter;
+  if (uNightFx > 0.5) outInscatter += nightExtras(i, d, c, R, H, h, t0, t1, outTrans);
 }
 
 // Composes every atmosphere far to near onto the running affine transform: out = scene * T + L.
