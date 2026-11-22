@@ -253,6 +253,38 @@ export const config = {
     sprayMax: 2400,
     spraySize: 1,
   },
+  /** Speed fx: warp streaks, entry plasma, boost shock cone, Mach diamonds, wingtip vortices. */
+  speedFx: {
+    enabled: true,
+    /** Warp travel: the look starts at this log10 of (speed x warp) and is full at the second. */
+    warpLogMin: 4.3,
+    warpLogFull: 6.3,
+    /** Needs at least this time warp (fades in up to 3x this). */
+    warpMin: 30,
+    /** Streak length at full effect, meters (dust and the warp layer). */
+    warpStreakLength: 1200,
+    warpStreakAlpha: 0.3,
+    /** 0 white, 1 full blue ahead and red behind. */
+    warpTint: 0.65,
+    /** Edge darkening and blue tunnel at full effect, 0..1. */
+    warpTunnel: 0.55,
+    /** Entry plasma: glow around the screen edges (first person), ship tint light, streamers, screen shimmer. */
+    plasmaEdgeGlow: 1,
+    plasmaLight: 1,
+    plasmaStreamers: 1,
+    plasmaShimmer: 1,
+    /** Boost in dense air: vapour cone strength, exhaust shock diamonds, wingtip vortices. */
+    vaporCone: 1,
+    /** Air density (0..1) where the cone can form, and the fraction of the speed cap that triggers it. */
+    vaporDensity: 0.18,
+    vaporCapFraction: 0.8,
+    machDiamonds: 1,
+    vortices: 1,
+    /** Turn rate (rad/s) where wingtip vortices start. */
+    vortexTurnRate: 0.35,
+    /** Rooster tail of spray behind the ship low over water. */
+    roosterTail: 1,
+  },
   /** Land look: per facet variation, rock and strata on steep faces, baked occlusion, valley mist, ground clutter (terrain/biomes.ts, render/bodies/terrainMaterial.ts). Chunk bake values apply to chunks built after a change. */
   terrain: {
     /** Per facet brightness jitter (0.2 is plus or minus 10 percent) and warm/cool hue shift, on fine chunks. */

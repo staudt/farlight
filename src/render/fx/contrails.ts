@@ -2,19 +2,33 @@ import { BufferAttribute, BufferGeometry, Group, Mesh, ShaderMaterial, Vector3 }
 import type { FrameContext } from '../context';
 
 const POINTS = 110;
-const LIFE = 4;
-const INTERVAL = LIFE / (POINTS - 2);
 /** Wingtip points in ship space (matches shipModel). */
-const TIPS: [number, number, number][] = [
+export const TIPS: [number, number, number][] = [
   [11, -1.1, 8],
   [-11, -1.1, 8],
 ];
 
-class Ribbon {
+export interface RibbonOpts {
+  /** Seconds a point lives. */
+  life: number;
+  /** Half width at the wingtip and growth over the life, meters. */
+  w0: number;
+  wGrow: number;
+  alpha: number;
+  /** Optional HDR colours at the wingtip and at the end of the life (default white). */
+  color?: [number, number, number];
+  color2?: [number, number, number];
+}
+
+const CONTRAIL: RibbonOpts = { life: 4, w0: 0.25, wGrow: 3.2, alpha: 0.5 };
+
+export class Ribbon {
   readonly mesh: Mesh;
+  private opts: RibbonOpts;
   private posAttr: BufferAttribute;
   private sideAttr: BufferAttribute;
   private alphaAttr: BufferAttribute;
+  private ageAttr: BufferAttribute;
   // Ring buffer, world float64.
   private wp = new Float64Array(POINTS * 3);
   private time = new Float64Array(POINTS);
@@ -23,16 +37,20 @@ class Ribbon {
   private count = 0;
   private lastPos = new Vector3();
 
-  constructor() {
+  constructor(opts: RibbonOpts = CONTRAIL) {
+    this.opts = opts;
     const geo = new BufferGeometry();
     this.posAttr = new BufferAttribute(new Float32Array(POINTS * 2 * 3), 3);
     this.sideAttr = new BufferAttribute(new Float32Array(POINTS * 2), 1);
     this.alphaAttr = new BufferAttribute(new Float32Array(POINTS * 2), 1);
+    this.ageAttr = new BufferAttribute(new Float32Array(POINTS * 2), 1);
+    this.ageAttr.setUsage(35048);
     this.posAttr.setUsage(35048);
     this.alphaAttr.setUsage(35048);
     geo.setAttribute('position', this.posAttr);
     geo.setAttribute('aSide', this.sideAttr);
     geo.setAttribute('aAlpha', this.alphaAttr);
+    geo.setAttribute('aAge', this.ageAttr);
     const idx: number[] = [];
     for (let k = 0; k < POINTS - 1; k++) {
       const a = k * 2;
@@ -44,16 +62,21 @@ class Ribbon {
       this.sideAttr.setX(k * 2, -1);
       this.sideAttr.setX(k * 2 + 1, 1);
     }
+    const white: [number, number, number] = [0.95, 0.97, 1.0];
     const mat = new ShaderMaterial({
+      uniforms: { uColor: { value: new Vector3(...(opts.color ?? white)) }, uColor2: { value: new Vector3(...(opts.color2 ?? opts.color ?? white)) } },
       vertexShader: /* glsl */ `
         #include <common>
         #include <logdepthbuf_pars_vertex>
         attribute float aSide;
         attribute float aAlpha;
+        attribute float aAge;
         varying float vSide;
         varying float vAlpha;
+        varying float vAge;
         void main() {
           vSide = aSide;
+          vAge = aAge;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           // Fade out close to the camera so the trail does not slap the lens.
           vAlpha = aAlpha * smoothstep(6.0, 45.0, length(mv.xyz));
@@ -63,12 +86,14 @@ class Ribbon {
       fragmentShader: /* glsl */ `
         #include <common>
         #include <logdepthbuf_pars_fragment>
+        uniform vec3 uColor, uColor2;
         varying float vSide;
         varying float vAlpha;
+        varying float vAge;
         void main() {
           #include <logdepthbuf_fragment>
           float soft = 1.0 - vSide * vSide;
-          gl_FragColor = vec4(vec3(0.95, 0.97, 1.0), vAlpha * soft * soft);
+          gl_FragColor = vec4(mix(uColor, uColor2, vAge), vAlpha * soft * soft);
         }`,
       transparent: true,
       depthWrite: false,
@@ -80,6 +105,8 @@ class Ribbon {
 
   update(ctx: FrameContext, tip: Vector3, strengthNow: number): void {
     const now = ctx.realTime;
+    const LIFE = this.opts.life;
+    const INTERVAL = LIFE / (POINTS - 2);
     // A jump (teleport, scenario change) breaks the trail.
     if (this.count > 0 && this.lastPos.distanceToSquared(tip) > 500 * 500) this.count = 0;
     this.lastPos.copy(tip);
@@ -99,6 +126,7 @@ class Ribbon {
     const cam = ctx.cameraWorld;
     const pos = this.posAttr.array as Float32Array;
     const alpha = this.alphaAttr.array as Float32Array;
+    const ages = this.ageAttr.array as Float32Array;
     let m = 0;
     const rel = _rel;
     const put = (x: number, y: number, z: number, age: number, str: number): void => {
@@ -130,8 +158,8 @@ class Ribbon {
       _s.normalize();
       const age = _age[k]!;
       const life = age / LIFE;
-      const width = 0.25 + 3.2 * life;
-      const a = _str[k]! * Math.pow(1 - life, 1.5) * 0.5 * Math.min(1, age * 6 + 0.25);
+      const width = this.opts.w0 + this.opts.wGrow * life;
+      const a = _str[k]! * Math.pow(1 - life, 1.5) * this.opts.alpha * Math.min(1, age * 6 + 0.25);
       for (let side = 0; side < 2; side++) {
         const sgn = side === 0 ? -1 : 1;
         const o = (k * 2 + side) * 3;
@@ -139,10 +167,12 @@ class Ribbon {
         pos[o + 1] = _p.y + _s.y * width * sgn;
         pos[o + 2] = _p.z + _s.z * width * sgn;
         alpha[k * 2 + side] = a;
+        ages[k * 2 + side] = life;
       }
     }
     this.posAttr.needsUpdate = true;
     this.alphaAttr.needsUpdate = true;
+    this.ageAttr.needsUpdate = true;
     this.mesh.geometry.setDrawRange(0, (m - 1) * 6);
   }
 }
@@ -177,7 +207,7 @@ export class Contrails {
   }
 }
 
-function smooth(a: number, b: number, x: number): number {
+export function smooth(a: number, b: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 }
