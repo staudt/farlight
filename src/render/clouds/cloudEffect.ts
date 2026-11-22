@@ -3,6 +3,7 @@ import type { GUI } from 'lil-gui';
 import type { Body } from '../../sim/universe';
 import { cloudDrift, cloudStructure, cycloneData, MAX_CYCLONES } from './coverage';
 import { config } from '../../core/config';
+import { nightLight, nightUniforms } from '../nightLight';
 import { createCloudNoiseTexture } from './noiseTexture';
 import { eclipse } from '../eclipse';
 
@@ -11,7 +12,7 @@ export class CloudEffect {
   readonly uniforms: Map<string, Uniform>;
   /** Global tuning knobs (debug panel). */
   coverageBias = 0;
-  sunIntensity = 0.85;
+  sunIntensity = 0.55;
   private frame = 0;
   /** Kept for the wiring in post.ts: the march jitter always changes per frame now, the temporal resolve averages it. */
   animateJitter = true;
@@ -52,12 +53,14 @@ export class CloudEffect {
         ['uDrift', new Uniform(new Vector3())],
         ['uCSunDir', new Uniform(new Vector3(1, 0, 0))],
         ['uCloudColor', new Uniform(new Color(1, 1, 1))],
-        ['uCSunI', new Uniform(0.85)],
+        ['uCSunI', new Uniform(0.55)],
         ['uCloudSelf', new Uniform(-1)],
         ['uFlash', new Uniform(0)],
         ['uFlashPos', new Uniform(new Vector3())],
         ['uFrame', new Uniform(0)],
         ['uCStruct', new Uniform(1)],
+        ['uCMoonDir', new Uniform(new Vector3(0, 1, 0))],
+        ['uNLCol', nightUniforms.uNLCol as unknown as Uniform],
         ['uCyc', new Uniform(new Float32Array(MAX_CYCLONES * 4))],
         ['uCLit', new Uniform(new Vector4(0.8, 1, 0.6, 1))],
         ['uHistW', new Uniform(0)],
@@ -119,6 +122,7 @@ export class CloudEffect {
     (u.get('uFlashPos')!.value as Vector3).copy(this.flashPos);
     u.get('uFrame')!.value = this.frame++;
     u.get('uCStruct')!.value = cloudStructure(c);
+    (u.get('uCMoonDir')!.value as Vector3).copy(nightLight.dirWorld);
     u.get('uCyc')!.value = cycloneData(this.cyc);
     const cl = config.clouds;
     (u.get('uCLit')!.value as Vector4).set(cl.powder, cl.silver, cl.underside, cl.warmth);

@@ -74,7 +74,7 @@ export function weatherCover(c: CloudDef, radius: number, px: number, py: number
     const sub = Math.exp(-(((al - 0.45) / 0.14) ** 2));
     const storm = Math.exp(-(((al - 0.95) / 0.2) ** 2));
     const polar = smoothstep(1.2, 1.5, al);
-    cov += s * (0.32 * itcz - 0.4 * sub + 0.3 * storm - 0.1 * polar);
+    cov += s * (0.4 * itcz * (0.4 + 1.2 * w1) - 0.4 * sub + 0.22 * storm * (0.4 + 1.1 * w1) - 0.1 * polar);
     const cy = cycloneData(_cyc);
     for (let i = 0; i < MAX_CYCLONES; i++) {
       const cx = cy[i * 4]!, cyy = cy[i * 4 + 1]!, cz = cy[i * 4 + 2]!, cr = cy[i * 4 + 3]!;
@@ -96,8 +96,9 @@ export function weatherCover(c: CloudDef, radius: number, px: number, py: number
     cov += 0.2 * s * smoothstep(0.55, 0.9, cov);
   }
   // Soft ceiling: fully saturated coverage is a flat grey sheet with no relief.
+  const stormDeck = smoothstep(0.7, 0.88, cov) * Math.min(1, s * 2);
   if (cov > 0.86) cov = 0.86 + (cov - 0.86) * 0.4;
-  return Math.min(1, Math.max(0, cov));
+  return Math.min(1, Math.max(0, cov + (1 - cov) * stormDeck));
 }
 
 /** Coverage 0..1 at a body fixed unit direction (sampled on the cloud base sphere). */

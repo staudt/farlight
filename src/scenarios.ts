@@ -44,19 +44,51 @@ const surface = (description: string, p: ShipPlacement): Scenario => ({
 
 /** Longitude (degrees) on the day side at `lat` where the weather `kind` is strongest right now. */
 /** Finds a daytime spot inside a storm cell: scans latitudes (within the band) and longitudes. */
+/** Heading (degrees) that looks toward the thickest cloud around a spot, so the view is the deck and not a gap. */
+function stormHeading(w: World, bodyId: string, spot: { lat: number; lon: number }): number {
+  const body = w.universe.get(bodyId);
+  const cl = body.def.atmosphere!.clouds!;
+  const d = new Vector3();
+  let best = 20;
+  let bestScore = -1;
+  for (let h = 0; h < 360; h += 20) {
+    let score = 0;
+    for (const km of [1, 2, 3, 4]) {
+      const t = (km * 0.02);
+      const lat = spot.lat + Math.cos((h * Math.PI) / 180) * t * 57.3;
+      const lon = spot.lon + (Math.sin((h * Math.PI) / 180) * t * 57.3) / Math.max(0.2, Math.cos((spot.lat * Math.PI) / 180));
+      latLonToDir((lat * Math.PI) / 180, (lon * Math.PI) / 180, d);
+      score += cloudCoverage(cl, body.radius, body.atmosphereHeight, d, w.clock.time);
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = h;
+    }
+  }
+  return best;
+}
+
+const STORM_RING: [number, number][] = [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3], [2, 2], [-2, 2], [2, -2], [-2, -2], [5, 5], [-5, -5], [5, -5], [-5, 5]];
+
 function stormSpot(w: World, bodyId: string, kind: 'rain' | 'lightning' | 'snow' | 'acidRain' | 'methaneRain', lats: [number, number]): { lat: number; lon: number } {
   w.universe.update(w.clock.time);
   const body = w.universe.get(bodyId);
   const def = body.def.atmosphere!.weather!.find((d) => d.kind === kind)!;
   const sun = body.worldToLocalDir(w.universe.root.position.clone().sub(body.position).normalize(), new Vector3());
   const d = new Vector3();
+  const nb = new Vector3();
   let best = { lat: lats[0], lon: 0 };
   let bestScore = -1;
   for (let lat = lats[0]; lat <= lats[1]; lat += 1.5) {
     for (let lon = -180; lon < 180; lon += 1.5) {
       latLonToDir((lat * Math.PI) / 180, (lon * Math.PI) / 180, d);
       if (d.dot(sun) < 0.3) continue;
-      const score = weatherAmount(def, d, w.clock.time, body);
+      // Weakest point around the candidate: the storm should fill the whole sky, not sit at an edge or in an eye.
+      let score = 1;
+      for (const [dl, dn] of STORM_RING) {
+        latLonToDir(((lat + dl) * Math.PI) / 180, ((lon + dn) * Math.PI) / 180, nb);
+        score = Math.min(score, weatherAmount(def, nb, w.clock.time, body));
+      }
       if (score > bestScore) {
         bestScore = score;
         best = { lat, lon };
@@ -441,7 +473,7 @@ export const SCENARIOS: Record<string, Scenario> = {
     description: 'Low under the storm clouds, rain and lightning',
     apply: (w) => {
       const spot = stormSpot(w, 'earth', 'lightning', [-30, 30]);
-      w.place({ body: 'earth', ...spot, altitude: 1200, heading: 20, pitch: 3, throttle: 0.15 });
+      w.place({ body: 'earth', ...spot, altitude: 1200, heading: stormHeading(w, 'earth', spot), pitch: 3, throttle: 0.15 });
     },
   },
   'earth-snow': {
