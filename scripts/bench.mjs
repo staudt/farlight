@@ -20,6 +20,7 @@ const variants = opt('variants', 'cur:dist:')
     const [name, dist, quality] = v.split(':');
     return { name, dist, quality };
   });
+const profile = args.includes('--profile');
 const names = args.filter((a) => !a.startsWith('--'));
 const list = names.length ? names : ['earth-low-morning', 'earth-storm', 'atmo-entry', 'earth-orbit', 'jupiter-skim', 'saturn-rings'];
 mkdirSync('artifacts/bench', { recursive: true });
@@ -66,6 +67,17 @@ for (const name of list) {
       const f1 = await page.evaluate(() => window.__game.getState().frames);
       const fps = (f1 - f0) / ((Date.now() - t0) / 1000);
       const gb = await page.evaluate(() => window.__game.post?.perf?.gpuBest ?? 0);
+      if (profile) {
+        const ps = await page.evaluate(async () => {
+          const perf = window.__game.post.perf;
+          perf.setProfile(true);
+          await new Promise((r) => setTimeout(r, 4000));
+          return Object.fromEntries(Object.entries(perf.passes).filter(([, v]) => v.ms > 0).map(([k, v]) => [k, [v.ms, v.calls, v.triangles]]));
+        });
+        const prev = best[vi].passes ?? {};
+        for (const [k, v] of Object.entries(ps)) if (!prev[k] || v[0] < prev[k][0]) prev[k] = v;
+        best[vi].passes = prev;
+      }
       if (fps > best[vi].fps) {
         best[vi].fps = fps;
         await page.screenshot({ path: `artifacts/bench/${v.name}-${name}.png` });
@@ -74,6 +86,7 @@ for (const name of list) {
       await page.close();
     }
   }
+  if (profile) for (let vi = 0; vi < variants.length; vi++) console.log(`  ${variants[vi].name}: ` + Object.entries(best[vi].passes ?? {}).map(([k, v]) => `${k} ${v[0].toFixed(2)}ms/${v[1]}c/${(v[2] / 1000).toFixed(0)}kt`).join('  '));
   console.log([name, ...best.map((b) => `${b.fps.toFixed(1)}${b.gpu ? ` (gpu ${b.gpu.toFixed(1)})` : ''}`)].join('\t'));
 }
 await browser.close();

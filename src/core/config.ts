@@ -80,6 +80,8 @@ export const config = {
     near: 0.5,
     far: 1e11,
     pixelRatioMax: 1.5,
+    /** Atmosphere march: sample spacing on short paths, in smaller scale heights (0 = always the full step count). */
+    atmoAdaptive: 0.5,
   },
   /** Render quality presets and the auto adapt rules (see render/quality.ts). */
   quality: {

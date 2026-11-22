@@ -48,9 +48,14 @@ export class PostStack {
     r.toneMapping = NoToneMapping;
     this.composer = new EffectComposer(r, { frameBufferType: HalfFloatType, multisampling: quality.settings.msaa });
     this.perf = new PerfStats(r);
-    this.composer.addPass(new RenderPass(gfx.scene, gfx.camera));
+    const scenePass = new RenderPass(gfx.scene, gfx.camera);
+    this.composer.addPass(scenePass);
     this.vol = new VolumetricPass([this.clouds.uniforms, this.atmosphere.uniforms]);
     this.composer.addPass(this.vol);
+    this.perf.addStage('scene', scenePass);
+    this.perf.addStage('volumetric', this.vol);
+    this.perf.addStage('godRays', this.godRays.pass);
+    this.perf.addStage('flare', this.flare.pass);
     this.composer.addPass(this.godRays.pass);
     this.composer.addPass(this.flare.pass);
     this.bloom = new BloomEffect({
@@ -66,6 +71,8 @@ export class PostStack {
     this.passNoBloom = new EffectPass(gfx.camera, this.shimmer, this.composite, this.godRays.effect, this.flare.effect, this.toneMapping, this.vignette);
     this.finalPass = this.passWithBloom;
     this.composer.addPass(this.finalPass);
+    this.perf.addStage('finalBloom', this.passWithBloom);
+    this.perf.addStage('finalNoBloom', this.passNoBloom);
 
     const sunView = gfx.bodyViews.find((v) => v instanceof SunView) as SunView | undefined;
 
