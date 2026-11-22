@@ -214,9 +214,13 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
         vec3 eclL = eclipseLight(vViewPos * mat3(viewMatrix), uEclSelf);
         // No sun means no skylight either: the shadow darkens the ambient too.
         amb *= 0.25 + 0.75 * dot(eclL, vec3(0.2126, 0.7152, 0.0722));
-        vec3 lightIn = sunCol * uStarColor * eclL * uSunIntensity * diffuse + amb + nightMoon(N, R, term);
+        vec3 lightIn = sunCol * uStarColor * eclL * uSunIntensity * diffuse + amb;
+        // Moonlight only where there is a moon (uniform branch).
+        if (dot(uNLCol, uNLCol) > 0.0) lightIn += nightMoon(N, R, term);
         vec3 albedo = mix(vColor, uFoamColor, foam * 0.92);
-        vec3 col = nightPurkinje(albedo * lightIn, lightIn);
+        vec3 col = albedo * lightIn;
+        // Purkinje shift is zero in good light (coherent branch: day pixels skip it).
+        if (dot(lightIn, vec3(0.2126, 0.7152, 0.0722)) < 0.9) col = nightPurkinje(col, lightIn);
         if (isWater > 0.5) {
           vec3 H = normalize(L + V);
           float nvS = clamp(dot(N, V), 0.0, 1.0);
@@ -261,7 +265,10 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
           float sig = sqrt(sig2);
           float sa = sig * uWaterB.y;
           float sparkleMix = uWaterA.z * (1.0 - smoothstep(25000.0, 90000.0, dist));
-          float tw = mix(1.0, glitter(glUV, glFw, uTime), sparkleMix);
+          // The glitter cells (16 hashes) only run where they show: close water, and once for both lights.
+          float glit = 1.0;
+          if (sparkleMix > 0.0) glit = mix(1.0, glitter(glUV, glFw, uTime), sparkleMix);
+          float tw = glit;
           float vh = clamp(dot(V, H), 0.0, 1.0);
           float Fg = 0.02 + 0.98 * pow(1.0 - vh, 5.0);
           float D = glintLobe(N, H, L, sa, sig);
@@ -274,7 +281,7 @@ export function createTerrainMaterial(def?: BodyDef): ShaderMaterial {
             float Dm = glintLobe(N, Hm, uMoonDir, sa * 1.2, sig * 1.2);
             float vm = clamp(dot(V, Hm), 0.0, 1.0);
             float Fm = 0.02 + 0.98 * pow(1.0 - vm, 5.0);
-            float sm = Dm * Fm * mix(1.0, glitter(glUV, glFw, uTime), sparkleMix) / (4.0 * (0.12 + 0.88 * nvF));
+            float sm = Dm * Fm * glit / (4.0 * (0.12 + 0.88 * nvF));
             col += vec3(0.55, 0.68, 1.0) * sm * up * uMoonLit * (1.0 - term) * 0.05 * uWaterB.w * (1.0 - foam);
           }
         }
