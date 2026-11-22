@@ -320,6 +320,11 @@ export const config = {
     /** Orange and red twilight band along the terminator seen from orbit. */
     twilightBand: 1,
   },
+  /** Atmosphere pass tuning (render/atmosphere). */
+  atmosphere: {
+    /** 0..1: how much the Mie extinction is greyed relative to its scattering colour (rust dust scatters rust but must not strip red from what is behind it). */
+    mieExtinctionGrey: 0.8,
+  },
   /** Space scenery: asteroid belts, comets and the nebula backdrop. */
   space: {
     enabled: true,

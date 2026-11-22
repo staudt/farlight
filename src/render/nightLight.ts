@@ -131,7 +131,7 @@ export const nightLight = new NightLight();
 /**
  * GLSL for lit surfaces. `nightMoon` is the moon's diffuse light at a fragment: N and R are the
  * view space surface and outward radial normals, `term` the day factor. `nightPurkinje` blends a dark,
- * dim lit colour toward a blue grey (rod vision).
+ * dim lit colour toward a blue grey (rod vision), only when the sun is well below the local horizon (`sunR`).
  */
 export const NIGHT_LIGHT_GLSL = /* glsl */ `
   uniform vec3 uNLDir;
@@ -141,9 +141,10 @@ export const NIGHT_LIGHT_GLSL = /* glsl */ `
     float up = smoothstep(-0.05, 0.14, dot(R, uNLDir));
     return uNLCol * max(dot(N, uNLDir), 0.0) * up * (1.0 - term);
   }
-  vec3 nightPurkinje(vec3 col, vec3 lightIn) {
+  // Only at real night: shade by day and dim dusk keep their own colour (rusty Mars rock stays rusty).
+  vec3 nightPurkinje(vec3 col, vec3 lightIn, float sunR) {
     float ll = dot(lightIn, vec3(0.2126, 0.7152, 0.0722));
-    float k = (1.0 - smoothstep(0.03, 0.9, ll)) * uNLPurk;
+    float k = (1.0 - smoothstep(0.03, 0.9, ll)) * uNLPurk * (1.0 - smoothstep(-0.22, -0.08, sunR));
     float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
     return mix(col, vec3(lum) * vec3(0.62, 0.82, 1.25), k * 0.8);
   }

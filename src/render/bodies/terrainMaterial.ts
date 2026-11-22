@@ -4,7 +4,7 @@ import { MIST_GLSL, updateMist } from './landLook';
 import { starLight } from '../starLight';
 import { NIGHT_LIGHT_GLSL, nightUniforms } from '../nightLight';
 import { ECLIPSE_GLSL, eclipse } from '../eclipse';
-import { WAVE_COUNT, createWaveUniforms, waterLook } from './waterWaves';
+import { WAVE_COUNT, createWaveUniforms, skyAmbientTint, waterLook } from './waterWaves';
 import type { BodyDef } from '../../data/types';
 
 /** Flat shaded, vertex colored terrain material with sun lighting and glinting water. */
@@ -236,7 +236,7 @@ export function createTerrainMaterial(def?: BodyDef, radius = 0): ShaderMaterial
           col = landMist(col, mistLit, vWater.y, sunR, vViewPos, uBodyCenterView);
         }
         // Purkinje shift is zero in good light (coherent branch: day pixels skip it).
-        if (dot(lightIn, vec3(0.2126, 0.7152, 0.0722)) < 0.9) col = nightPurkinje(col, lightIn);
+        if (dot(lightIn, vec3(0.2126, 0.7152, 0.0722)) < 0.9) col = nightPurkinje(col, lightIn, sunR);
         if (isWater > 0.5) {
           vec3 H = normalize(L + V);
           float nvS = clamp(dot(N, V), 0.0, 1.0);
@@ -324,5 +324,7 @@ export function createTerrainMaterial(def?: BodyDef, radius = 0): ShaderMaterial
     updateMist(mist, def, radius);
     mat.uniforms.uRim!.value = config.terrain.rim;
   };
+  const amb = skyAmbientTint(def);
+  if (amb) (mat.uniforms.uSkyAmbient!.value as Color).setRGB(amb[0], amb[1], amb[2]);
   return mat;
 }

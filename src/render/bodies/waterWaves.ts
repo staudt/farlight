@@ -59,6 +59,23 @@ export function skyLook(def: BodyDef): SkyLook {
   };
 }
 
+/**
+ * Terrain skylight colour from the atmosphere data (same luminance as the old fixed blue): blue under a
+ * blue Rayleigh sky, butterscotch under Mars's. Null without an atmosphere (the caller keeps its default).
+ */
+export function skyAmbientTint(def: BodyDef | undefined, level = 0.0572): RGB | null {
+  const a = def?.atmosphere;
+  if (!a) return null;
+  const d = a.rayleighDepth;
+  const z: RGB = [1 - Math.exp(-d[0] * 5), 1 - Math.exp(-d[1] * 5), 1 - Math.exp(-d[2] * 5)];
+  const lum = Math.max(1e-4, 0.2126 * z[0] + 0.7152 * z[1] + 0.0722 * z[2]);
+  const k = (c: number): number => (0.4 + 0.6 * (c / lum)) * level;
+  const t: RGB = [k(z[0]), k(z[1]), k(z[2])];
+  const tl = 0.2126 * t[0] + 0.7152 * t[1] + 0.0722 * t[2];
+  const n = level / Math.max(1e-6, tl);
+  return [t[0] * n, t[1] * n, t[2] * n];
+}
+
 function hashString(s: string): number {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
