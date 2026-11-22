@@ -486,6 +486,22 @@ export interface RingDef {
   color: RGB;
   opacity: number;
   bands: number;
+  /**
+   * Gaps and divisions as fractions of the ring width (0 inner edge, 1 outer edge). Absent: a
+   * Cassini-like division and a few thin gaps are derived from the body seed (render/bodies/rings).
+   */
+  gaps?: RingGap[];
+  /** Strength of the faint radial spokes on the lit face, 0..1 (default derived from the opacity). */
+  spokes?: number;
+}
+
+export interface RingGap {
+  /** Centre across the ring width, 0..1. */
+  at: number;
+  /** Full width across the ring width, 0..1. */
+  width: number;
+  /** How empty the gap is, 0..1 (1 = clear). */
+  depth: number;
 }
 
 export interface StarDef {

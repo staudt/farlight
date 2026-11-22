@@ -103,9 +103,9 @@ export const config = {
     /** Seconds ignored after load before auto adapts. */
     warmup: 4,
     presets: {
-      low: { pixelRatioMax: 1, msaa: 0, fxaa: false, volScale: 0.4, cloudSteps: 10, cloudLight: 2, atmoSteps: 8, atmoLight: 3, cloudShadows: false, bloom: false, bloomLevels: 3, splitFactor: 0.7, gasOctaves: 2, shimmer: false, godRaySamples: 0, godRayScale: 0.25, lensFlare: true, fxScale: 0.35, maxChunks: 700, maxInFlight: 6, propRange: 0.55, propLevels: 1, nightFx: 1 },
-      medium: { pixelRatioMax: 1.25, msaa: 0, fxaa: true, volScale: 0.5, cloudSteps: 14, cloudLight: 3, atmoSteps: 10, atmoLight: 4, cloudShadows: true, bloom: true, bloomLevels: 5, splitFactor: 0.85, gasOctaves: 3, shimmer: true, godRaySamples: 20, godRayScale: 0.25, lensFlare: true, fxScale: 0.65, maxChunks: 1400, maxInFlight: 8, propRange: 0.75, propLevels: 1, nightFx: 2 },
-      high: { pixelRatioMax: 1.5, msaa: 4, fxaa: false, volScale: 0.67, cloudSteps: 20, cloudLight: 3, atmoSteps: 14, atmoLight: 5, cloudShadows: true, bloom: true, bloomLevels: 8, splitFactor: 1, gasOctaves: 4, shimmer: true, godRaySamples: 32, godRayScale: 0.33, lensFlare: true, fxScale: 1, maxChunks: 4500, maxInFlight: 0, propRange: 1, propLevels: 2, nightFx: 2 },
+      low: { ringDebris: 0, ringOctaves: 5, pixelRatioMax: 1, msaa: 0, fxaa: false, volScale: 0.4, cloudSteps: 10, cloudLight: 2, atmoSteps: 8, atmoLight: 3, cloudShadows: false, bloom: false, bloomLevels: 3, splitFactor: 0.7, gasOctaves: 2, shimmer: false, godRaySamples: 0, godRayScale: 0.25, lensFlare: true, fxScale: 0.35, maxChunks: 700, maxInFlight: 6, propRange: 0.55, propLevels: 1, nightFx: 1 },
+      medium: { ringDebris: 1, ringOctaves: 8, pixelRatioMax: 1.25, msaa: 0, fxaa: true, volScale: 0.5, cloudSteps: 14, cloudLight: 3, atmoSteps: 10, atmoLight: 4, cloudShadows: true, bloom: true, bloomLevels: 5, splitFactor: 0.85, gasOctaves: 3, shimmer: true, godRaySamples: 20, godRayScale: 0.25, lensFlare: true, fxScale: 0.65, maxChunks: 1400, maxInFlight: 8, propRange: 0.75, propLevels: 1, nightFx: 2 },
+      high: { ringDebris: 2, ringOctaves: 9, pixelRatioMax: 1.5, msaa: 4, fxaa: false, volScale: 0.67, cloudSteps: 20, cloudLight: 3, atmoSteps: 14, atmoLight: 5, cloudShadows: true, bloom: true, bloomLevels: 8, splitFactor: 1, gasOctaves: 4, shimmer: true, godRaySamples: 32, godRayScale: 0.33, lensFlare: true, fxScale: 1, maxChunks: 4500, maxInFlight: 0, propRange: 1, propLevels: 2, nightFx: 2 },
     },
   },
   /** Volumetric clouds (render/clouds, render/volumetricPass.ts). */
@@ -337,6 +337,43 @@ export const config = {
     limbGlow: 0.55,
     /** Warm band along the terminator. */
     terminatorWarm: 0.35,
+  },
+  /** Planetary rings (render/bodies/ringView.ts and rings/). Read every frame, live in the debug panel. */
+  rings: {
+    /** Strength of the fine ringlet structure (0 = the old smooth bands). */
+    detail: 1,
+    /** Noise octaves for the radial profile (more resolve closer up; low quality caps it). */
+    octaves: 9,
+    /** Radial spokes on the lit face. */
+    spokes: 1,
+    /** Forward scattering glow when the sun is behind the ring (unlit face view). */
+    forward: 1,
+    /** Brightening when the sun is behind the camera (opposition surge). */
+    opposition: 1,
+    /** Brightness of the unlit face lit by transmission. */
+    unlit: 1,
+    /** Minimum on screen thickness of the ring seen edge on, in pixels (the thin bright line). */
+    edgePx: 1.4,
+    /** Debris: instanced icy rocks around the camera near the ring plane. */
+    debris: true,
+    /** Thickness of the debris layer in metres (rocks spread over this height). */
+    thickness: 320,
+    /** Rock count multiplier (cells filled per unit ring density). */
+    density: 1,
+    /** Rock size multiplier. */
+    sizeScale: 1,
+    /** Multiplier on how far the rocks are drawn. */
+    range: 1,
+    /** Camera height above the plane (in layer thicknesses) where the flat disc starts to fade out near the camera. */
+    fadeHeight: 12,
+    /** Horizontal distance (m) where the flat disc is fully back, and where it starts to return. */
+    /** How much of the flat disc is removed at the camera (1 = fully gone, 0 = no fade). */
+    fadeDepth: 0.7,
+    fadeNear: 150,
+    fadeFar: 1800,
+    /** Rock tint multiplier and ambient light (planet shine) so shadowed rocks are not black. */
+    rockBrightness: 1,
+    rockAmbient: 0.1,
   },
   /** Eclipses and moon shadows: bodies shadow each other from the sun. */
   eclipse: {
