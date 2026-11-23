@@ -165,6 +165,11 @@ input.on('snapshot', () => {
 const overlay = new MapOverlay(document.getElementById('map')!, input);
 input.on('back', () => overlay.close());
 const padMode = (): PadMode => (photo.active ? 'photo' : overlay.isOpen || settingsScreen.isOpen ? 'overlay' : 'flight');
+input.on('orbitLevel', () => {
+  const on = !settings.get('orbitLevel');
+  settings.set('orbitLevel', on);
+  hud.notify(on ? 'LEVEL IN ORBIT' : 'FREE ROTATION', '');
+});
 const gamepad = new GamepadControls(input, { mode: padMode, notify: (a, b) => hud.notify(a, b) });
 const systemMap = new SystemMap(overlay.pane('system'), world);
 const hyper = new Hyperspace(gfx, input);

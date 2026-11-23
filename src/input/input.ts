@@ -20,6 +20,7 @@ export type Action =
   | 'snapshot'
   | 'info'
   | 'settings'
+  | 'orbitLevel'
   | 'back';
 
 /** Seconds a throttle key must be held before it sweeps instead of stepping one notch. */
@@ -46,6 +47,8 @@ export class Input {
   invertY = false;
   /** Multiplier on look deltas (settings). */
   lookScale = 1;
+  /** Level with the planet while in orbit (settings, L). */
+  orbitLevel = false;
   rightMouse = false;
   /** True on touch devices; the HUD adapts. */
   touchMode = false;
@@ -204,6 +207,7 @@ export class Input {
 
   poll(realDt: number): FlightInput {
     const inp = emptyInput();
+    inp.levelOrbit = this.orbitLevel;
     const dz = 0.04;
     const shape = (v: number): number => {
       const a = Math.abs(v);
@@ -288,6 +292,7 @@ const KEY_ACTIONS: Record<string, Action> = {
   KeyK: 'snapshot',
   KeyI: 'info',
   KeyO: 'settings',
+  KeyL: 'orbitLevel',
   F3: 'debug',
   KeyX: 'stop',
 };

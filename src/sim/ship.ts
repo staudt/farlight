@@ -15,10 +15,12 @@ export interface FlightInput {
   brake: boolean;
   /** Direction to align the nose to, in FRAME coordinates, or null. */
   alignDir: Vector3 | null;
+  /** Orbit leveling (setting): outside the air, keep the wings level with the body below. */
+  levelOrbit: boolean;
 }
 
 export function emptyInput(): FlightInput {
-  return { pitch: 0, yaw: 0, roll: 0, throttleDelta: 0, throttleSet: null, boost: false, brake: false, alignDir: null };
+  return { pitch: 0, yaw: 0, roll: 0, throttleDelta: 0, throttleSet: null, boost: false, brake: false, alignDir: null, levelOrbit: false };
 }
 
 /** Everything the flight model needs to know about the surroundings, in frame coordinates. */
@@ -142,6 +144,25 @@ export class Ship {
       if (Math.abs(pitchAngle) < f.levelPitchWindow) {
         const pitchAssist = (1 - Math.min(1, Math.abs(input.pitch))) * air;
         target.x += clamp(-pitchAngle * 0.8, -f.levelPitchRate, f.levelPitchRate) * pitchAssist;
+      }
+    }
+
+    // Orbit leveling: where the air does not level the ship (it fades in as the air thins), turns go
+    // about the local up and the wings roll back level, so looking around never spins the horizon.
+    const orbit = input.levelOrbit && env.solidGround ? 1 - air : 0;
+    if (orbit > 0) {
+      const fwd = this.forward(_v2);
+      const right = this.rightDir(_v3);
+      const levelRight = _v4.copy(fwd).cross(env.up);
+      // Fades out pointing straight up or down, where "level" has no meaning.
+      const w = Math.min(1, levelRight.length() * 4) * orbit;
+      if (w > 0) {
+        levelRight.normalize();
+        const yawRate = -input.yaw * f.yawRate * w;
+        target.y -= yawRate;
+        target.addScaledVector(_v5.copy(env.up).applyQuaternion(_q1.copy(this.quat).invert()), yawRate);
+        const rollErr = Math.atan2(-right.dot(env.up), right.dot(levelRight));
+        target.z += clamp(rollErr * 1.5, -f.levelRollRate, f.levelRollRate) * (1 - Math.min(1, Math.abs(input.roll))) * w;
       }
     }
 
@@ -274,6 +295,7 @@ const _qId = new Quaternion();
 const _v2 = new Vector3();
 const _v3 = new Vector3();
 const _v4 = new Vector3();
+const _v5 = new Vector3();
 const _q1 = new Quaternion();
 const _m4 = new Matrix4();
 const _ZERO = new Vector3();

@@ -69,6 +69,7 @@ const SECTIONS: { title: string; rows: Row[] }[] = [
       { kind: 'range', key: 'lookSens', label: 'Look sensitivity', min: SENS_RANGE.min, max: SENS_RANGE.max, step: 0.05, fmt: mult },
       { kind: 'toggle', key: 'invertStick', label: 'Invert touch stick' },
       { kind: 'toggle', key: 'invertPad', label: 'Invert gamepad' },
+      { kind: 'toggle', key: 'orbitLevel', label: 'Level in orbit (L)' },
     ],
   },
   {
@@ -86,6 +87,7 @@ export function applyRuntimeSettings(s: Settings, deps: Pick<Deps, 'input' | 'au
   if (key === undefined || key === 'mouseSens') deps.input.sensitivity = 0.0022 * s.mouseSens;
   if (key === undefined || key === 'invertMouseY') deps.input.invertY = s.invertMouseY;
   if (key === undefined || key === 'lookSens') deps.input.lookScale = s.lookSens;
+  if (key === undefined || key === 'orbitLevel') deps.input.orbitLevel = s.orbitLevel;
   if (key === undefined || key === 'volMaster' || key === 'volMusic' || key === 'volFx') {
     deps.audio.volume.master = s.volMaster;
     deps.audio.volume.music = s.volMusic;

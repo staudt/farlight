@@ -15,6 +15,8 @@ export interface Settings {
   invertMouseY: boolean;
   invertStick: boolean;
   invertPad: boolean;
+  /** In orbit, keep the wings level with the planet below (yaw turns about the local up). */
+  orbitLevel: boolean;
   /** 0..1 */
   volMaster: number;
   volMusic: number;
@@ -38,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
   invertMouseY: false,
   invertStick: false,
   invertPad: false,
+  orbitLevel: false,
   volMaster: 1,
   volMusic: 1,
   volFx: 1,
@@ -84,6 +87,7 @@ export function sanitize(raw: unknown): Settings {
     invertMouseY: bool(r.invertMouseY, d.invertMouseY),
     invertStick: bool(r.invertStick, d.invertStick),
     invertPad: bool(r.invertPad, d.invertPad),
+    orbitLevel: bool(r.orbitLevel, d.orbitLevel),
     volMaster: num(r.volMaster, 0, 1, d.volMaster),
     volMusic: num(r.volMusic, 0, 1, d.volMusic),
     volFx: num(r.volFx, 0, 1, d.volFx),
