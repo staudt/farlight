@@ -202,6 +202,16 @@ body.touch {
   background: rgba(95, 242, 255, 0.25);
 }
 
+/* Level in orbit toggle, bottom left: just above the altitude and speed block (zoom scales the offset with the HUD). */
+.t-level {
+  position: absolute;
+  left: calc(env(safe-area-inset-left) + 12px);
+  bottom: calc(env(safe-area-inset-bottom) + 76px);
+  width: 44px;
+  height: 44px;
+  padding: 8px;
+}
+
 /* Menu popup: on body, above the HUD, below the map overlay */
 .t-menu-layer {
   display: none;
@@ -347,6 +357,7 @@ body.photo .t-menu-layer {
 /* HUD size setting: the fixed position controls follow it (the floating stick tracks the finger, so it stays). */
 .t-slider,
 .t-boost,
+.t-level,
 .t-row {
   zoom: var(--hud-scale, 1);
 }

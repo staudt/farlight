@@ -33,6 +33,7 @@ const ICONS = {
   info: I('<circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><circle cx="12" cy="7.8" r=".7" fill="currentColor"/>'),
   look: I('<circle cx="12" cy="12" r="3.2"/><path d="M12 3a9 9 0 0 1 9 9M12 21a9 9 0 0 1-9-9"/><path d="M19 4l2 2-3 .5zM5 20l-2-2 3-.5z" fill="currentColor"/>'),
   settings: I('<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>'),
+  level: I('<path d="M2 15h20"/><path d="M6 15a6 6 0 0 1 12 0"/><path d="M12 5v3M9 11l3-3 3 3"/>'),
   invert: I('<path d="M8 5v14M5 8l3-3 3 3M16 19V5M13 16l3 3 3-3"/>'),
 };
 
@@ -102,6 +103,7 @@ export class TouchControls {
   private readonly slider: HTMLElement;
   private readonly sliderTrack: HTMLElement;
   private readonly boostBtn: HTMLElement;
+  private readonly levelBtn: HTMLElement;
   private readonly buttons = new Map<string, HTMLElement>();
   private readonly menu: HTMLElement;
   private readonly rows = new Map<string, HTMLElement>();
@@ -133,6 +135,7 @@ export class TouchControls {
       <div class="t-base" data-k="base"><i data-k="knob"></i></div>
       <div class="t-slider" data-k="slider"><div class="t-track" data-k="track"><div class="t-fill"></div><div class="t-knob"></div></div></div>
       <div class="t-boost" data-k="boost"><span>BOOST</span></div>
+      <button type="button" class="t-btn t-level" data-k="level" aria-label="Level in orbit">${ICONS.level}</button>
       <div class="t-row">${BUTTONS.map((b) => `<button type="button" class="t-btn" data-b="${b.key}" aria-label="${b.label}">${ICONS[b.key]}</button>`).join('')}</div>
       <div class="t-rotate"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="15" y="6" width="18" height="30" rx="3" transform="rotate(-90 24 24) translate(0 0)"/><path d="M10 38c8 6 20 6 28 0M34 36l4 2-1-5"/></svg><div>ROTATE FOR LANDSCAPE</div></div>`;
     const q = (k: string): HTMLElement => root.querySelector(`[data-k="${k}"]`) as HTMLElement;
@@ -142,6 +145,7 @@ export class TouchControls {
     this.slider = q('slider');
     this.sliderTrack = q('track');
     this.boostBtn = q('boost');
+    this.levelBtn = q('level');
     for (const el of root.querySelectorAll<HTMLElement>('[data-b]')) this.buttons.set(el.dataset.b as string, el);
 
     // The menu lives on body, above the HUD, so taps on it never reach the stick.
@@ -311,6 +315,7 @@ export class TouchControls {
       this.syncButtons();
     });
     this.rows.get('tilt')!.addEventListener('click', () => void this.toggleTilt());
+    this.levelBtn.addEventListener('click', () => this.input.emit('orbitLevel'));
     const full = this.buttons.get('full')!;
     if (!document.documentElement.requestFullscreen) full.style.display = 'none';
     full.addEventListener('click', () => void this.toggleFullscreen());
@@ -326,6 +331,7 @@ export class TouchControls {
 
   private syncButtons(): void {
     this.rows.get('invert')!.classList.toggle('active', settings.get('invertStick'));
+    this.levelBtn.classList.toggle('active', settings.get('orbitLevel'));
     this.rows.get('look')!.classList.toggle('active', this.input.lookMode);
     this.rows.get('tilt')!.classList.toggle('active', this.tiltOn);
     this.rows.get('align')!.classList.toggle('active', this.alignLatched);
