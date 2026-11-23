@@ -105,27 +105,45 @@ describe('SimClock', () => {
     expect(clock.warp).toBe(levels[3]);
   });
 
-  test('clampTo lowers the warp and reports true', () => {
+  test('limitTo caps the warp and reports true', () => {
     const clock = new SimClock();
     clock.warpIndex = levels.length - 1;
-    const changed = clock.clampTo(4);
-    expect(changed).toBe(true);
+    expect(clock.limitTo(4)).toBe(true);
     expect(clock.warp).toBe(4);
   });
 
-  test('clampTo leaves a lower warp alone and reports false', () => {
+  test('limitTo keeps the chosen level: it comes back when the cap lifts', () => {
+    const clock = new SimClock();
+    clock.warpIndex = clock.indexFor(1000);
+    clock.limitTo(1);
+    expect(clock.warp).toBe(1);
+    clock.limitTo(Infinity);
+    expect(clock.warp).toBe(1000);
+    expect(clock.limited).toBe(false);
+  });
+
+  test('limitTo leaves a lower warp alone and reports false', () => {
     const clock = new SimClock();
     clock.warpIndex = 1; // level 2
-    expect(clock.clampTo(100)).toBe(false);
+    expect(clock.limitTo(100)).toBe(false);
     expect(clock.warpIndex).toBe(1);
   });
 
-  test('clampTo below the lowest level settles at level 1', () => {
+  test('limitTo below the lowest level settles at level 1', () => {
     const clock = new SimClock();
     clock.warpIndex = 3;
-    expect(clock.clampTo(0.25)).toBe(true);
-    expect(clock.warpIndex).toBe(0);
+    expect(clock.limitTo(0.25)).toBe(true);
     expect(clock.warp).toBe(1);
+  });
+
+  test('stepping while capped starts from the level in effect', () => {
+    const clock = new SimClock();
+    clock.warpIndex = clock.indexFor(1000);
+    clock.limitTo(4);
+    clock.step(-1);
+    expect(clock.warp).toBe(3);
+    clock.limitTo(Infinity);
+    expect(clock.warp).toBe(3);
   });
 
   test('advance returns realDt times warp and moves sim time by the same amount', () => {

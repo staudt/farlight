@@ -118,7 +118,7 @@ export class World {
       this.groundEta(),
     );
     const maxWarp = allowedWarp(this.phase, eta);
-    this.warpDropped = this.clock.clampTo(maxWarp);
+    this.warpDropped = this.clock.limitTo(maxWarp);
 
     // 2. Advance time and bodies.
     const simDt = this.clock.advance(realDt);
@@ -214,6 +214,8 @@ export class World {
     const nearZone = dominant.nearZoneRadius * (sameBody && ship.frame.rotating ? 1.05 : 1.0);
     const rotating = dominant.kind !== 'star' && dist < nearZone;
     if (!sameBody || rotating !== ship.frame.rotating) {
+      // Arriving in a body's sphere of influence (from its parent's) is the one place the warp resets.
+      if (!sameBody && isWithin(dominant, ship.frame.body)) this.clock.resetWarp();
       const to: Frame = { body: dominant, rotating };
       transferState(ship, ship.frame, to);
       ship.frame = to;
@@ -347,3 +349,9 @@ const _vh = new Vector3();
 const _wp = new Vector3();
 const _m = new Matrix4();
 const _zero = new Vector3();
+
+/** True when `b` sits below `ancestor` in the body hierarchy. */
+function isWithin(b: Body, ancestor: Body): boolean {
+  for (let p = b.parent; p; p = p.parent) if (p === ancestor) return true;
+  return false;
+}

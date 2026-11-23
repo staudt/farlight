@@ -429,7 +429,7 @@ export class Hud {
     const clock = w.clock;
     if (clock.paused) this.timeValue.textContent = 'PAUSED';
     else {
-      const glyphs = '▶'.repeat(Math.min(8, clock.warpIndex + 1));
+      const glyphs = '▶'.repeat(Math.min(8, clock.index + 1));
       this.timeValue.textContent = `×${clock.warp} ${glyphs}`;
     }
 
